@@ -1,19 +1,17 @@
-import json
-import math
-from pathlib import Path
-from typing import Optional
+# hospitals.py (負責地圖 API 的檔案)
 
-from fastapi import APIRouter
+import math
+from typing import Optional
+from fastapi import APIRouter, HTTPException
+from psycopg2.extras import RealDictCursor
+
+# 🎯 1. 引入你們共用的 PostgreSQL 資料庫連線函式
+from services import get_db_connection 
 
 router = APIRouter(prefix="/api/v1", tags=["Hospitals"])
 
-# 臺南市各醫院一覽表（政府開放資料，29 筆固定資料，啟動時讀一次）
-DATA_PATH = Path(__file__).parent.parent / "data" / "tainan_hospitals.json"
-HOSPITALS = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-
-
 def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """兩座標間的球面距離（公尺）"""
+    """計算球面距離"""
     r = 6371000
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp = math.radians(lat2 - lat1)
@@ -25,15 +23,43 @@ def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> floa
 @router.get("/hospitals")
 def list_hospitals(lat: Optional[float] = None, lng: Optional[float] = None):
     """
-    回傳臺南市醫院清單。
-    帶 ?lat=&lng=（使用者位置）時，附上 distance_meters 並依距離由近到遠排序。
+    🎯 直接從 PostgreSQL 抓取醫院清單並計算距離
     """
-    if lat is None or lng is None:
-        return {"hospitals": HOSPITALS}
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="無法連線至資料庫")
 
-    result = [
-        {**h, "distance_meters": round(haversine_meters(lat, lng, h["lat"], h["lng"]))}
-        for h in HOSPITALS
-    ]
-    result.sort(key=lambda h: h["distance_meters"])
-    return {"hospitals": result}
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 🎯 2. 使用 SELECT 撈取 DB，並將 latitude/longitude 轉為 lat/lng 以符合前端地圖的格式
+            cur.execute("""
+                SELECT 
+                    hospital_code, 
+                    name, 
+                    phone, 
+                    address, 
+                    latitude AS lat, 
+                    longitude AS lng 
+                FROM hospitals;
+            """)
+            hospitals_data = cur.fetchall()
+
+            # 若前端沒傳使用者當前座標，直接回傳所有醫院
+            if lat is None or lng is None:
+                return {"hospitals": hospitals_data}
+
+            # 🎯 3. 算距離並排序 (邏輯保持完全不變)
+            result = []
+            for h in hospitals_data:
+                if h["lat"] is not None and h["lng"] is not None:
+                    dist = round(haversine_meters(lat, lng, h["lat"], h["lng"]))
+                else:
+                    dist = 9999999
+                
+                result.append({**h, "distance_meters": dist})
+
+            result.sort(key=lambda x: x["distance_meters"])
+            return {"hospitals": result}
+
+    finally:
+        conn.close()
