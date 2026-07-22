@@ -27,7 +27,7 @@ class DoctorInfo(BaseModel):
     name: str
     department: str
     specialty: str
-    schedule: str
+    
 
 class HospitalResponse(BaseModel):
     hospital_code: str
