@@ -20,7 +20,7 @@ app.add_middleware(
 # 測試前後端連線的基礎路由
 @app.get("/api/test")
 def read_test():
-    return {"status": "success", "message": "恭喜！前後端成功連線！"}
+    return {"status": "success", "message": "成功連線"}
 
 # 🎯 註冊 API 路由模組
 app.include_router(diagnose_router)
