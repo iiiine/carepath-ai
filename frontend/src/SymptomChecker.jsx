@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import api from './api/axios'; // 引入前面封裝好的 axios (baseURL 預設連 127.0.0.1:8000)
+import HospitalMap from './HospitalMap'; // Peter 的醫院地圖
 
 function SymptomChecker() {
   // 1. 對話訊息列表 (初始化放一則 AI 的問候語)
@@ -160,6 +161,8 @@ function SymptomChecker() {
               </div>
             </div>
           ))}
+
+          <HospitalMap />
         </div>
       )}
 
