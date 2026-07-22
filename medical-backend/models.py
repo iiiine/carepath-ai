@@ -23,14 +23,17 @@ class GeminiOutputSchema(BaseModel):
 
 # 4. 醫生與醫院資料結構
 class DoctorInfo(BaseModel):
+    hospital_code: str
     name: str
     department: str
     specialty: str
     schedule: str
 
 class HospitalResponse(BaseModel):
+    hospital_code: str
     name: str
     address: str
+    phone: str
     distance_meters: int
     available_doctors: List[DoctorInfo]
 

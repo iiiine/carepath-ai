@@ -7,11 +7,11 @@ function App() {
   useEffect(() => { 
     // 呼叫同學的 FastAPI 測試接口
     fetch('https://baked-gender-unseen.ngrok-free.dev/api/test', {
-  headers: {
-    // 這是專門用來逼 ngrok 免費版直接放行、跳過警告頁面的特殊神奇標頭！
-    'ngrok-skip-browser-warning': 'true'
-  }
-})
+    headers: {
+      // 這是專門用來逼 ngrok 免費版直接放行、跳過警告頁面的特殊神奇標頭！
+      'ngrok-skip-browser-warning': 'true'
+    }
+  })
       .then(response => {
         if (!response.ok) {
           throw new Error('網路回應不成功')
@@ -29,9 +29,9 @@ function App() {
   }, []) // 空陣列代表只在網頁開啟時執行一次
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
-      <h1>的專案前端平台</h1>
-      <div style={{ padding: '20px', border: '2px solid #646cff', borderRadius: '8px', marginTop: '20px', backgroundColor: '#242424', color: '#fff' }}>
+    <div style={{ display: 'flex', justifyContent:'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+      <h1>Medical Project</h1>
+      <div style={{ alignself:'flex-start', padding: '20px', border: '2px solid #646cff', borderRadius: '8px', marginTop: '20px', backgroundColor: '#242424', color: '#fff' }}>
         <h3>後端回傳訊息：</h3>
         <p style={{ fontSize: '1.2rem', color: '#4caf50', fontWeight: 'bold' }}>{message}</p>
       </div>
