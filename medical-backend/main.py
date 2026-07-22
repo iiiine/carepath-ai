@@ -8,7 +8,6 @@ from routes.diagnose import router as diagnose_router
 from routes.hospitals import router as hospitals_router
 
 app = FastAPI(title="醫療系統 AI 詢問後端")
-
 # 設定 CORS
 app.add_middleware(
     CORSMiddleware,

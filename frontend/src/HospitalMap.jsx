@@ -31,7 +31,12 @@ function HospitalMap() {
   useEffect(() => {
     if (!located) return;
     const params = userPos ? { lat: userPos.lat, lng: userPos.lng } : {};
-    api.get('/api/v1/hospitals', { params })
+    api.get('/api/v1/hospitals', { 
+      params,
+      headers: {
+      'ngrok-skip-browser-warning': 'true' 
+      }
+    })
       .then((res) => setHospitals(res.data.hospitals))
       .catch(() => setError(true));
   }, [located, userPos]);
