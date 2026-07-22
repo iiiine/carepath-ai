@@ -104,23 +104,30 @@ async def diagnose_symptom(payload: SymptomRequest):
         matched_resources = []
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT name, address, latitude, longitude FROM hospitals;")
+                cur.execute("SELECT hospital_code, name, address, phone, latitude, longitude FROM hospitals;")
                 hospitals_data = cur.fetchall()
                 
                 cur.execute(
-                    "SELECT name, department, specialty, schedule FROM doctors WHERE department = %s;", 
+                    "SELECT hospital_code, name, department, specialty, schedule FROM doctors WHERE department = %s;", 
                     (suggested_dept,)
                 )
                 doctors_data = cur.fetchall()
                 
-                available_docs = [DoctorInfo(**doc) for doc in doctors_data]
+                all_doctors = [DoctorInfo(**doc) for doc in doctors_data]
                 
                 for hospital in hospitals_data:
+                    hospital_docs = [
+                        doc for doc in all_doctors 
+                        if doc.hospital_code == hospital["hospital_code"]
+                    ]
+                    
                     matched_resources.append(HospitalResponse(
+                        hospital_code=hospital["hospital_code"], 
                         name=hospital["name"],
+                        phone=hospital["phone"] or "暫無提供",     
                         address=hospital["address"],
-                        distance_meters=500,
-                        available_doctors=available_docs
+                        distance_meters=500, # 之後可結合經緯度計算距離
+                        available_doctors=hospital_docs
                     ))
         finally:
             conn.close()
