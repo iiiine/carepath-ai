@@ -92,7 +92,8 @@ function SymptomChecker({ isConnected, statusText }) {
       flexDirection: 'column',
       boxSizing: 'border-box',
       border: '1px solid #e2e8f0',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      minHeight: 0 // 🎯 關鍵1：允許 Flex 子容器收縮，防止被內容頂開撐大畫面
     };
   };
 
@@ -102,15 +103,15 @@ function SymptomChecker({ isConnected, statusText }) {
       gridTemplateColumns: '1fr 1fr', // 左右寬度 1:1
       gap: '20px',
       maxWidth: '1600px',
-      height: 'calc(100vh - 40px)',
+      height: 'calc(100vh - 40px)', // 🎯 固定整個頁面高度正好等於視窗高，永不出現整頁捲軸
       margin: '0 auto'
     }}>
       
       {/* 👈 左半邊欄位（3:7 比例） */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', minHeight: 0 }}>
         
-        {/* 左上（30%）：專案標題與指示燈（無白框背景） */}
-        <div style={{ flex: 3, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', padding: '10px 5px' }}>
+        {/* 左上（30%）：專案標題與指示燈 */}
+        <div style={{ flex: 3, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', padding: '10px 5px', minHeight: 0 }}>
           {/* 🟢/🔴 綠燈指示燈 */}
           <div style={{ 
             display: 'inline-flex', 
@@ -136,11 +137,11 @@ function SymptomChecker({ isConnected, statusText }) {
           </div>
 
           {/* 標題 */}
-          <h2 style={{ margin: 0, color: '#0550a0', fontSize: '3.5rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
+          <h2 style={{ margin: 0, color: '#0550a0', fontSize: '3.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
             🏥 智慧 AI 醫療問診系統
           </h2>
-          <p style={{ color: '#666', marginTop: '6px', fontSize: '1.5rem' }}>
-            ----------即時輔助問診與醫療資源導引
+          <p style={{ color: '#666', marginTop: '6px', fontSize: '1.2rem' }}>
+            ---------- 即時輔助問診與醫療資源導引
           </p>
         </div>
 
@@ -152,7 +153,7 @@ function SymptomChecker({ isConnected, statusText }) {
               {fullscreenSection === 'map' ? '↩️ 退出' : '🔍 全螢幕'}
             </button>
           </div>
-          <div style={{ flex: 1, width: '100%', minHeight: '0', position: 'relative' }}>
+          <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
             <HospitalMap isFullscreen={fullscreenSection === 'map'} />
           </div>
         </div>
@@ -160,7 +161,7 @@ function SymptomChecker({ isConnected, statusText }) {
       </div>
 
       {/* 👉 右半邊欄位（1:1 比例） */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', minHeight: 0 }}>
         
         {/* 右上（50%）：AI 線上問診對話框 */}
         <div style={{ ...getSectionStyle('chat'), flex: 1 }}>
@@ -180,30 +181,31 @@ function SymptomChecker({ isConnected, statusText }) {
                   color: '#475569',
                   fontWeight: 'bold'
                 }}>
-                <span>不適度: <strong style={{ color: painLevel >= 4 ? '#dc3545' : '#0056b3' }}>{painLevel} 分</strong></span>
-                <input
-                  type="range"
-                  min="1"
-                  max="5"
-                  step="1"
-                  value={painLevel}
-                  onChange={(e) => setPainLevel(e.target.value)}
-                  style={{ 
-                    width: '70px', 
-                    accentColor: painLevel >= 4 ? '#f34a5b' : painLevel >= 3 ? '#f6cf59' : '#6bf28a', 
-                    cursor: 'pointer',
-                    verticalAlign: 'middle'
-                  }}
-                />
-              </div>
-            )}
+                  <span>不適度: <strong style={{ color: painLevel >= 4 ? '#dc3545' : '#0056b3' }}>{painLevel} 分</strong></span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="1"
+                    value={painLevel}
+                    onChange={(e) => setPainLevel(e.target.value)}
+                    style={{ 
+                      width: '70px', 
+                      accentColor: painLevel >= 4 ? '#f34a5b' : painLevel >= 3 ? '#f6cf59' : '#6bf28a', 
+                      cursor: 'pointer',
+                      verticalAlign: 'middle'
+                    }}
+                  />
+                </div>
+              )}
               <button onClick={() => toggleFullscreen('chat')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>
                 {fullscreenSection === 'chat' ? '↩️退出' : '🔍全螢幕'}
               </button>
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '10px' }}>
+          {/* 🎯 關鍵2：限制對話滾動區塊 */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '10px' }}>
             {messages.map((msg, index) => (
               <div key={index} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '10px' }}>
                 <div style={{
@@ -258,7 +260,8 @@ function SymptomChecker({ isConnected, statusText }) {
             </button>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* 🎯 關鍵3：加上 minHeight: 0，讓內部診所/醫師列表超過時，只會在卡片內部顯示滑動條 */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {diagnosisResult ? (
               <div>
                 <div style={{ padding: '8px 10px', backgroundColor: '#e6f4ea', borderRadius: '6px', marginBottom: '8px', fontSize: '0.85rem' }}>
