@@ -15,6 +15,7 @@ from models import (
     ChatMessage
 )
 from services import get_db_connection, call_gemini_with_retry, get_rag_context
+from routes.hospitals import haversine_meters
 
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
@@ -132,18 +133,33 @@ async def diagnose_symptom(payload: SymptomRequest):
                 
                 for hospital in hospitals_data:
                     hospital_docs = [
-                        doc for doc in all_doctors 
+                        doc for doc in all_doctors
                         if doc.hospital_code == hospital["hospital_code"]
                     ]
-                    
+
+                    # 只推薦有該科醫生的醫院
+                    if not hospital_docs:
+                        continue
+
+                    if hospital["latitude"] is None or hospital["longitude"] is None:
+                        continue
+
                     matched_resources.append(HospitalResponse(
-                        hospital_code=hospital["hospital_code"], 
+                        hospital_code=hospital["hospital_code"],
                         name=hospital["name"],
-                        phone=hospital["phone"] or "暫無提供",     
+                        phone=hospital["phone"] or "暫無提供",
                         address=hospital["address"],
-                        distance_meters=500, 
+                        distance_meters=round(haversine_meters(
+                            payload.user_latitude, payload.user_longitude,
+                            float(hospital["latitude"]), float(hospital["longitude"]),
+                        )),
                         available_doctors=hospital_docs
                     ))
+
+                # ponytail: 先用「有該科醫生 + 距離最近」挑前 5 筆；
+                # 等組長的醫生專長(specialty)資料庫寫好後，再改成依專長匹配度排序
+                matched_resources.sort(key=lambda h: h.distance_meters)
+                matched_resources = matched_resources[:5]
         finally:
             conn.close()
 
