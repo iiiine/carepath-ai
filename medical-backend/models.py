@@ -36,6 +36,8 @@ class HospitalResponse(BaseModel):
     phone: str
     distance_meters: int
     booking_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None 
     available_doctors: List[DoctorInfo]
     
 # 5. 最終完成診斷時的回應結構

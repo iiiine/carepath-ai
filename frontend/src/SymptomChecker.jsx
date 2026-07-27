@@ -154,7 +154,10 @@ function SymptomChecker({ isConnected, statusText }) {
             </button>
           </div>
           <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
-            <HospitalMap isFullscreen={fullscreenSection === 'map'} />
+            <HospitalMap 
+              isFullscreen={fullscreenSection === 'map'} 
+              hospitalsProp={diagnosisResult ? diagnosisResult.nearby_medical_resources : null}
+            />
           </div>
         </div>
 

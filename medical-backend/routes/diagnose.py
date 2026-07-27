@@ -150,6 +150,8 @@ async def diagnose_symptom(payload: SymptomRequest):
                         phone=hospital["phone"] or "暫無提供",
                         address=hospital["address"],
                         booking_url=hospital.get("booking_url"),
+                        latitude=hospital["latitude"],   
+                        longitude=hospital["longitude"], 
                         distance_meters=round(haversine_meters(
                             payload.user_latitude, payload.user_longitude,
                             float(hospital["latitude"]), float(hospital["longitude"]),
