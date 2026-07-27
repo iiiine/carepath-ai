@@ -93,7 +93,7 @@ function SymptomChecker({ isConnected, statusText }) {
       boxSizing: 'border-box',
       border: '1px solid #e2e8f0',
       overflow: 'hidden',
-      minHeight: 0 // 🎯 關鍵1：允許 Flex 子容器收縮，防止被內容頂開撐大畫面
+      minHeight: 0
     };
   };
 
@@ -103,11 +103,11 @@ function SymptomChecker({ isConnected, statusText }) {
       gridTemplateColumns: '1fr 1fr', // 左右寬度 1:1
       gap: '20px',
       maxWidth: '1600px',
-      height: 'calc(100vh - 40px)', // 🎯 固定整個頁面高度正好等於視窗高，永不出現整頁捲軸
+      height: 'calc(100vh - 40px)',
       margin: '0 auto'
     }}>
       
-      {/* 👈 左半邊欄位（3:7 比例） */}
+      {/* 👈 左半邊欄位 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', minHeight: 0 }}>
         
         {/* 左上（30%）：專案標題與指示燈 */}
@@ -160,7 +160,7 @@ function SymptomChecker({ isConnected, statusText }) {
 
       </div>
 
-      {/* 👉 右半邊欄位（1:1 比例） */}
+      {/* 👉 右半邊欄位 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', minHeight: 0 }}>
         
         {/* 右上（50%）：AI 線上問診對話框 */}
@@ -204,7 +204,6 @@ function SymptomChecker({ isConnected, statusText }) {
             </div>
           </div>
 
-          {/* 🎯 關鍵2：限制對話滾動區塊 */}
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '10px' }}>
             {messages.map((msg, index) => (
               <div key={index} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '10px' }}>
@@ -260,7 +259,6 @@ function SymptomChecker({ isConnected, statusText }) {
             </button>
           </div>
 
-          {/* 🎯 關鍵3：加上 minHeight: 0，讓內部診所/醫師列表超過時，只會在卡片內部顯示滑動條 */}
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {diagnosisResult ? (
               <div>
@@ -269,22 +267,80 @@ function SymptomChecker({ isConnected, statusText }) {
                   <p style={{ margin: '4px 0 0' }}><strong>可能原因：</strong> {diagnosisResult.possible_causes.join('、')}</p>
                 </div>
 
-                {diagnosisResult.nearby_medical_resources.map((hospital, idx) => (
-                  <div key={idx} style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '6px', marginBottom: '8px', border: '1px solid #c3e6cb', fontSize: '0.85rem' }}>
-                    <div style={{ fontWeight: 'bold', color: '#155724' }}>🏥 {hospital.name}</div>
-                    <div style={{ color: '#555', margin: '2px 0', fontSize: '0.8rem' }}>地址：{hospital.address} (約 {hospital.distance_meters}m)</div>
-                    
-                    <div style={{ marginTop: '6px' }}>
-                      <strong>👨‍⚕️ 門診醫師：</strong>
-                      {hospital.available_doctors.map((doc, dIdx) => (
-                        <div key={dIdx} style={{ backgroundColor: '#f8f9fa', padding: '4px 6px', borderRadius: '4px', marginTop: '4px', fontSize: '0.8rem' }}>
-                          <strong>{doc.name} 醫師</strong> ({doc.department})
-                          <br /><span style={{ color: '#d9534f' }}>🗓️ 排班：{doc.schedule}</span>
+                {diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
+                  // 判斷是否為合法的網址 (開頭為 http:// 或 https://)
+                  const isUrl = hospital.booking_url && /^https?:\/\//i.test(hospital.booking_url.trim());
+
+                  return (
+                    <div key={idx} style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '6px', marginBottom: '8px', border: '1px solid #c3e6cb', fontSize: '0.85rem' }}>
+                      
+                      {/*醫院名稱與線上掛號按鈕/提示 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 'bold', color: '#155724', fontSize: '0.95rem' }}>
+                          🏥 {hospital.name}
                         </div>
-                      ))}
+
+                        {/*條件渲染：合法網址 ➔ 按鈕；一般文字/NULL ➔ 提示黃色標籤 */}
+                        {isUrl ? (
+                          <a
+                            href={hospital.booking_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              backgroundColor: '#28a745',
+                              color: '#ffffff',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              textDecoration: 'none',
+                              fontSize: '0.8rem',
+                              fontWeight: 'bold',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            🌐 線上掛號
+                          </a>
+                        ) : (
+                          <span style={{ 
+                            fontSize: '0.75rem', 
+                            color: '#856404', 
+                            backgroundColor: '#fff3cd', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px',
+                            border: '1px solid #ffeeba',
+                            fontWeight: 'bold'
+                          }}>
+                            {hospital.booking_url || '僅提供現場掛號'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 📍 地址與距離 */}
+                      <div style={{ color: '#555', margin: '4px 0', fontSize: '0.8rem' }}>
+                        📍 地址：{hospital.address} (約 {hospital.distance_meters}m)
+                      </div>
+
+                      {/* 📞 電話 */}
+                      <div style={{ color: '#555', marginBottom: '6px', fontSize: '0.8rem' }}>
+                        📞 電話：{hospital.phone}
+                      </div>
+                      
+                      {/* 👨‍⚕️ 門診醫師列表 */}
+                      <div style={{ marginTop: '6px', borderTop: '1px dashed #d4edda', paddingTop: '6px' }}>
+                        <strong>👨‍⚕️ 門診醫師：</strong>
+                        {hospital.available_doctors.map((doc, dIdx) => (
+                          <div key={dIdx} style={{ backgroundColor: '#f8f9fa', padding: '4px 6px', borderRadius: '4px', marginTop: '4px', fontSize: '0.8rem' }}>
+                            <strong>{doc.name}</strong> ({doc.department})
+                            <br /><span style={{ color: '#666' }}>專長：{doc.specialty}</span>
+                          </div>
+                        ))}
+                      </div>
+
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888', fontSize: '0.85rem' }}>

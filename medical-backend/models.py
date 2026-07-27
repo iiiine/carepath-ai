@@ -35,8 +35,9 @@ class HospitalResponse(BaseModel):
     address: str
     phone: str
     distance_meters: int
+    booking_url: str | None = None
     available_doctors: List[DoctorInfo]
-
+    
 # 5. 最終完成診斷時的回應結構
 class DiagnosisResponse(BaseModel):
     status: str = "completed"
