@@ -55,7 +55,7 @@ async def diagnose_symptom(payload: SymptomRequest):
     - department 給予 "家醫科"，causes 給予空陣列 []。
 
     3. 如果資訊足夠 (is_complete = true)：
-    - 在 department 中從以下九個科別精準選擇一個：["骨科", "眼科", "腸胃科", "家醫科","心臟內科","婦產科","耳鼻喉科","精神科","牙科(口腔科)"]
+    - 在 department 中從以下九個科別精準選擇一個：["骨科", "眼科", "腸胃科", "家醫科","心臟內科","婦產科","耳鼻喉科","精神科","牙科"]
     - 在 causes 中參考衛教知識庫與症狀，列出 2-3 個可能的原因。
     - follow_up_question 給予空字串 ""。
 
@@ -119,7 +119,7 @@ async def diagnose_symptom(payload: SymptomRequest):
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # 1. 撈取所有醫院
-                cur.execute("SELECT hospital_code, name, address, phone, latitude, longitude FROM hospitals;")
+                cur.execute("SELECT hospital_code, name, address, phone, latitude, longitude, booking_url FROM hospitals;")
                 hospitals_data = cur.fetchall()
                 
                 # 2. 撈取指定科別的醫生
@@ -149,6 +149,7 @@ async def diagnose_symptom(payload: SymptomRequest):
                         name=hospital["name"],
                         phone=hospital["phone"] or "暫無提供",
                         address=hospital["address"],
+                        booking_url=hospital.get("booking_url"),
                         distance_meters=round(haversine_meters(
                             payload.user_latitude, payload.user_longitude,
                             float(hospital["latitude"]), float(hospital["longitude"]),
