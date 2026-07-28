@@ -2,6 +2,7 @@
 import os
 import json
 import re
+from functools import lru_cache
 from fastapi import APIRouter, HTTPException
 from psycopg2.extras import RealDictCursor
 from typing import Union
@@ -20,6 +21,30 @@ from routes.hospitals import haversine_meters
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
 router = APIRouter(prefix="/api/v1", tags=["Diagnose"])
+
+# 資料庫連不上時的備援科別清單（2026-07-28 的實際內容）
+DEFAULT_DEPARTMENTS = (
+    "家醫科", "婦產科", "心臟內科", "腸胃科", "牙科", "神經外科", "精神科", "眼科", "皮膚科",
+)
+
+
+@lru_cache(maxsize=1)
+def get_departments() -> tuple:
+    """資料庫實際有醫生的科別，用來限制 AI 只能從這些科別挑，避免推薦到查無醫生的科別。
+
+    ponytail: 快取到重啟為止；組長匯入新科別後要重啟後端才會生效。
+    回傳 tuple 是因為 lru_cache 要求可 hash。
+    """
+    conn = get_db_connection()
+    if not conn:
+        print("⚠️ 撈科別清單時資料庫連線失敗，改用備援清單")
+        return DEFAULT_DEPARTMENTS
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT department FROM doctors ORDER BY department;")
+            return tuple(r[0] for r in cur.fetchall()) or DEFAULT_DEPARTMENTS
+    finally:
+        conn.close()
 
 
 def specialty_score(specialty: str, causes_text: str) -> int:
@@ -67,7 +92,7 @@ async def diagnose_symptom(payload: SymptomRequest):
     - department 給予 "家醫科"，causes 給予空陣列 []。
 
     3. 如果資訊足夠 (is_complete = true)：
-    - 在 department 中從以下九個科別精準選擇一個：["骨科", "眼科", "腸胃科", "家醫科","心臟內科","婦產科","耳鼻喉科","精神科","牙科"]
+    - 在 department 中從以下科別精準選擇一個（這是本系統合作院所實際有的科別，不可自創）：{list(get_departments())}
     - 在 causes 中參考衛教知識庫與症狀，列出 2-3 個可能的原因。
     - follow_up_question 給予空字串 ""。
 
@@ -114,6 +139,15 @@ async def diagnose_symptom(payload: SymptomRequest):
         # ------------------------------------------------------------------
         suggested_dept = ai_result.get("department", "家醫科")
         possible_causes = ai_result.get("causes", ["一般身體不適"])
+
+        # 後端防線：prompt 限制不等於保證，AI 仍可能吐出資料庫沒有的科別，
+        # 此時若直接查詢會回 0 筆，前端會退回顯示全部醫院。改推薦家醫科初步評估。
+        departments = get_departments()
+        unavailable_dept = None
+        if suggested_dept not in departments:
+            unavailable_dept = suggested_dept
+            suggested_dept = "家醫科" if "家醫科" in departments else departments[0]
+            print(f"⚠️ AI 判定的「{unavailable_dept}」不在資料庫科別內，改推薦 {suggested_dept}")
 
         print("\n" + "="*50)
         print(f"🔍 經過多輪評估，最終症狀描述: {payload.symptom_text}")
@@ -192,6 +226,11 @@ async def diagnose_symptom(payload: SymptomRequest):
 
         causes_str = "、".join(possible_causes) if possible_causes else "身體不適"
         custom_message = f"已收到您的完整描述，初步判斷您可能有 {causes_str} 的問題，推薦您看 {suggested_dept}。以下為您附近的診所與醫師資訊："
+        if unavailable_dept:
+            custom_message = (
+                f"已收到您的完整描述，初步判斷您可能有 {causes_str} 的問題。"
+                f"目前合作院所暫無 {unavailable_dept} 門診，先為您推薦 {suggested_dept} 做初步評估與轉診建議："
+            )
 
         return DiagnosisResponse(
             status="completed",
