@@ -270,6 +270,13 @@ function SymptomChecker({ isConnected, statusText }) {
                   <p style={{ margin: '4px 0 0' }}><strong>可能原因：</strong> {diagnosisResult.possible_causes.join('、')}</p>
                 </div>
 
+                {diagnosisResult.nearby_medical_resources.length === 0 && (
+                  <div style={{ padding: '14px', backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', borderRadius: '6px', fontSize: '0.85rem', lineHeight: 1.7 }}>
+                    😔 <strong>附近查無 {diagnosisResult.suggested_department} 的合作院所</strong>
+                    <br />目前系統合作的院所中沒有這個科別的門診，建議您直接前往鄰近醫院掛號，或撥打 1922 健康諮詢專線。
+                  </div>
+                )}
+
                 {diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
                   // 判斷是否為合法的網址 (開頭為 http:// 或 https://)
                   const isUrl = hospital.booking_url && /^https?:\/\//i.test(hospital.booking_url.trim());
