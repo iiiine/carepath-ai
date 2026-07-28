@@ -2,6 +2,8 @@
 # 資料庫與 AI 工具函式
 import os
 import time
+from pathlib import Path
+
 import psycopg2
 from dotenv import load_dotenv
 from google import genai
@@ -13,13 +15,14 @@ from models import GeminiOutputSchema
 from langchain_postgres import PGVector
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ------------------------------------------------------------------
 # 初始化 RAG 向量資料庫檢索器 (PGVector)
@@ -29,22 +32,30 @@ pgvector_db_url = DATABASE_URL
 if pgvector_db_url and pgvector_db_url.startswith("postgresql://"):
     pgvector_db_url = pgvector_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="gemini-embedding-001",
-    google_api_key=GEMINI_API_KEY
-)
+if GEMINI_API_KEY:
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="gemini-embedding-001",
+        google_api_key=GEMINI_API_KEY,
+    )
 
-vector_store = PGVector(
-    embeddings=embeddings,
-    collection_name="medical_knowledge",
-    connection=pgvector_db_url,
-    use_jsonb=True,
-)
+    vector_store = PGVector(
+        embeddings=embeddings,
+        collection_name="medical_knowledge",
+        connection=pgvector_db_url,
+        use_jsonb=True,
+    )
 
-retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+else:
+    embeddings = None
+    vector_store = None
+    retriever = None
 
 def get_rag_context(query_text: str) -> str:
     """根據使用者症狀描述，從 PostgreSQL 向量庫抓取最相關的 3 筆衛教知識"""
+    if not retriever:
+        return "暫無相關衛教知識"
+
     try:
         docs = retriever.invoke(query_text)
         if not docs:
@@ -66,6 +77,9 @@ def get_db_connection():
         return None
 
 def call_gemini_with_retry(prompt: str, max_retries: int = 5):
+    if not client or not GEMINI_API_KEY:
+        raise RuntimeError("缺少 GEMINI_API_KEY，無法呼叫 Gemini")
+
     delay = 2
     for attempt in range(max_retries):
         try:

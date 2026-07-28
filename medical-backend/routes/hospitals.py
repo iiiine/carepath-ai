@@ -2,9 +2,9 @@
 
 import math
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from psycopg2.extras import RealDictCursor
-
+from routes.auth import get_current_user
 # 🎯 1. 引入你們共用的 PostgreSQL 資料庫連線函式
 from services import get_db_connection 
 
@@ -21,7 +21,7 @@ def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> floa
 
 
 @router.get("/hospitals")
-def list_hospitals(lat: Optional[float] = None, lng: Optional[float] = None):
+def list_hospitals(lat: Optional[float] = None, lng: Optional[float] = None,current_user=Depends(get_current_user)):
     """
     🎯 直接從 PostgreSQL 抓取醫院清單並計算距離
     """
