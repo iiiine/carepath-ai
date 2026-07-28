@@ -57,7 +57,9 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
   // 只有在【沒有傳入特定醫院清單】時，才去撈取全臺南的醫院
   useEffect(() => {
     if (!located) return;
-    if (hospitalsProp && hospitalsProp.length > 0) return; // 已經有問診結果，就不抓全量
+    // 已經有問診結果就不抓全量。注意要用 null 判斷：問診完但查無醫院時是空陣列 []，
+    // 這種情況該顯示「查無」，不是退回顯示全部醫院。
+    if (hospitalsProp) return;
 
     const params = userPos ? { lat: userPos.lat, lng: userPos.lng } : {};
     api.get('/api/v1/hospitals', { 
@@ -70,15 +72,29 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
       .catch(() => setError(true));
   }, [located, userPos, hospitalsProp]);
 
-  // 決定目前要在地圖顯示的醫院：如果有傳入問診結果就用 hospitalsProp，否則用全量 hospitals
-  const displayHospitals = (hospitalsProp && hospitalsProp.length > 0) ? hospitalsProp : hospitals;
+  // 決定目前要在地圖顯示的醫院：有問診結果就用 hospitalsProp（即使是空的），否則用全量 hospitals
+  const displayHospitals = hospitalsProp ?? hospitals;
+  const isEmptyResult = hospitalsProp?.length === 0;
 
   if (!MAPS_KEY) return <p style={{ color: '#d9534f' }}>⚠️ 未設定 Google Maps API key</p>;
-  if (error && (!hospitalsProp || hospitalsProp.length === 0)) return <p style={{ color: '#d9534f' }}>⚠️ 無法載入醫院地圖資料</p>;
+  if (error && !hospitalsProp) return <p style={{ color: '#d9534f' }}>⚠️ 無法載入醫院地圖資料</p>;
   if (!displayHospitals) return <p style={{ color: '#666' }}>🗺️ 醫院地圖載入中...</p>;
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* 問診完但查無合作院所：地圖留著讓使用者看得到自己的位置，只在上面疊一條說明 */}
+      {isEmptyResult && (
+        <div style={{
+          position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10, backgroundColor: '#fff3cd', color: '#856404',
+          border: '1px solid #ffeeba', borderRadius: '6px',
+          padding: '8px 14px', fontSize: '0.85rem', fontWeight: 'bold',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.15)', whiteSpace: 'nowrap',
+        }}>
+          😔 附近查無合作院所，建議直接前往鄰近醫院就診
+        </div>
+      )}
+
       <APIProvider apiKey={MAPS_KEY}>
         <Map
           style={{ width: '100%', height: isFullscreen ? 'calc(100vh - 100px)' : '100%', minHeight: '380px', borderRadius: '8px' }}
