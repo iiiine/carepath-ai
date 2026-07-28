@@ -21,6 +21,18 @@ GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
 router = APIRouter(prefix="/api/v1", tags=["Diagnose"])
 
+
+def specialty_score(specialty: str, causes_text: str) -> int:
+    """醫生專長與 AI 判定病因的相符程度：中文兩字詞重疊數，越高越相關。
+
+    例：causes「胃食道逆流」vs specialty「胃食道逆流、消化性潰瘍」→ 命中「胃食」「食道」「道逆」「逆流」= 4。
+    ponytail: 用 2-gram 硬比字，不做斷詞/語意比對；等實測發現排序不準再換 embedding。
+    """
+    if not specialty or not causes_text:
+        return 0
+    grams = {causes_text[i:i + 2] for i in range(len(causes_text) - 1)}
+    return sum(1 for g in grams if g in specialty)
+
 @router.post("/diagnose", response_model=Union[DiagnosisResponse, FollowUpResponse])
 async def diagnose_symptom(payload: SymptomRequest):
     """
@@ -115,7 +127,11 @@ async def diagnose_symptom(payload: SymptomRequest):
         if not conn:
             raise HTTPException(status_code=500, detail="無法連線到資料庫")
 
+        # 拿 AI 判定的可能病因當作比對醫生專長的關鍵字來源
+        causes_text = "".join(possible_causes)
+
         matched_resources = []
+        scored_resources = []  # [(該院最佳專長匹配分數, HospitalResponse)]
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # 1. 撈取所有醫院
@@ -144,7 +160,13 @@ async def diagnose_symptom(payload: SymptomRequest):
                     if hospital["latitude"] is None or hospital["longitude"] is None:
                         continue
 
-                    matched_resources.append(HospitalResponse(
+                    # 院內醫生依專長相符度排序，最對症的醫生排最前面
+                    hospital_docs.sort(
+                        key=lambda d: -specialty_score(d.specialty, causes_text)
+                    )
+                    best_match = specialty_score(hospital_docs[0].specialty, causes_text)
+
+                    scored_resources.append((best_match, HospitalResponse(
                         hospital_code=hospital["hospital_code"],
                         name=hospital["name"],
                         phone=hospital["phone"] or "暫無提供",
@@ -157,12 +179,14 @@ async def diagnose_symptom(payload: SymptomRequest):
                             float(hospital["latitude"]), float(hospital["longitude"]),
                         )),
                         available_doctors=hospital_docs
-                    ))
+                    )))
 
-                # ponytail: 先用「有該科醫生 + 距離最近」挑前 5 筆；
-                # 等組長的醫生專長(specialty)資料庫寫好後，再改成依專長匹配度排序
-                matched_resources.sort(key=lambda h: h.distance_meters)
-                matched_resources = matched_resources[:5]
+                # 先用距離篩出附近 10 間候選，再從中挑專長最對症的 5 間（同分則近的優先）。
+                # ponytail: 先距離後專長，避免為了專長把人導去 20 公里外的醫院。
+                scored_resources.sort(key=lambda t: t[1].distance_meters)
+                nearest = scored_resources[:10]
+                nearest.sort(key=lambda t: (-t[0], t[1].distance_meters))
+                matched_resources = [hosp for _, hosp in nearest[:5]]
         finally:
             conn.close()
 
