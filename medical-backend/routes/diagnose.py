@@ -3,10 +3,10 @@ import os
 import json
 import re
 from functools import lru_cache
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from psycopg2.extras import RealDictCursor
 from typing import Union
-
+from routes.auth import get_current_user
 from models import (
     SymptomRequest, 
     DiagnosisResponse, 
@@ -59,7 +59,7 @@ def specialty_score(specialty: str, causes_text: str) -> int:
     return sum(1 for g in grams if g in specialty)
 
 @router.post("/diagnose", response_model=Union[DiagnosisResponse, FollowUpResponse])
-async def diagnose_symptom(payload: SymptomRequest):
+async def diagnose_symptom(payload: SymptomRequest,current_user=Depends(get_current_user)):
     """
     AI 多輪問診 API (結合 RAG 衛教知識庫):
     1. 若資訊不足，回傳 is_complete=False 與追問問題 (FollowUpResponse)。

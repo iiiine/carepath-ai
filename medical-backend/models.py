@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 
 # 1. 歷史對話訊息結構
@@ -56,3 +56,28 @@ class FollowUpResponse(BaseModel):
     is_complete: bool = False
     message: str
     history: List[ChatMessage]
+    # ==============================
+# 使用者註冊 / 登入 Model
+# ==============================
+
+class UserRegister(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserLogin(BaseModel):
+    identifier: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserPublic(BaseModel):
+    id: int
+    username: str
+    email: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserPublic
