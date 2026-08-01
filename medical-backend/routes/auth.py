@@ -5,6 +5,7 @@ import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
+import uuid
 from fastapi import (
     APIRouter,
     Depends,
@@ -166,7 +167,8 @@ def get_current_user(
                     id,
                     username,
                     email,
-                    is_active
+                    is_active,
+                    is_guest
                 FROM users
                 WHERE id = %s;
                 """,
@@ -425,4 +427,63 @@ def get_me(
         "id": current_user["id"],
         "username": current_user["username"],
         "email": current_user["email"]
+    }
+
+# =========================
+# 訪客登入 (Guest Login)
+# =========================
+
+@router.post(
+    "/guest-login",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def guest_login():
+    """
+    產生臨時訪客帳號並回傳 JWT Token
+    """
+    # 產生不重複的匿名訪客名稱與 Email
+    unique_id = uuid.uuid4().hex[:8]
+    guest_username = f"Guest_{unique_id}"
+    guest_email = f"guest_{unique_id}@anonymous.local"
+    
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(
+            status_code=500,
+            detail="無法連線至資料庫"
+        )
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 建立訪客帳號，is_guest 設為 True，密碼給隨機雜湊
+            dummy_hashed = hash_password(uuid.uuid4().hex)
+            
+            cur.execute(
+                """
+                INSERT INTO users (username, email, password_hash, is_guest)
+                VALUES (%s, %s, %s, TRUE)
+                RETURNING id, username, email, is_guest;
+                """,
+                (guest_username, guest_email, dummy_hashed)
+            )
+            user = cur.fetchone()
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"訪客登入建立失敗：{str(e)}"
+        )
+    finally:
+        conn.close()
+
+    # 發放該訪客的 JWT Token
+    token = create_access_token(user["id"])
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user
     }

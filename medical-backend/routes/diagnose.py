@@ -15,10 +15,15 @@ from models import (
     HospitalResponse,
     ChatMessage
 )
-from services import get_db_connection, call_gemini_with_retry, get_rag_context
+# 💡 匯入 client 與 GEMINI_MODEL_NAME 進行摘要標題生成
+from services import (
+    get_db_connection, 
+    call_gemini_with_retry, 
+    get_rag_context, 
+    client, 
+    GEMINI_MODEL_NAME
+)
 from routes.hospitals import haversine_meters
-
-GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
 router = APIRouter(prefix="/api/v1", tags=["Diagnose"])
 
@@ -59,7 +64,7 @@ def specialty_score(specialty: str, causes_text: str) -> int:
     return sum(1 for g in grams if g in specialty)
 
 @router.post("/diagnose", response_model=Union[DiagnosisResponse, FollowUpResponse])
-async def diagnose_symptom(payload: SymptomRequest,current_user=Depends(get_current_user)):
+async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_current_user)):
     """
     AI 多輪問診 API (結合 RAG 衛教知識庫):
     1. 若資訊不足，回傳 is_complete=False 與追問問題 (FollowUpResponse)。
@@ -216,7 +221,6 @@ async def diagnose_symptom(payload: SymptomRequest,current_user=Depends(get_curr
                     )))
 
                 # 先用距離篩出附近 10 間候選，再從中挑專長最對症的 5 間（同分則近的優先）。
-                # ponytail: 先距離後專長，避免為了專長把人導去 20 公里外的醫院。
                 scored_resources.sort(key=lambda t: t[1].distance_meters)
                 nearest = scored_resources[:10]
                 nearest.sort(key=lambda t: (-t[0], t[1].distance_meters))
@@ -231,6 +235,55 @@ async def diagnose_symptom(payload: SymptomRequest,current_user=Depends(get_curr
                 f"已收到您的完整描述，初步判斷您可能有 {causes_str} 的問題。"
                 f"目前合作院所暫無 {unavailable_dept} 門診，先為您推薦 {suggested_dept} 做初步評估與轉診建議："
             )
+
+        # ------------------------------------------------------------------
+        # 會員自動保存歷史紀錄 (含 Gemini 自動生成精簡標題)
+        # ------------------------------------------------------------------
+        if not current_user.get("is_guest"):
+            save_conn = get_db_connection()
+            if save_conn:
+                try:
+                    # 預設標題 (Fallback: 截取前 10 字)
+                    summary_title = payload.symptom_text[:10] + "..." if len(payload.symptom_text) > 10 else payload.symptom_text
+                    
+                    # 💡 1. 呼叫 Gemini client 產生 6 字以內對話標題
+                    if client:
+                        try:
+                            title_prompt = f"請根據以下患者主訴，生成一個 6 個字以內的繁體中文精簡對話標題（例如：腸胃不適諮詢、急性偏頭痛評估）。請直接輸出標題文字，不要包含任何引號或標點符號：{payload.symptom_text}"
+                            
+                            title_response = client.models.generate_content(
+                                model=GEMINI_MODEL_NAME,
+                                contents=title_prompt
+                            )
+                            
+                            extracted_title = title_response.text.strip().replace('"', '').replace('「', '').replace('」', '').replace('\n', '')
+                            if extracted_title and len(extracted_title) <= 12:
+                                summary_title = extracted_title
+                        except Exception as t_err:
+                            print(f"⚠️ 標題摘要生成失敗，退回預設症狀文字: {t_err}")
+
+                    # 💡 2. 將最終 AI 的回覆訊息打包進對話歷史
+                    final_history_for_db = updated_history + [
+                        ChatMessage(role="model", content=custom_message)
+                    ]
+                    
+                    # 💡 3. 寫入資料庫
+                    with save_conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO chat_sessions (user_id, symptom_text, suggested_department, history_json)
+                            VALUES (%s, %s, %s, %s);
+                        """, (
+                            current_user["id"],
+                            summary_title,
+                            suggested_dept,
+                            json.dumps([msg.dict() for msg in final_history_for_db], ensure_ascii=False)
+                        ))
+                        save_conn.commit()
+                        print(f"✅ 已成功為會員 ID [{current_user['id']}] 儲存歷史紀錄，標題：{summary_title}")
+                except Exception as save_err:
+                    print(f"⚠️ 歷史紀錄儲存失敗: {save_err}")
+                finally:
+                    save_conn.close()
 
         return DiagnosisResponse(
             status="completed",
