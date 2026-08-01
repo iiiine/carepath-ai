@@ -75,9 +75,17 @@ class UserPublic(BaseModel):
     id: int
     username: str
     email: str
-
+    is_guest: bool = False
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserPublic
+
+class ChatSessionResponse(BaseModel):
+    id: int
+    user_id: int
+    symptom_text: str
+    suggested_department: Optional[str] = None
+    created_at: str
+    history: List[ChatMessage]

@@ -7,6 +7,7 @@ from services import run_health_check
 from routes.diagnose import router as diagnose_router
 from routes.hospitals import router as hospitals_router
 from routes.auth import router as auth_router
+from routes.history import router as history_router
 app = FastAPI(title="醫療系統 AI 詢問後端")
 # 設定 CORS
 app.add_middleware(
@@ -26,6 +27,7 @@ def read_test():
 app.include_router(diagnose_router)
 app.include_router(hospitals_router)
 app.include_router(auth_router)
+app.include_router(history_router)
 # 啟動時執行連線健康檢查
 run_health_check()
 

@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useEffect } from 'react'
 import './App.css'
 import SymptomChecker from './SymptomChecker'
@@ -94,50 +95,63 @@ function App() {
   return (
     <div
       style={{
-        padding: '20px',
+        padding: '16px 24px',
         minHeight: '100vh',
         boxSizing: 'border-box',
         backgroundColor: '#bee7f7',
-        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px'
       }}
     >
+      {/* 🔝 頂部使用者資訊欄 */}
       <div
         style={{
-          position: 'fixed',
-          right: '26px',
-          top: '18px',
-          zIndex: 5000,
           display: 'flex',
+          justifyContent: 'flex-end',
           alignItems: 'center',
-          gap: '10px',
-          padding: '7px 10px 7px 14px',
-          backgroundColor: 'rgba(255,255,255,0.96)',
-          borderRadius: '24px',
-          boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
-          border: '1px solid #dbeafe',
-          fontSize: '0.82rem',
+          width: '100%',
+          maxWidth: '1700px',
+          margin: '0 auto',
         }}
       >
-        <span style={{ color: '#334155', fontWeight: 600 }}>
-          👤 {user.username}
-        </span>
-        <button
-          onClick={handleLogout}
+        <div
           style={{
-            border: 'none',
-            backgroundColor: '#0550a0',
-            color: '#fff',
-            borderRadius: '18px',
-            padding: '5px 10px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '6px 14px',
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            borderRadius: '20px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            border: '1px solid #dbeafe',
+            fontSize: '0.85rem',
           }}
         >
-          登出
-        </button>
+          <span style={{ color: '#334155', fontWeight: 600 }}>
+            {user.is_guest ? `👤 訪客 (${user.username})` : `👤 ${user.username}`}
+          </span>
+          <button
+            onClick={handleLogout}
+            style={{
+              border: 'none',
+              backgroundColor: '#0550a0',
+              color: '#fff',
+              borderRadius: '14px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '0.8rem'
+            }}
+          >
+            登出
+          </button>
+        </div>
       </div>
 
+      {/* 主介面，傳入當前使用者 */}
       <SymptomChecker
+        user={user}
         isConnected={isConnected}
         statusText={statusText}
       />

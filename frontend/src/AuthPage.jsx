@@ -9,6 +9,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isRegister = mode === 'register';
@@ -20,6 +21,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
     setMode(isRegister ? 'login' : 'register');
   };
 
+  // 1. 一般會員 登入/註冊 處理
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -58,9 +60,28 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
       onAuthSuccess(user, access_token);
     } catch (err) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : '登入系統發生錯誤，請稍後再試');
+      setError(typeof detail === 'string' ? detail : '系統發生錯誤，請稍後再試');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 2. 💡 訪客登入 處理
+  const handleGuestLogin = async () => {
+    setError('');
+    setGuestLoading(true);
+
+    try {
+      const response = await api.post('/api/v1/auth/guest-login');
+      const { access_token, user } = response.data;
+
+      onAuthSuccess(user, access_token);
+    } catch (err) {
+      console.error('訪客登入失敗:', err);
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : '訪客登入失敗，請確認後端服務是否正常');
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -72,6 +93,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
     outline: 'none',
     fontSize: '0.95rem',
     marginTop: '6px',
+    boxSizing: 'border-box'
   };
 
   return (
@@ -125,7 +147,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
           🏥 智慧 AI 醫療問診系統
         </h1>
         <p style={{ color: '#64748b', marginBottom: '24px' }}>
-          {isRegister ? '建立帳號後即可使用問診與醫院地圖功能' : '請先登入以使用醫療問診系統'}
+          {isRegister ? '建立帳號後即可使用問診與醫院地圖功能' : '請登入或以訪客身份體驗醫療問診系統'}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -236,7 +258,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || guestLoading}
             style={{
               width: '100%',
               marginTop: '22px',
@@ -245,16 +267,46 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              cursor: loading ? 'not-allowed' : 'pointer',
+              cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
               fontSize: '1rem',
               fontWeight: 'bold',
             }}
           >
-            {loading ? '處理中...' : isRegister ? '建立帳號' : '登入'}
+            {loading ? '處理中...' : isRegister ? '建立帳號' : '會員登入'}
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '18px', color: '#64748b' }}>
+        {/* 💡 分隔線與訪客按鈕 */}
+        <div style={{ margin: '20px 0', borderTop: '1px solid #e2e8f0', position: 'relative', textAlign: 'center' }}>
+          <span style={{ position: 'absolute', top: '-10px', backgroundColor: '#fff', padding: '0 10px', color: '#94a3b8', fontSize: '0.8rem' }}>
+            或
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGuestLogin}
+          disabled={loading || guestLoading}
+          style={{
+            width: '100%',
+            padding: '12px',
+            backgroundColor: '#f1f5f9',
+            color: '#334155',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
+            fontSize: '0.95rem',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}
+        >
+          {guestLoading ? '建立訪客身份中...' : '👤 以訪客身份直接體驗'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: '18px', color: '#64748b', fontSize: '0.9rem' }}>
           {isRegister ? '已經有帳號？' : '還沒有帳號？'}
           <button
             type="button"
