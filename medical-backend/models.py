@@ -12,7 +12,7 @@ class SymptomRequest(BaseModel):
     symptom_text: str
     user_latitude: Optional[float] = 23.0
     user_longitude: Optional[float] = 120.2
-    history: Optional[List[ChatMessage]] = [] # 過去的對話歷史紀錄
+    history: List[ChatMessage] = Field(default_factory=list)
 
 # 3. 強制 Gemini 輸出的 JSON Schema
 class GeminiOutputSchema(BaseModel):
@@ -85,7 +85,26 @@ class TokenResponse(BaseModel):
 class ChatSessionResponse(BaseModel):
     id: int
     user_id: int
-    symptom_text: str
+
+    title: str
+    original_symptom: Optional[str] = None
+    pain_level: Optional[int] = None
+
     suggested_department: Optional[str] = None
+    possible_causes: List[str] = Field(default_factory=list)
+
     created_at: str
-    history: List[ChatMessage]
+    history: List[ChatMessage] = Field(default_factory=list)
+
+    nearby_medical_resources: List[HospitalResponse] = Field(
+        default_factory=list
+    )
+
+class ProfileSchema(BaseModel):
+    height_cm: Optional[float] = Field(None, ge=30, le=250, description="身高 (cm)，限制 30~250")
+    weight_kg: Optional[float] = Field(None, ge=2, le=300, description="體重 (kg)，限制 2~300")
+    birth_date: Optional[str] = Field(None, description="生日 (YYYY-MM-DD)")
+    gender: Optional[str] = Field(None, description="性別")
+    past_medical_history: Optional[str] = Field("", description="既往病史")
+    allergy_history: Optional[str] = Field("", description="過敏史")
+    current_medications: Optional[str] = Field("", description="目前長期用藥")

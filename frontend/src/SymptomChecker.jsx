@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import api from './api/axios';
 import HospitalMap from './HospitalMap';
 import HistorySidebar from './HistorySidebar';
+import UserProfileModal from './UserProfileModal'; // 👈 1. 匯入 Modal
 
 function SymptomChecker({ user, isConnected, statusText }) {
   const [messages, setMessages] = useState([
@@ -26,10 +27,22 @@ function SymptomChecker({ user, isConnected, statusText }) {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [fullscreenSection, setFullscreenSection] = useState(null);
 
+  // 💡 個人健康資料 Modal 開關狀態
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   const messagesEndRef = useRef(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // 開啟個人健康資料 Modal 判斷
+  const handleOpenProfile = () => {
+    if (user?.is_guest) {
+      alert('🔒 訪客模式無法儲存健康資料，請先註冊/登入會員！');
+      return;
+    }
+    setIsProfileOpen(true);
+  };
 
   // 發送問診訊息
   const handleSendMessage = async (e) => {
@@ -61,6 +74,9 @@ function SymptomChecker({ user, isConnected, statusText }) {
         setMessages([...newMessages, { role: 'model', content: data.message }]);
         setDiagnosisResult(data);
 
+        // 廣播「歷史紀錄已更新」事件
+        window.dispatchEvent(new Event('refresh-history'));
+
         // 🟢 觸發「三個燈 3 秒倒數彈窗」
         setShowCompleteModal(true);
         setCountdownStep(1); // 亮第 1 個燈 (第 1 秒)
@@ -86,13 +102,38 @@ function SymptomChecker({ user, isConnected, statusText }) {
   };
 
   const handleSelectSession = (session) => {
-    setMessages(session.history);
-    setHistory(session.history);
+    const savedHistory = Array.isArray(session.history)
+      ? session.history
+      : [];
+
+    const savedCauses = Array.isArray(session.possible_causes)
+      ? session.possible_causes
+      : [];
+
+    const savedResources = Array.isArray(
+      session.nearby_medical_resources
+    )
+      ? session.nearby_medical_resources
+      : [];
+
+    setMessages(savedHistory);
+    setHistory(savedHistory);
+    setPainLevel(session.pain_level ?? 3);
+
     setDiagnosisResult({
-      suggested_department: session.suggested_department,
-      possible_causes: [],
-      nearby_medical_resources: []
+      status: 'completed',
+      is_complete: true,
+      symptom:
+        session.original_symptom ||
+        session.symptom_text ||
+        '',
+      suggested_department:
+        session.suggested_department || '家醫科',
+      possible_causes: savedCauses,
+      nearby_medical_resources: savedResources,
+      message: ''
     });
+
     setViewMode('split-screen');
   };
 
@@ -168,13 +209,35 @@ function SymptomChecker({ user, isConnected, statusText }) {
                 <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>請詳細描述症狀，AI 將為您即時分析並推薦醫療資源</p>
               </div>
 
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#f1f5f9', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', color: '#475569', fontWeight: 'bold' }}>
-                <span>不適度: <strong style={{ color: painLevel >= 4 ? '#dc3545' : '#0056b3' }}>{painLevel} 分</strong></span>
-                <input
-                  type="range" min="1" max="5" step="1" value={painLevel}
-                  onChange={(e) => setPainLevel(e.target.value)}
-                  style={{ width: '80px', accentColor: painLevel >= 4 ? '#f34a5b' : painLevel >= 3 ? '#f6cf59' : '#6bf28a', cursor: 'pointer' }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* 📋 個人健康資料按鈕 */}
+                <button
+                  onClick={handleOpenProfile}
+                  style={{
+                    backgroundColor: user?.is_guest ? '#f1f5f9' : '#e0f2fe',
+                    color: user?.is_guest ? '#64748b' : '#0369a1',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '16px',
+                    padding: '6px 12px',
+                    fontSize: '0.82rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  📋 個人健康資料
+                </button>
+
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#f1f5f9', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', color: '#475569', fontWeight: 'bold' }}>
+                  <span>不適度: <strong style={{ color: painLevel >= 4 ? '#dc3545' : '#0056b3' }}>{painLevel} 分</strong></span>
+                  <input
+                    type="range" min="1" max="5" step="1" value={painLevel}
+                    onChange={(e) => setPainLevel(e.target.value)}
+                    style={{ width: '80px', accentColor: painLevel >= 4 ? '#f34a5b' : painLevel >= 3 ? '#f6cf59' : '#6bf28a', cursor: 'pointer' }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -232,9 +295,27 @@ function SymptomChecker({ user, isConnected, statusText }) {
               <div style={{ ...getSectionStyle('chat'), flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <h3 style={{ margin: 0, color: '#0550a0', fontSize: '0.95rem' }}>💬 問診對話歷程</h3>
-                  <button onClick={() => toggleFullscreen('chat')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>
-                    {fullscreenSection === 'chat' ? '↩️退出' : '🔍全螢幕'}
-                  </button>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={handleOpenProfile}
+                      style={{
+                        backgroundColor: user?.is_guest ? '#f1f5f9' : '#e0f2fe',
+                        color: user?.is_guest ? '#64748b' : '#0369a1',
+                        border: '1px solid #bae6fd',
+                        borderRadius: '12px',
+                        padding: '3px 8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📋 個人資料
+                    </button>
+                    <button onClick={() => toggleFullscreen('chat')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                      {fullscreenSection === 'chat' ? '↩️退出' : '🔍全螢幕'}
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '8px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
@@ -282,7 +363,31 @@ function SymptomChecker({ user, isConnected, statusText }) {
                               )}
                             </div>
                             <div style={{ color: '#555', margin: '4px 0' }}>📍 {hospital.address} (約 {hospital.distance_meters}m)</div>
-                            <div style={{ color: '#555' }}>📞 {hospital.phone}</div>
+                            <div style={{ color: '#555' }}>
+                              📞{' '}
+                              {hospital.phone ? (
+                                <a href={`tel:${hospital.phone}`} style={{ color: '#0550a0', textDecoration: 'none' }}>
+                                  {hospital.phone}
+                                </a>
+                              ) : (
+                                '院方未提供'
+                              )}
+                            </div>
+
+                            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                              <div style={{ color: '#0550a0', fontWeight: 'bold', marginBottom: '6px' }}>👨‍⚕️ 推薦醫師</div>
+                              {Array.isArray(hospital.available_doctors) && hospital.available_doctors.length > 0 ? (
+                                hospital.available_doctors.map((doctor, doctorIndex) => (
+                                  <div key={`${hospital.hospital_code}-${doctor.name}-${doctorIndex}`} style={{ padding: '8px 10px', marginBottom: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                                    <div style={{ color: '#334155', fontWeight: 'bold' }}>👨‍⚕️ {doctor.name}</div>
+                                    <div style={{ color: '#0550a0', marginTop: '3px' }}>科別：{doctor.department || '院方未提供'}</div>
+                                    <div style={{ color: '#64748b', marginTop: '3px', lineHeight: 1.5 }}>專長：{doctor.specialty || '院方未提供'}</div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>目前沒有符合科別的醫師資料</div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -315,7 +420,6 @@ function SymptomChecker({ user, isConnected, statusText }) {
                 即將為您跳轉至地圖與相關資訊...
               </p>
 
-              {/* 💡 三個燈倒數顯示 (1秒亮一個燈) */}
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
                 {[1, 2, 3].map((step) => {
                   const isActive = countdownStep >= step;
@@ -337,6 +441,13 @@ function SymptomChecker({ user, isConnected, statusText }) {
             </div>
           </div>
         )}
+
+        {/* 📋 渲染個人健康資料彈窗 Modal */}
+        <UserProfileModal 
+          isOpen={isProfileOpen} 
+          onClose={() => setIsProfileOpen(false)} 
+          user={user} 
+        />
 
       </div>
 

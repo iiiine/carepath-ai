@@ -2,10 +2,12 @@
 import os
 import json
 import re
+from datetime import datetime
 from functools import lru_cache
+from typing import Union
 from fastapi import APIRouter, HTTPException, Depends
 from psycopg2.extras import RealDictCursor
-from typing import Union
+
 from routes.auth import get_current_user
 from models import (
     SymptomRequest, 
@@ -15,31 +17,34 @@ from models import (
     HospitalResponse,
     ChatMessage
 )
-# 💡 匯入 client 與 GEMINI_MODEL_NAME 進行摘要標題生成
 from services import (
     get_db_connection, 
     call_gemini_with_retry, 
-    get_rag_context, 
-    client, 
-    GEMINI_MODEL_NAME
+    get_rag_context
 )
 from routes.hospitals import haversine_meters
 
 router = APIRouter(prefix="/api/v1", tags=["Diagnose"])
 
-# 資料庫連不上時的備援科別清單（2026-07-28 的實際內容）
+# 資料庫連不上時的備援科別清單
 DEFAULT_DEPARTMENTS = (
     "家醫科", "婦產科", "心臟內科", "腸胃科", "牙科", "神經外科", "精神科", "眼科", "皮膚科",
 )
 
+def calculate_age(birth_date_str: str) -> str:
+    if not birth_date_str:
+        return "未知"
+    try:
+        b_date = datetime.strptime(birth_date_str, "%Y-%m-%d")
+        today = datetime.now()
+        age = today.year - b_date.year - ((today.month, today.day) < (b_date.month, b_date.day))
+        return f"{age} 歲"
+    except Exception:
+        return "未知"
 
 @lru_cache(maxsize=1)
 def get_departments() -> tuple:
-    """資料庫實際有醫生的科別，用來限制 AI 只能從這些科別挑，避免推薦到查無醫生的科別。
-
-    ponytail: 快取到重啟為止；組長匯入新科別後要重啟後端才會生效。
-    回傳 tuple 是因為 lru_cache 要求可 hash。
-    """
+    """資料庫實際有醫生的科別，用來限制 AI 只能從這些科別挑，避免推薦到查無醫生的科別。"""
     conn = get_db_connection()
     if not conn:
         print("⚠️ 撈科別清單時資料庫連線失敗，改用備援清單")
@@ -53,11 +58,7 @@ def get_departments() -> tuple:
 
 
 def specialty_score(specialty: str, causes_text: str) -> int:
-    """醫生專長與 AI 判定病因的相符程度：中文兩字詞重疊數，越高越相關。
-
-    例：causes「胃食道逆流」vs specialty「胃食道逆流、消化性潰瘍」→ 命中「胃食」「食道」「道逆」「逆流」= 4。
-    ponytail: 用 2-gram 硬比字，不做斷詞/語意比對；等實測發現排序不準再換 embedding。
-    """
+    """醫生專長與 AI 判定病因的相符程度：中文兩字詞重疊數，越高越相關。"""
     if not specialty or not causes_text:
         return 0
     grams = {causes_text[i:i + 2] for i in range(len(causes_text) - 1)}
@@ -77,13 +78,42 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
     # 檢索 RAG 衛教資料庫
     rag_knowledge = get_rag_context(full_context_text)
 
-    # 2. 組合 Prompt（加入 RAG 衛教資訊參考）
+    # 1. 撈取會員健康資料 (若有)
+    profile_info_text = "無提供 (訪客或尚未填寫)"
+    if not current_user.get("is_guest"):
+        conn = get_db_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT height_cm, weight_kg, birth_date, gender, 
+                               past_medical_history, allergy_history, current_medications 
+                        FROM user_profiles WHERE user_id = %s;
+                    """, (current_user["id"],))
+                    prof = cur.fetchone()
+                    if prof:
+                        user_age = calculate_age(str(prof[2])) if prof[2] else "未填"
+                        profile_info_text = f"""
+                        - 身高/體重: {prof[0] or '未填'} cm / {prof[1] or '未填'} kg
+                        - 年齡/性別: {user_age} / {prof[3] or '未填'}
+                        - 既往病史: {prof[4] or '無'}
+                        - 藥物或食物過敏: {prof[5] or '無'}
+                        - 目前長期服用藥物: {prof[6] or '無'}
+                        """
+            finally:
+                conn.close()
+
+    # 2. 組合 Prompt（修復：補上【患者基礎健康背景資料】注入）
     prompt = f"""
     【參考醫療衛教知識庫】
     {rag_knowledge}
 
+    【患者基礎健康背景資料】
+    {profile_info_text}
+
     【任務目標】
-    請根據【參考醫療衛教知識庫】、使用者描述的症狀與他們自評的「不舒服程度（1-5分）」，評估資訊是否足夠判斷科別：
+    請綜合【患者基礎健康背景資料】、【參考醫療衛教知識庫】、使用者描述的症狀與他們自評的「不舒服程度（1-5分）」，評估資訊是否足夠判斷科別：
+    (若患者有相關既往病史或過敏史，請在診斷與建議中特別留心相關風險)
 
     目前使用者自評不舒服程度為：【{payload.pain_level} 分】
 
@@ -114,7 +144,7 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
         # 呼叫 Gemini AI
         response = call_gemini_with_retry(prompt)
         
-        # 💡 防禦性解析：避免 AI 回覆帶有 ```json ``` 導致 json.loads 失敗
+        # 💡 防禦性解析
         clean_text = re.sub(r"```(?:json)?", "", response.text).strip()
         ai_result = json.loads(clean_text)
 
@@ -125,9 +155,7 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
             ChatMessage(role="user", content=payload.symptom_text),
         ]
 
-        # ------------------------------------------------------------------
-        # 情境 A：資訊不足，需要 AI 繼續追問
-        # ------------------------------------------------------------------
+        # 情境 A：資訊不足，繼續追問
         if not is_complete:
             updated_history.append(ChatMessage(role="model", content=follow_up_q))
             print(f"🔄 [多輪問診中] AI 決定進行追問：{follow_up_q}")
@@ -139,14 +167,10 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
                 history=updated_history
             )
 
-        # ------------------------------------------------------------------
-        # 情境 B：資訊已足夠，進入資料庫查詢流程
-        # ------------------------------------------------------------------
+        # 情境 B：資訊足夠，完成問診
         suggested_dept = ai_result.get("department", "家醫科")
         possible_causes = ai_result.get("causes", ["一般身體不適"])
 
-        # 後端防線：prompt 限制不等於保證，AI 仍可能吐出資料庫沒有的科別，
-        # 此時若直接查詢會回 0 筆，前端會退回顯示全部醫院。改推薦家醫科初步評估。
         departments = get_departments()
         unavailable_dept = None
         if suggested_dept not in departments:
@@ -154,30 +178,19 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
             suggested_dept = "家醫科" if "家醫科" in departments else departments[0]
             print(f"⚠️ AI 判定的「{unavailable_dept}」不在資料庫科別內，改推薦 {suggested_dept}")
 
-        print("\n" + "="*50)
-        print(f"🔍 經過多輪評估，最終症狀描述: {payload.symptom_text}")
-        print(f"📚 RAG 檢索到的衛教知識摘要: {rag_knowledge[:100]}...")
-        print(f"✨ AI 結構化判定最終結果：【{suggested_dept}】")
-        print(f"📋 評估可能原因: {possible_causes}")
-        print("="*50 + "\n")
-
-        # 連線 PostgreSQL 資料庫撈取診所與醫生
         conn = get_db_connection()
         if not conn:
             raise HTTPException(status_code=500, detail="無法連線到資料庫")
 
-        # 拿 AI 判定的可能病因當作比對醫生專長的關鍵字來源
         causes_text = "".join(possible_causes)
-
         matched_resources = []
-        scored_resources = []  # [(該院最佳專長匹配分數, HospitalResponse)]
+        scored_resources = []
+        
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # 1. 撈取所有醫院
                 cur.execute("SELECT hospital_code, name, address, phone, latitude, longitude, booking_url FROM hospitals;")
                 hospitals_data = cur.fetchall()
                 
-                # 2. 撈取指定科別的醫生
                 cur.execute(
                     "SELECT hospital_code, name, department, specialty FROM doctors WHERE department = %s;", 
                     (suggested_dept,)
@@ -192,14 +205,9 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
                         if doc.hospital_code == hospital["hospital_code"]
                     ]
 
-                    # 只推薦有該科醫生的醫院
-                    if not hospital_docs:
+                    if not hospital_docs or hospital["latitude"] is None or hospital["longitude"] is None:
                         continue
 
-                    if hospital["latitude"] is None or hospital["longitude"] is None:
-                        continue
-
-                    # 院內醫生依專長相符度排序，最對症的醫生排最前面
                     hospital_docs.sort(
                         key=lambda d: -specialty_score(d.specialty, causes_text)
                     )
@@ -220,7 +228,6 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
                         available_doctors=hospital_docs
                     )))
 
-                # 先用距離篩出附近 10 間候選，再從中挑專長最對症的 5 間（同分則近的優先）。
                 scored_resources.sort(key=lambda t: t[1].distance_meters)
                 nearest = scored_resources[:10]
                 nearest.sort(key=lambda t: (-t[0], t[1].distance_meters))
@@ -237,51 +244,105 @@ async def diagnose_symptom(payload: SymptomRequest, current_user=Depends(get_cur
             )
 
         # ------------------------------------------------------------------
-        # 會員自動保存歷史紀錄 (含 Gemini 自動生成精簡標題)
+        # 會員自動保存歷史紀錄 (預設標題：科別-YYYY/MM/DD)
         # ------------------------------------------------------------------
         if not current_user.get("is_guest"):
             save_conn = get_db_connection()
+
             if save_conn:
                 try:
-                    # 預設標題 (Fallback: 截取前 10 字)
-                    summary_title = payload.symptom_text[:10] + "..." if len(payload.symptom_text) > 10 else payload.symptom_text
-                    
-                    # 💡 1. 呼叫 Gemini client 產生 6 字以內對話標題
-                    if client:
-                        try:
-                            title_prompt = f"請根據以下患者主訴，生成一個 6 個字以內的繁體中文精簡對話標題（例如：腸胃不適諮詢、急性偏頭痛評估）。請直接輸出標題文字，不要包含任何引號或標點符號：{payload.symptom_text}"
-                            
-                            title_response = client.models.generate_content(
-                                model=GEMINI_MODEL_NAME,
-                                contents=title_prompt
-                            )
-                            
-                            extracted_title = title_response.text.strip().replace('"', '').replace('「', '').replace('」', '').replace('\n', '')
-                            if extracted_title and len(extracted_title) <= 12:
-                                summary_title = extracted_title
-                        except Exception as t_err:
-                            print(f"⚠️ 標題摘要生成失敗，退回預設症狀文字: {t_err}")
+                    # 標題格式：科別-YYYY/MM/DD
+                    today_str = datetime.now().strftime("%Y/%m/%d")
+                    summary_title = f"{suggested_dept}-{today_str}"
 
-                    # 💡 2. 將最終 AI 的回覆訊息打包進對話歷史
+                    # 抓取初始症狀，若有歷史紀錄則取第一條，否則取當前描述
+                    first_symptom = payload.history[0].content if payload.history else payload.symptom_text
+
+                    # 把最後一次 AI 結果加入完整對話
                     final_history_for_db = updated_history + [
-                        ChatMessage(role="model", content=custom_message)
+                        ChatMessage(
+                            role="model",
+                            content=custom_message
+                        )
                     ]
-                    
-                    # 💡 3. 寫入資料庫
+
+                    # 將對話轉成 JSON 可儲存格式
+                    history_data = [
+                        msg.model_dump()
+                        if hasattr(msg, "model_dump")
+                        else msg.dict()
+                        for msg in final_history_for_db
+                    ]
+
+                    # 將醫院與推薦醫師完整保存
+                    medical_resources_data = [
+                        hospital.model_dump()
+                        if hasattr(hospital, "model_dump")
+                        else hospital.dict()
+                        for hospital in matched_resources
+                    ]
+
                     with save_conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO chat_sessions (user_id, symptom_text, suggested_department, history_json)
-                            VALUES (%s, %s, %s, %s);
-                        """, (
-                            current_user["id"],
-                            summary_title,
-                            suggested_dept,
-                            json.dumps([msg.dict() for msg in final_history_for_db], ensure_ascii=False)
-                        ))
-                        save_conn.commit()
-                        print(f"✅ 已成功為會員 ID [{current_user['id']}] 儲存歷史紀錄，標題：{summary_title}")
+                        cur.execute(
+                            """
+                            INSERT INTO chat_sessions (
+                                user_id,
+                                title,
+                                symptom_text,
+                                original_symptom,
+                                pain_level,
+                                suggested_department,
+                                possible_causes,
+                                history_json,
+                                medical_resources_json
+                            )
+                            VALUES (
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s::jsonb,
+                                %s::jsonb,
+                                %s::jsonb
+                            );
+                            """,
+                            (
+                                current_user["id"],
+                                summary_title,
+                                payload.symptom_text,
+                                first_symptom,
+                                payload.pain_level,
+                                suggested_dept,
+                                json.dumps(
+                                    possible_causes,
+                                    ensure_ascii=False
+                                ),
+                                json.dumps(
+                                    history_data,
+                                    ensure_ascii=False
+                                ),
+                                json.dumps(
+                                    medical_resources_data,
+                                    ensure_ascii=False,
+                                    default=str
+                                )
+                            )
+                        )
+
+                    save_conn.commit()
+
+                    print(
+                        f"✅ 已成功保存完整問診紀錄，"
+                        f"會員 ID [{current_user['id']}]，"
+                        f"標題：{summary_title}"
+                    )
+
                 except Exception as save_err:
-                    print(f"⚠️ 歷史紀錄儲存失敗: {save_err}")
+                    save_conn.rollback()
+                    print(f"⚠️ 歷史紀錄儲存失敗：{save_err}")
+
                 finally:
                     save_conn.close()
 
