@@ -5,11 +5,12 @@ import api from './api/axios';
 function HistorySidebar({ user, onSelectSession, onNewChat }) {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(false);
-  
-  // 💡 由元件自己管理縮放狀態（預設 false 展開）
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 抓取歷史紀錄 (僅會員發送 API)
+  // 💡 正在編輯標題的狀態
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+
   const fetchHistory = async () => {
     if (user?.is_guest) return;
     setLoading(true);
@@ -25,8 +26,12 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
 
   useEffect(() => {
     fetchHistory();
+    const handleRefresh = () => fetchHistory();
+    window.addEventListener('refresh-history', handleRefresh);
+    return () => window.removeEventListener('refresh-history', handleRefresh);
   }, [user]);
 
+  // 刪除單筆紀錄
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     if (!window.confirm('確定要刪除這筆問診紀錄嗎？')) return;
@@ -36,6 +41,35 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
     } catch (err) {
       alert('刪除失敗');
     }
+  };
+
+  // ✏️ 開啟編輯模式 (修正：填入 session.title)
+  const handleStartEdit = (e, session) => {
+    e.stopPropagation();
+    setEditingId(session.id);
+    setEditTitle(session.title || session.symptom_text || '');
+  };
+
+  // 💾 儲存新標題 (修正：同步更新 State 中的 item.title)
+  const handleSaveTitle = async (e, id) => {
+    e.stopPropagation();
+    if (!editTitle.trim()) return;
+
+    try {
+      await api.patch(`/api/v1/history/${id}`, { title: editTitle.trim() });
+      setHistoryList(prev => prev.map(item => 
+        item.id === id ? { ...item, title: editTitle.trim() } : item
+      ));
+      setEditingId(null);
+    } catch (err) {
+      alert('修改標題失敗');
+    }
+  };
+
+  // ❌ 取消編輯
+  const handleCancelEdit = (e) => {
+    e.stopPropagation();
+    setEditingId(null);
   };
 
   return (
@@ -54,7 +88,7 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
       flexShrink: 0
     }}>
       
-      {/* 🔝 頂部列：無論是訪客還是會員，永遠顯示 ☰ 漢堡按鈕 */}
+      {/* 頂部列 */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -64,24 +98,14 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
         borderBottom: '1px solid #f1f5f9'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* 💡 醒目的深藍色 ☰ 按鈕 */}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
             title={isCollapsed ? "展開側邊欄" : "收起側邊欄"}
             style={{
-              border: 'none',
-              backgroundColor: '#0550a0',
-              color: '#ffffff',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1.2rem',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(5,80,160,0.3)',
-              flexShrink: 0
+              border: 'none', backgroundColor: '#0550a0', color: '#ffffff',
+              borderRadius: '8px', cursor: 'pointer', fontSize: '1.2rem',
+              width: '36px', height: '36px', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', boxShadow: '0 2px 6px rgba(5,80,160,0.3)', flexShrink: 0
             }}
           >
             ☰
@@ -108,7 +132,7 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
         )}
       </div>
 
-      {/* 底部內容：縮起時顯示圖示 / 展開時顯示完整列表 */}
+      {/* 列表區塊 */}
       {isCollapsed ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginTop: '10px' }}>
           <button 
@@ -140,7 +164,7 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
                 key={session.id}
                 onClick={() => onSelectSession(session)}
                 style={{
-                  padding: '12px',
+                  padding: '10px 12px',
                   borderRadius: '10px',
                   backgroundColor: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -148,27 +172,57 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
                   transition: 'all 0.2s',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'flex-start'
+                  alignItems: 'center'
                 }}
               >
-                <div style={{ overflow: 'hidden', flex: 1, paddingRight: '8px' }}>
-                  <div style={{ fontWeight: 'bold', color: '#334155', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {session.symptom_text}
+                {/* ✏️ 情況 A：正在編輯標題 */}
+                {editingId === session.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="text" 
+                      value={editTitle} 
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle(e, session.id)}
+                      autoFocus
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: '0.85rem',
+                        borderRadius: '6px', border: '1px solid #0550a0', outline: 'none'
+                      }}
+                    />
+                    <button onClick={(e) => handleSaveTitle(e, session.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="確定">✔</button>
+                    <button onClick={handleCancelEdit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="取消">✖</button>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#0550a0', marginTop: '4px', fontWeight: 600 }}>
-                    🏥 {session.suggested_department || '家醫科'}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
-                    {session.created_at}
-                  </div>
-                </div>
-                <button 
-                  onClick={(e) => handleDelete(e, session.id)}
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444', fontSize: '0.9rem', padding: '0 4px' }}
-                  title="刪除紀錄"
-                >
-                  ✕
-                </button>
+                ) : (
+                  /* 💬 情況 B：正常顯示標題 (修正：優先讀取 session.title) */
+                  <>
+                    <div style={{ overflow: 'hidden', flex: 1, paddingRight: '6px' }}>
+                      <div style={{ fontWeight: 'bold', color: '#334155', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {session.title || session.symptom_text || '未命名問診'}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                        {session.created_at}
+                      </div>
+                    </div>
+
+                    {/* 操作按鈕群：編輯 ✏️ & 刪除 ✕ */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button 
+                        onClick={(e) => handleStartEdit(e, session)}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem', padding: '2px', opacity: 0.7 }}
+                        title="重命名"
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        onClick={(e) => handleDelete(e, session.id)}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem', padding: '2px' }}
+                        title="刪除紀錄"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
