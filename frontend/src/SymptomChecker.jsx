@@ -4,6 +4,8 @@ import api from './api/axios';
 import HospitalMap from './HospitalMap';
 import HistorySidebar from './HistorySidebar';
 import UserProfileModal from './UserProfileModal'; // 👈 1. 匯入 Modal
+import { t } from './theme';
+import { BaymaxAvatar } from './Baymax';
 
 function SymptomChecker({ user, isConnected, statusText }) {
   const [messages, setMessages] = useState([
@@ -156,8 +158,8 @@ function SymptomChecker({ user, isConnected, statusText }) {
       };
     }
     return {
-      backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', padding: '16px',
-      display: 'flex', flexDirection: 'column', boxSizing: 'border-box', border: '1px solid #e2e8f0', overflow: 'hidden', minHeight: 0
+      backgroundColor: t.panel, borderRadius: '12px', padding: '16px',
+      display: 'flex', flexDirection: 'column', boxSizing: 'border-box', border: `1px solid ${t.border}`, overflow: 'hidden', minHeight: 0
     };
   };
 
@@ -191,84 +193,139 @@ function SymptomChecker({ user, isConnected, statusText }) {
         {viewMode === 'chat-only' ? (
           /* 🎯 模式 A：剛登入時「AI 對話框置中」 */
           <div style={{
-            maxWidth: '850px',
+            maxWidth: '780px',
             height: '100%',
             margin: '0 auto',
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-            border: '1px solid #cbd5e1',
+            backgroundColor: t.panel,
+            borderRadius: '12px',
+            border: `1px solid ${t.border}`,
             padding: '24px',
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h2 style={{ margin: 0, color: '#0550a0', fontSize: '1.6rem' }}>💬 AI 線上問診助理</h2>
-                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>請詳細描述症狀，AI 將為您即時分析並推薦醫療資源</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', paddingBottom: '16px', borderBottom: `1px solid ${t.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <BaymaxAvatar size={62} />
+                <div>
+                  <h2 style={{ margin: 0, color: t.text, fontSize: '1.05rem', fontWeight: 600, letterSpacing: '-0.01em' }}>AI 問診助理</h2>
+                  <p style={{ margin: '3px 0 0', color: t.muted, fontSize: '0.85rem' }}>描述您的症狀，我會協助判斷科別並推薦附近院所</p>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {/* 📋 個人健康資料按鈕 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* 個人健康資料按鈕 */}
                 <button
                   onClick={handleOpenProfile}
                   style={{
-                    backgroundColor: user?.is_guest ? '#f1f5f9' : '#e0f2fe',
-                    color: user?.is_guest ? '#64748b' : '#0369a1',
-                    border: '1px solid #bae6fd',
-                    borderRadius: '16px',
+                    backgroundColor: t.panel,
+                    color: user?.is_guest ? t.muted : t.text,
+                    border: `1px solid ${t.border}`,
+                    borderRadius: '8px',
                     padding: '6px 12px',
-                    fontSize: '0.82rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    cursor: 'pointer'
                   }}
                 >
-                  📋 個人健康資料
+                  個人健康資料
                 </button>
 
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#f1f5f9', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', color: '#475569', fontWeight: 'bold' }}>
-                  <span>不適度: <strong style={{ color: painLevel >= 4 ? '#dc3545' : '#0056b3' }}>{painLevel} 分</strong></span>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: `1px solid ${t.border}`, padding: '5px 12px', borderRadius: '8px', fontSize: '0.8rem', color: t.muted }}>
+                  <span>不適度 <strong style={{ color: painLevel >= 4 ? t.danger : t.text, fontWeight: 600 }}>{painLevel}</strong></span>
                   <input
                     type="range" min="1" max="5" step="1" value={painLevel}
                     onChange={(e) => setPainLevel(e.target.value)}
-                    style={{ width: '80px', accentColor: painLevel >= 4 ? '#f34a5b' : painLevel >= 3 ? '#f6cf59' : '#6bf28a', cursor: 'pointer' }}
+                    style={{ width: '72px', accentColor: painLevel >= 4 ? t.danger : t.userBubble, cursor: 'pointer' }}
                   />
                 </div>
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px', marginBottom: '16px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 4px', marginBottom: '12px' }}>
               {messages.map((msg, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
-                  <div style={{
-                    maxWidth: '80%', padding: '10px 16px',
-                    borderRadius: msg.role === 'user' ? '16px 16px 0 16px' : '16px 16px 16px 0',
-                    backgroundColor: msg.role === 'user' ? '#0550a0' : '#ffffff',
-                    color: msg.role === 'user' ? '#ffffff' : '#333333',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                    whiteSpace: 'pre-wrap', fontSize: '0.95rem'
+                <div key={index} style={{ display: 'flex', gap: '12px', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '20px' }}>
+                  {/* AI 訊息：頭像 + 純文字（assistant-ui 風格），只有使用者有泡泡 */}
+                  {msg.role === 'model' && <BaymaxAvatar size={40} />}
+                  <div style={msg.role === 'user' ? {
+                    maxWidth: '75%', padding: '10px 16px', borderRadius: '18px',
+                    backgroundColor: t.userBubble, color: '#ffffff',
+                    whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: 1.6
+                  } : {
+                    flex: 1, paddingTop: '3px', color: t.text,
+                    whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: 1.75
                   }}>
-                    {msg.role === 'model' && <strong style={{ color: '#0550a0', display: 'block', fontSize: '0.8rem', marginBottom: '4px' }}>🤖 AI 疾病判斷</strong>}
                     {msg.content}
                   </div>
                 </div>
               ))}
-              {loading && <div style={{ color: '#64748b', fontSize: '0.85rem' }}>🤖 AI 分析症狀中...</div>}
+
+              {loading && (
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
+                  <BaymaxAvatar size={40} />
+                  <div style={{ display: 'flex', gap: '4px', paddingTop: '2px' }}>
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        style={{
+                          width: '6px', height: '6px', borderRadius: '50%', backgroundColor: t.muted,
+                          animation: `baymax-blink 1.2s ease-in-out ${i * 0.16}s infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+            {/* 還沒開始描述時給幾個常見症狀當起手式，點了直接填進輸入框 */}
+            {messages.length === 1 && !loading && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                {['頭痛', '發燒', '喉嚨痛', '肚子痛', '皮膚起疹', '牙齒痛'].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setInputText(s)}
+                    style={{
+                      border: `1px solid ${t.border}`, backgroundColor: t.panel, color: t.muted,
+                      borderRadius: '16px', padding: '5px 14px', fontSize: '0.8rem', cursor: 'pointer',
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSendMessage}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                border: `1px solid ${t.border}`, borderRadius: '24px',
+                padding: '6px 6px 6px 18px', backgroundColor: t.panel
+              }}
+            >
               <input
                 type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
-                placeholder="請描述您不舒服的地方（例如：頭痛、發燒...）" disabled={loading}
-                style={{ flex: 1, padding: '12px 16px', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.95rem' }}
+                placeholder="傳訊息給助理..." disabled={loading}
+                style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.9rem', color: t.text, backgroundColor: 'transparent', padding: '8px 0' }}
               />
-              <button type="submit" disabled={loading || !inputText.trim()} style={{ padding: '0 24px', backgroundColor: '#0550a0', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                發送
+              <button
+                type="submit"
+                disabled={loading || !inputText.trim()}
+                aria-label="發送"
+                style={{
+                  width: '34px', height: '34px', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: !inputText.trim() || loading ? t.subtle : t.userBubble,
+                  color: !inputText.trim() || loading ? t.muted : '#ffffff',
+                  border: 'none', borderRadius: '50%',
+                  cursor: !inputText.trim() || loading ? 'default' : 'pointer',
+                  fontSize: '1rem', lineHeight: 1
+                }}
+              >
+                ↑
               </button>
             </form>
           </div>
@@ -279,9 +336,9 @@ function SymptomChecker({ user, isConnected, statusText }) {
             {/* 左邊：地圖 */}
             <div style={{ ...getSectionStyle('map'), height: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h3 style={{ margin: 0, color: '#333', fontSize: '1rem' }}>🗺️ 附近醫療院所地圖</h3>
-                <button onClick={() => toggleFullscreen('map')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>
-                  {fullscreenSection === 'map' ? '↩️ 退出' : '🔍 全螢幕'}
+                <h3 style={{ margin: 0, color: t.text, fontSize: '0.9rem', fontWeight: 600 }}>附近醫療院所地圖</h3>
+                <button onClick={() => toggleFullscreen('map')} style={{ border: `1px solid ${t.border}`, background: t.panel, color: t.muted, padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  {fullscreenSection === 'map' ? '退出全螢幕' : '全螢幕'}
                 </button>
               </div>
               <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
@@ -294,37 +351,41 @@ function SymptomChecker({ user, isConnected, statusText }) {
               
               <div style={{ ...getSectionStyle('chat'), flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <h3 style={{ margin: 0, color: '#0550a0', fontSize: '0.95rem' }}>💬 問診對話歷程</h3>
-                  
+                  <h3 style={{ margin: 0, color: t.text, fontSize: '0.9rem', fontWeight: 600 }}>問診對話歷程</h3>
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                       onClick={handleOpenProfile}
                       style={{
-                        backgroundColor: user?.is_guest ? '#f1f5f9' : '#e0f2fe',
-                        color: user?.is_guest ? '#64748b' : '#0369a1',
-                        border: '1px solid #bae6fd',
-                        borderRadius: '12px',
+                        backgroundColor: t.panel,
+                        color: user?.is_guest ? t.muted : t.text,
+                        border: `1px solid ${t.border}`,
+                        borderRadius: '6px',
                         padding: '3px 8px',
                         fontSize: '0.75rem',
-                        fontWeight: 'bold',
+                        fontWeight: 500,
                         cursor: 'pointer'
                       }}
                     >
-                      📋 個人資料
+                      個人資料
                     </button>
-                    <button onClick={() => toggleFullscreen('chat')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>
-                      {fullscreenSection === 'chat' ? '↩️退出' : '🔍全螢幕'}
+                    <button onClick={() => toggleFullscreen('chat')} style={{ border: `1px solid ${t.border}`, background: t.panel, color: t.muted, padding: '3px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' }}>
+                      {fullscreenSection === 'chat' ? '退出全螢幕' : '全螢幕'}
                     </button>
                   </div>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '8px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '8px 4px' }}>
                   {messages.map((msg, index) => (
-                    <div key={index} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '8px' }}>
-                      <div style={{
-                        maxWidth: '85%', padding: '6px 10px', borderRadius: '10px',
-                        backgroundColor: msg.role === 'user' ? '#0550a0' : '#ffffff',
-                        color: msg.role === 'user' ? '#ffffff' : '#333333', fontSize: '0.85rem'
+                    <div key={index} style={{ display: 'flex', gap: '8px', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
+                      {msg.role === 'model' && <BaymaxAvatar size={30} />}
+                      <div style={msg.role === 'user' ? {
+                        maxWidth: '85%', padding: '6px 12px', borderRadius: '14px',
+                        backgroundColor: t.userBubble, color: '#ffffff',
+                        fontSize: '0.85rem', lineHeight: 1.6, whiteSpace: 'pre-wrap'
+                      } : {
+                        flex: 1, color: t.text,
+                        fontSize: '0.85rem', lineHeight: 1.7, whiteSpace: 'pre-wrap'
                       }}>
                         {msg.content}
                       </div>
@@ -336,56 +397,55 @@ function SymptomChecker({ user, isConnected, statusText }) {
 
               <div style={{ ...getSectionStyle('doctors'), flex: 1.2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <h3 style={{ margin: 0, color: '#155724', fontSize: '0.95rem' }}>📋 推薦診所與門診醫師資訊</h3>
-                  <button onClick={() => toggleFullscreen('doctors')} style={{ border: 'none', background: '#f0f0f0', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>
-                    {fullscreenSection === 'doctors' ? '↩️退出' : '🔍全螢幕'}
+                  <h3 style={{ margin: 0, color: t.text, fontSize: '0.9rem', fontWeight: 600 }}>推薦診所與門診醫師</h3>
+                  <button onClick={() => toggleFullscreen('doctors')} style={{ border: `1px solid ${t.border}`, background: t.panel, color: t.muted, padding: '3px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' }}>
+                    {fullscreenSection === 'doctors' ? '退出全螢幕' : '全螢幕'}
                   </button>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                   {diagnosisResult ? (
                     <div>
-                      <div style={{ padding: '8px 10px', backgroundColor: '#e6f4ea', borderRadius: '6px', marginBottom: '8px', fontSize: '0.85rem' }}>
-                        <p style={{ margin: 0 }}><strong>推薦科別：</strong> <span style={{ backgroundColor: '#28a745', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>{diagnosisResult.suggested_department}</span></p>
-                        <p style={{ margin: '4px 0 0' }}><strong>可能原因：</strong> {diagnosisResult.possible_causes.join('、')}</p>
+                      <div style={{ padding: '10px 12px', backgroundColor: t.subtle, borderRadius: '8px', marginBottom: '10px', fontSize: '0.85rem', color: t.text }}>
+                        <p style={{ margin: 0 }}><strong style={{ fontWeight: 600 }}>推薦科別：</strong> <span style={{ backgroundColor: t.userBubble, color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem' }}>{diagnosisResult.suggested_department}</span></p>
+                        <p style={{ margin: '6px 0 0', color: t.muted }}><strong style={{ fontWeight: 600, color: t.text }}>可能原因：</strong> {diagnosisResult.possible_causes.join('、')}</p>
                       </div>
 
                       {diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
                         const isUrl = hospital.booking_url && /^https?:\/\//i.test(hospital.booking_url.trim());
                         return (
-                          <div key={idx} style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '6px', marginBottom: '8px', border: '1px solid #c3e6cb', fontSize: '0.82rem' }}>
+                          <div key={idx} style={{ backgroundColor: t.panel, padding: '12px', borderRadius: '8px', marginBottom: '8px', border: `1px solid ${t.border}`, fontSize: '0.82rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div style={{ fontWeight: 'bold', color: '#155724' }}>🏥 {hospital.name}</div>
+                              <div style={{ fontWeight: 600, color: t.text }}>{hospital.name}</div>
                               {isUrl ? (
-                                <a href={hospital.booking_url} target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#28a745', color: '#ffffff', padding: '3px 8px', borderRadius: '4px', textDecoration: 'none', fontWeight: 'bold', fontSize: '0.75rem' }}>🌐 線上掛號</a>
+                                <a href={hospital.booking_url} target="_blank" rel="noopener noreferrer" style={{ backgroundColor: t.userBubble, color: '#ffffff', padding: '4px 10px', borderRadius: '6px', textDecoration: 'none', fontWeight: 500, fontSize: '0.75rem' }}>線上掛號</a>
                               ) : (
-                                <span style={{ fontSize: '0.72rem', color: '#856404', backgroundColor: '#fff3cd', padding: '2px 6px', borderRadius: '4px' }}>{hospital.booking_url || '現場掛號'}</span>
+                                <span style={{ fontSize: '0.72rem', color: t.muted, backgroundColor: t.subtle, padding: '3px 8px', borderRadius: '6px' }}>{hospital.booking_url || '現場掛號'}</span>
                               )}
                             </div>
-                            <div style={{ color: '#555', margin: '4px 0' }}>📍 {hospital.address} (約 {hospital.distance_meters}m)</div>
-                            <div style={{ color: '#555' }}>
-                              📞{' '}
+                            <div style={{ color: t.muted, margin: '6px 0 2px' }}>{hospital.address} · 約 {hospital.distance_meters} 公尺</div>
+                            <div style={{ color: t.muted }}>
                               {hospital.phone ? (
-                                <a href={`tel:${hospital.phone}`} style={{ color: '#0550a0', textDecoration: 'none' }}>
+                                <a href={`tel:${hospital.phone}`} style={{ color: t.text, textDecoration: 'none' }}>
                                   {hospital.phone}
                                 </a>
                               ) : (
-                                '院方未提供'
+                                '院方未提供電話'
                               )}
                             </div>
 
-                            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
-                              <div style={{ color: '#0550a0', fontWeight: 'bold', marginBottom: '6px' }}>👨‍⚕️ 推薦醫師</div>
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${t.border}` }}>
+                              <div style={{ color: t.muted, fontWeight: 500, marginBottom: '6px', fontSize: '0.78rem' }}>推薦醫師</div>
                               {Array.isArray(hospital.available_doctors) && hospital.available_doctors.length > 0 ? (
                                 hospital.available_doctors.map((doctor, doctorIndex) => (
-                                  <div key={`${hospital.hospital_code}-${doctor.name}-${doctorIndex}`} style={{ padding: '8px 10px', marginBottom: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                                    <div style={{ color: '#334155', fontWeight: 'bold' }}>👨‍⚕️ {doctor.name}</div>
-                                    <div style={{ color: '#0550a0', marginTop: '3px' }}>科別：{doctor.department || '院方未提供'}</div>
-                                    <div style={{ color: '#64748b', marginTop: '3px', lineHeight: 1.5 }}>專長：{doctor.specialty || '院方未提供'}</div>
+                                  <div key={`${hospital.hospital_code}-${doctor.name}-${doctorIndex}`} style={{ padding: '8px 10px', marginBottom: '6px', backgroundColor: t.subtle, borderRadius: '6px' }}>
+                                    <div style={{ color: t.text, fontWeight: 600 }}>{doctor.name}</div>
+                                    <div style={{ color: t.muted, marginTop: '3px' }}>科別：{doctor.department || '院方未提供'}</div>
+                                    <div style={{ color: t.muted, marginTop: '3px', lineHeight: 1.5 }}>專長：{doctor.specialty || '院方未提供'}</div>
                                   </div>
                                 ))
                               ) : (
-                                <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>目前沒有符合科別的醫師資料</div>
+                                <div style={{ color: t.muted, fontSize: '0.78rem' }}>目前沒有符合科別的醫師資料</div>
                               )}
                             </div>
                           </div>
@@ -411,13 +471,13 @@ function SymptomChecker({ user, isConnected, statusText }) {
             zIndex: 99999
           }}>
             <div style={{
-              backgroundColor: '#ffffff', padding: '32px 48px', borderRadius: '20px',
-              boxShadow: '0 12px 40px rgba(0,0,0,0.25)', textAlign: 'center',
-              border: '2px solid #28a745', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px'
+              backgroundColor: t.panel, padding: '32px 48px', borderRadius: '16px',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.12)', textAlign: 'center',
+              border: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px'
             }}>
-              <h2 style={{ color: '#28a745', margin: 0, fontSize: '1.6rem' }}>🎉 問診已完成！</h2>
-              <p style={{ color: '#475569', margin: 0, fontSize: '1rem' }}>
-                即將為您跳轉至地圖與相關資訊...
+              <h2 style={{ color: t.text, margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>問診已完成</h2>
+              <p style={{ color: t.muted, margin: 0, fontSize: '0.9rem' }}>
+                即將為您跳轉至地圖與相關資訊
               </p>
 
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
@@ -430,8 +490,7 @@ function SymptomChecker({ user, isConnected, statusText }) {
                         width: '18px',
                         height: '18px',
                         borderRadius: '50%',
-                        backgroundColor: isActive ? '#28a745' : '#e2e8f0',
-                        boxShadow: isActive ? '0 0 10px #28a745' : 'none',
+                        backgroundColor: isActive ? t.userBubble : t.border,
                         transition: 'all 0.4s ease'
                       }}
                     />

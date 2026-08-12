@@ -19,3 +19,9 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* AI 思考中的三點動畫（SymptomChecker 用） */
+@keyframes baymax-blink {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
