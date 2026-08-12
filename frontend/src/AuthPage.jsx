@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import api from './api/axios';
+import { t } from './theme';
+import { BaymaxAvatar } from './Baymax';
 
 function AuthPage({ onAuthSuccess, isConnected, statusText }) {
   const [mode, setMode] = useState('login');
@@ -87,20 +89,28 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
 
   const inputStyle = {
     width: '100%',
-    padding: '12px 14px',
-    border: '1px solid #cbd5e1',
+    padding: '10px 14px',
+    border: `1px solid ${t.border}`,
     borderRadius: '8px',
     outline: 'none',
-    fontSize: '0.95rem',
+    fontSize: '0.9rem',
     marginTop: '6px',
     boxSizing: 'border-box'
+  };
+
+  const labelStyle = {
+    color: t.text,
+    fontWeight: 500,
+    fontSize: '0.85rem',
+    display: 'block',
+    marginTop: '14px',
   };
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #bee7f7 0%, #e7f7ff 100%)',
+        backgroundColor: t.page,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -110,50 +120,53 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '430px',
-          backgroundColor: '#fff',
-          borderRadius: '18px',
+          maxWidth: '410px',
+          backgroundColor: t.panel,
+          borderRadius: '12px',
           padding: '32px',
-          boxShadow: '0 18px 50px rgba(5, 80, 160, 0.16)',
-          border: '1px solid rgba(5, 80, 160, 0.1)',
+          border: `1px solid ${t.border}`,
         }}
       >
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#f8fafc',
-            padding: '5px 11px',
+            gap: '7px',
+            border: `1px solid ${t.border}`,
+            padding: '4px 10px',
             borderRadius: '20px',
-            fontSize: '0.78rem',
-            fontWeight: 'bold',
-            color: '#475569',
-            marginBottom: '18px',
+            fontSize: '0.75rem',
+            color: t.muted,
+            marginBottom: '20px',
           }}
         >
           <span
             style={{
-              width: '8px',
-              height: '8px',
+              width: '6px',
+              height: '6px',
               borderRadius: '50%',
-              backgroundColor: isConnected ? '#28a745' : '#dc3545',
+              backgroundColor: isConnected ? t.ok : t.danger,
             }}
           />
           {statusText}
         </div>
 
-        <h1 style={{ color: '#0550a0', fontSize: '1.8rem', marginBottom: '6px' }}>
-          🏥 智慧 AI 醫療問診系統
-        </h1>
-        <p style={{ color: '#64748b', marginBottom: '24px' }}>
-          {isRegister ? '建立帳號後即可使用問診與醫院地圖功能' : '請登入或以訪客身份體驗醫療問診系統'}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
+          <BaymaxAvatar size={72} />
+          <div>
+            <h1 style={{ color: t.text, fontSize: '1.25rem', fontWeight: 600, margin: 0, letterSpacing: '-0.01em' }}>
+              智慧 AI 醫療問診系統
+            </h1>
+            <p style={{ color: t.muted, margin: '6px 0 0', fontSize: '0.85rem', lineHeight: 1.5 }}>
+              {isRegister ? '建立帳號後即可使用問診與醫院地圖功能' : '請登入，或以訪客身份直接體驗'}
+            </p>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit}>
           {isRegister ? (
             <>
-              <label style={{ color: '#334155', fontWeight: 600 }}>
+              <label style={{ ...labelStyle, marginTop: 0 }}>
                 使用者帳號
                 <input
                   style={inputStyle}
@@ -166,14 +179,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
                 />
               </label>
 
-              <label
-                style={{
-                  color: '#334155',
-                  fontWeight: 600,
-                  display: 'block',
-                  marginTop: '14px',
-                }}
-              >
+              <label style={labelStyle}>
                 Email
                 <input
                   style={inputStyle}
@@ -186,7 +192,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               </label>
             </>
           ) : (
-            <label style={{ color: '#334155', fontWeight: 600 }}>
+            <label style={{ ...labelStyle, marginTop: 0 }}>
               帳號或 Email
               <input
                 style={inputStyle}
@@ -198,14 +204,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
             </label>
           )}
 
-          <label
-            style={{
-              color: '#334155',
-              fontWeight: 600,
-              display: 'block',
-              marginTop: '14px',
-            }}
-          >
+          <label style={labelStyle}>
             密碼
             <input
               style={inputStyle}
@@ -219,14 +218,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
           </label>
 
           {isRegister && (
-            <label
-              style={{
-                color: '#334155',
-                fontWeight: 600,
-                display: 'block',
-                marginTop: '14px',
-              }}
-            >
+            <label style={labelStyle}>
               確認密碼
               <input
                 style={inputStyle}
@@ -245,11 +237,11 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               style={{
                 marginTop: '16px',
                 padding: '10px 12px',
-                backgroundColor: '#fff1f2',
-                border: '1px solid #fecdd3',
-                color: '#be123c',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: t.danger,
                 borderRadius: '8px',
-                fontSize: '0.88rem',
+                fontSize: '0.85rem',
               }}
             >
               {error}
@@ -262,14 +254,14 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
             style={{
               width: '100%',
               marginTop: '22px',
-              padding: '12px',
-              backgroundColor: loading ? '#94a3b8' : '#0550a0',
+              padding: '11px',
+              backgroundColor: loading ? t.muted : t.userBubble,
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
               cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
-              fontSize: '1rem',
-              fontWeight: 'bold',
+              fontSize: '0.92rem',
+              fontWeight: 500,
             }}
           >
             {loading ? '處理中...' : isRegister ? '建立帳號' : '會員登入'}
@@ -277,8 +269,8 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
         </form>
 
         {/* 💡 分隔線與訪客按鈕 */}
-        <div style={{ margin: '20px 0', borderTop: '1px solid #e2e8f0', position: 'relative', textAlign: 'center' }}>
-          <span style={{ position: 'absolute', top: '-10px', backgroundColor: '#fff', padding: '0 10px', color: '#94a3b8', fontSize: '0.8rem' }}>
+        <div style={{ margin: '20px 0', borderTop: `1px solid ${t.border}`, position: 'relative', textAlign: 'center' }}>
+          <span style={{ position: 'absolute', top: '-10px', backgroundColor: t.panel, padding: '0 10px', color: t.muted, fontSize: '0.8rem' }}>
             或
           </span>
         </div>
@@ -289,24 +281,24 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
           disabled={loading || guestLoading}
           style={{
             width: '100%',
-            padding: '12px',
-            backgroundColor: '#f1f5f9',
-            color: '#334155',
-            border: '1px solid #cbd5e1',
+            padding: '11px',
+            backgroundColor: t.panel,
+            color: t.text,
+            border: `1px solid ${t.border}`,
             borderRadius: '8px',
             cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
-            fontSize: '0.95rem',
-            fontWeight: 'bold',
+            fontSize: '0.92rem',
+            fontWeight: 500,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px'
           }}
         >
-          {guestLoading ? '建立訪客身份中...' : '👤 以訪客身份直接體驗'}
+          {guestLoading ? '建立訪客身份中...' : '以訪客身份直接體驗'}
         </button>
 
-        <div style={{ textAlign: 'center', marginTop: '18px', color: '#64748b', fontSize: '0.9rem' }}>
+        <div style={{ textAlign: 'center', marginTop: '18px', color: t.muted, fontSize: '0.85rem' }}>
           {isRegister ? '已經有帳號？' : '還沒有帳號？'}
           <button
             type="button"
@@ -315,9 +307,11 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               marginLeft: '6px',
               border: 'none',
               background: 'transparent',
-              color: '#0550a0',
-              fontWeight: 'bold',
+              color: t.text,
+              fontWeight: 600,
               cursor: 'pointer',
+              textDecoration: 'underline',
+              fontSize: '0.85rem',
             }}
           >
             {isRegister ? '返回登入' : '立即註冊'}

@@ -72,9 +72,9 @@ function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#bee7f7',
-          color: '#0550a0',
-          fontWeight: 'bold',
+          backgroundColor: '#fafafa',
+          color: '#71717a',
+          fontSize: '0.9rem',
         }}
       >
         驗證登入狀態中...
@@ -98,7 +98,7 @@ function App() {
         padding: '16px 24px',
         minHeight: '100vh',
         boxSizing: 'border-box',
-        backgroundColor: '#bee7f7',
+        backgroundColor: '#fafafa',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px'
@@ -120,28 +120,27 @@ function App() {
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            padding: '6px 14px',
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            borderRadius: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid #dbeafe',
-            fontSize: '0.85rem',
+            padding: '5px 6px 5px 14px',
+            backgroundColor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid #e4e4e7',
+            fontSize: '0.82rem',
           }}
         >
-          <span style={{ color: '#334155', fontWeight: 600 }}>
-            {user.is_guest ? `👤 訪客 (${user.username})` : `👤 ${user.username}`}
+          <span style={{ color: '#0a0a0a', fontWeight: 500 }}>
+            {user.is_guest ? `訪客 · ${user.username}` : user.username}
           </span>
           <button
             onClick={handleLogout}
             style={{
               border: 'none',
-              backgroundColor: '#0550a0',
+              backgroundColor: '#18181b',
               color: '#fff',
-              borderRadius: '14px',
+              borderRadius: '6px',
               padding: '4px 12px',
               cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.8rem'
+              fontWeight: 500,
+              fontSize: '0.78rem'
             }}
           >
             登出

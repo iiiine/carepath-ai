@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { APIProvider, Map, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import api from './api/axios';
+import { t } from './theme';
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const TAINAN_CENTER = { lat: 22.99, lng: 120.21 };
@@ -76,9 +77,9 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
   const displayHospitals = hospitalsProp ?? hospitals;
   const isEmptyResult = hospitalsProp?.length === 0;
 
-  if (!MAPS_KEY) return <p style={{ color: '#d9534f' }}>⚠️ 未設定 Google Maps API key</p>;
-  if (error && !hospitalsProp) return <p style={{ color: '#d9534f' }}>⚠️ 無法載入醫院地圖資料</p>;
-  if (!displayHospitals) return <p style={{ color: '#666' }}>🗺️ 醫院地圖載入中...</p>;
+  if (!MAPS_KEY) return <p style={{ color: t.danger, fontSize: '0.88rem' }}>未設定 Google Maps API key</p>;
+  if (error && !hospitalsProp) return <p style={{ color: t.danger, fontSize: '0.88rem' }}>無法載入醫院地圖資料</p>;
+  if (!displayHospitals) return <p style={{ color: t.muted, fontSize: '0.88rem' }}>醫院地圖載入中...</p>;
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -86,12 +87,12 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
       {isEmptyResult && (
         <div style={{
           position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 10, backgroundColor: '#fff3cd', color: '#856404',
-          border: '1px solid #ffeeba', borderRadius: '6px',
-          padding: '8px 14px', fontSize: '0.85rem', fontWeight: 'bold',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.15)', whiteSpace: 'nowrap',
+          zIndex: 10, backgroundColor: t.panel, color: t.text,
+          border: `1px solid ${t.border}`, borderRadius: '8px',
+          padding: '8px 14px', fontSize: '0.82rem', fontWeight: 500,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.10)', whiteSpace: 'nowrap',
         }}>
-          😔 附近查無合作院所，建議直接前往鄰近醫院就診
+          附近查無合作院所，建議直接前往鄰近醫院就診
         </div>
       )}
 
@@ -135,17 +136,17 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
               position={{ lat: selected.lat, lng: selected.lng }}
               onCloseClick={() => setSelected(null)}
             >
-              <div style={{ color: '#333', lineHeight: 1.6 }}>
-                <strong>🏥 {selected.name}</strong>
-                <br />📍 {selected.address}
-                <br />📞 <a href={`tel:${selected.phone}`}>{selected.phone}</a>
-                {selected.distance_meters != null && <><br />📏 距離約 {fmtDist(selected.distance_meters)}</>}
+              <div style={{ color: t.text, lineHeight: 1.7, fontSize: '0.85rem' }}>
+                <strong>{selected.name}</strong>
+                <br />{selected.address}
+                <br /><a href={`tel:${selected.phone}`} style={{ color: t.text }}>{selected.phone}</a>
+                {selected.distance_meters != null && <><br />距離約 {fmtDist(selected.distance_meters)}</>}
                 <br />
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`}
                   target="_blank" rel="noreferrer"
                 >
-                  🧭 導航至此
+                  導航至此
                 </a>
               </div>
             </InfoWindow>
