@@ -1,6 +1,7 @@
 // src/UserProfileModal.jsx
 import { useState, useEffect } from 'react';
 import api from './api/axios';
+import { t } from './theme';
 
 function UserProfileModal({ isOpen, onClose, user }) {
   const [formData, setFormData] = useState({
@@ -99,40 +100,40 @@ function UserProfileModal({ isOpen, onClose, user }) {
       zIndex: 1000
     }}>
       <div style={{
-        backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px',
+        backgroundColor: t.panel, borderRadius: '12px', padding: '24px',
         width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', border: '1px solid #cbd5e1'
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.12)', border: `1px solid ${t.border}`
       }}>
-        
+
         {/* Modal 頂部列 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-          <h3 style={{ margin: 0, color: '#0550a0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📋 個人健康基本資料
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: `1px solid ${t.border}`, paddingBottom: '14px' }}>
+          <h3 style={{ margin: 0, color: t.text, fontSize: '1rem', fontWeight: 600 }}>
+            個人健康基本資料
           </h3>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b' }}>✕</button>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.1rem', cursor: 'pointer', color: t.muted }}>✕</button>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748b' }}>載入資料中...</div>
+          <div style={{ textAlign: 'center', padding: '30px 0', color: t.muted }}>載入資料中...</div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             
             {/* 身高 & 體重 */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>身高 (cm)</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>身高 (cm)</label>
                 <input 
                   type="number" step="0.1" name="height_cm" placeholder="如: 175"
                   value={formData.height_cm} onChange={handleChange}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box' }}
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>體重 (kg)</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>體重 (kg)</label>
                 <input 
                   type="number" step="0.1" name="weight_kg" placeholder="如: 68"
                   value={formData.weight_kg} onChange={handleChange}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -140,21 +141,21 @@ function UserProfileModal({ isOpen, onClose, user }) {
             {/* 生日 & 性別 */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>出生日期</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>出生日期</label>
                 {/* 💡 使用 type="date" 並搭配智慧連續輸入轉號 */}
                 <input 
                   type="date" 
                   name="birth_date"
                   value={formData.birth_date} 
                   onChange={handleChange}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box' }}
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>生理性別</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>生理性別</label>
                 <select 
                   name="gender" value={formData.gender} onChange={handleChange}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box', backgroundColor: '#fff' }}
                 >
                   <option value="男">男</option>
                   <option value="女">女</option>
@@ -165,50 +166,50 @@ function UserProfileModal({ isOpen, onClose, user }) {
 
             {/* 過去病史 */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>既往病史</label>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>既往病史</label>
               <textarea 
                 name="past_medical_history" rows="2" placeholder="如：高血壓、氣喘、胃食道逆流...（無則留空）"
                 value={formData.past_medical_history} onChange={handleChange}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box', resize: 'vertical' }}
               />
             </div>
 
             {/* 過敏史 */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>藥物或食物過敏史</label>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>藥物或食物過敏史</label>
               <textarea 
                 name="allergy_history" rows="2" placeholder="如：對盤尼西林過敏、花生過敏...（無則留空）"
                 value={formData.allergy_history} onChange={handleChange}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box', resize: 'vertical' }}
               />
             </div>
 
             {/* 長期用藥 */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>目前長期服用藥物</label>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: t.text, marginBottom: '5px' }}>目前長期服用藥物</label>
               <textarea 
                 name="current_medications" rows="2" placeholder="如：降血壓藥、慢性病藥物...（無則留空）"
                 value={formData.current_medications} onChange={handleChange}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${t.border}`, boxSizing: 'border-box', resize: 'vertical' }}
               />
             </div>
 
             {/* 提示訊息 */}
-            <div style={{ fontSize: '0.78rem', color: '#64748b', backgroundColor: '#f1f5f9', padding: '8px 12px', borderRadius: '6px' }}>
-              💡 填寫資料後，AI助手在進行問診評估時會自動參考您的健康背景資訊。
+            <div style={{ fontSize: '0.78rem', color: t.muted, backgroundColor: t.subtle, padding: '10px 12px', borderRadius: '8px', lineHeight: 1.6 }}>
+              填寫資料後，AI 助手在進行問診評估時會自動參考您的健康背景資訊。
             </div>
 
             {/* 按鈕組 */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button 
                 type="button" onClick={onClose}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: 'pointer', color: '#475569' }}
+                style={{ padding: '9px 16px', borderRadius: '8px', border: `1px solid ${t.border}`, backgroundColor: t.panel, cursor: 'pointer', color: t.text, fontSize: '0.88rem' }}
               >
                 取消
               </button>
-              <button 
+              <button
                 type="submit" disabled={saving}
-                style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#0550a0', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                style={{ padding: '9px 20px', borderRadius: '8px', border: 'none', backgroundColor: t.userBubble, color: '#fff', fontWeight: 500, cursor: 'pointer', fontSize: '0.88rem' }}
               >
                 {saving ? '儲存中...' : '儲存健康資料'}
               </button>
