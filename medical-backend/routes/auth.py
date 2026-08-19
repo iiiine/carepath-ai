@@ -87,14 +87,21 @@ def verify_password(
 # JWT
 # =========================
 
-def create_access_token(user_id: int):
+def create_access_token(
+    subject,
+    actor_type: str = "user",
+    expires_minutes: int = None
+):
+    if expires_minutes is None:
+        expires_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
 
     expire = datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        minutes=expires_minutes
     )
 
     payload = {
-        "sub": str(user_id),
+        "sub": str(subject),
+        "actor_type": actor_type,
         "exp": expire,
     }
 
@@ -117,7 +124,6 @@ security = HTTPBearer(auto_error=False)
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -127,21 +133,22 @@ def get_current_user(
     token = credentials.credentials
 
     try:
-
         payload = jwt.decode(
             token,
             SECRET_KEY,
             algorithms=[ALGORITHM]
         )
 
-        user_id = int(payload.get("sub"))
+        subject = payload.get("sub")
+        actor_type = payload.get("actor_type", "user")
 
-    except (
-        InvalidTokenError,
-        TypeError,
-        ValueError
-    ):
+        if not subject:
+            raise HTTPException(
+                status_code=401,
+                detail="登入憑證無效"
+            )
 
+    except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="登入憑證無效或已過期"
@@ -156,10 +163,97 @@ def get_current_user(
         )
 
     try:
-
         with conn.cursor(
             cursor_factory=RealDictCursor
         ) as cur:
+
+            # =========================
+            # 訪客
+            # =========================
+            if actor_type == "guest":
+                try:
+                    guest_id = uuid.UUID(subject)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="訪客憑證格式錯誤"
+                    )
+
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        is_active,
+                        expires_at,
+                        migrated_to_user_id,
+                        migrated_at
+                    FROM guest_sessions
+                    WHERE id = %s;
+                    """,
+                    (str(guest_id),)
+                )
+
+                guest = cur.fetchone()
+
+                if not guest:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="找不到訪客 Session"
+                    )
+
+                if not guest["is_active"]:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="此訪客 Session 已失效"
+                    )
+
+                now = datetime.now(timezone.utc)
+
+                if (
+                    guest["expires_at"]
+                    and guest["expires_at"] < now
+                ):
+                    raise HTTPException(
+                        status_code=401,
+                        detail="訪客 Session 已過期"
+                    )
+
+                if guest["migrated_to_user_id"] is not None:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="此訪客資料已轉移至會員"
+                    )
+
+                # 更新最後活動時間
+                cur.execute(
+                    """
+                    UPDATE guest_sessions
+                    SET last_seen_at = CURRENT_TIMESTAMP
+                    WHERE id = %s;
+                    """,
+                    (str(guest_id),)
+                )
+
+                conn.commit()
+
+                return {
+                    "id": str(guest["id"]),
+                    "username": f"Guest_{str(guest['id'])[:8]}",
+                    "email": None,
+                    "is_guest": True,
+                    "actor_type": "guest"
+                }
+
+            # =========================
+            # 正式會員
+            # =========================
+            try:
+                user_id = int(subject)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=401,
+                    detail="會員憑證格式錯誤"
+                )
 
             cur.execute(
                 """
@@ -177,22 +271,28 @@ def get_current_user(
 
             user = cur.fetchone()
 
+            if not user:
+                raise HTTPException(
+                    status_code=401,
+                    detail="找不到使用者"
+                )
+
+            if not user["is_active"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="此帳號已停用"
+                )
+
+            return {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "is_guest": False,
+                "actor_type": "user"
+            }
+
     finally:
         conn.close()
-
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="找不到使用者"
-        )
-
-    if not user["is_active"]:
-        raise HTTPException(
-            status_code=403,
-            detail="此帳號已停用"
-        )
-
-    return user
 
 
 # =========================
@@ -422,11 +522,11 @@ def login(payload: UserLogin):
 def get_me(
     current_user=Depends(get_current_user)
 ):
-
     return {
         "id": current_user["id"],
         "username": current_user["username"],
-        "email": current_user["email"]
+        "email": current_user.get("email"),
+        "is_guest": current_user.get("is_guest", False)
     }
 
 # =========================

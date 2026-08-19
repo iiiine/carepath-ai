@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Union
 
 # 1. 歷史對話訊息結構
 class ChatMessage(BaseModel):
@@ -61,20 +61,46 @@ class FollowUpResponse(BaseModel):
 # ==============================
 
 class UserRegister(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(
+        min_length=3,
+        max_length=50
+    )
+
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+
+    password: str = Field(
+        min_length=8,
+        max_length=128
+    )
+
+    # 訪客註冊時，用來把原本訪客資料搬到新會員
+    guest_transfer_token: Optional[str] = None
 
 
 class UserLogin(BaseModel):
-    identifier: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=8, max_length=128)
+    identifier: str = Field(
+        min_length=3,
+        max_length=255
+    )
+
+    password: str = Field(
+        min_length=8,
+        max_length=128
+    )
+
+    # 訪客登入既有會員時，用來搬移訪客紀錄
+    guest_transfer_token: Optional[str] = None
 
 
 class UserPublic(BaseModel):
-    id: int
+    # 正式會員是 int，訪客是 UUID 字串
+    id: Union[int, str]
+
     username: str
-    email: str
+
+    # 訪客沒有真正 Email
+    email: Optional[str] = None
+
     is_guest: bool = False
 
 class TokenResponse(BaseModel):

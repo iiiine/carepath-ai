@@ -68,13 +68,108 @@ def get_rag_context(query_text: str) -> str:
 # ------------------------------------------------------------------
 # 原有資料庫連線與 Gemini 工具函式
 # ------------------------------------------------------------------
-def get_db_connection():
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except Exception as e:
-        print(f"資料庫連線失敗: {e}")
+def get_db_connection(
+    max_retries: int = 3,
+    retry_delay: float = 1.0
+):
+    """
+    建立 PostgreSQL / Neon 連線。
+
+    功能：
+    1. 連線失敗自動重試
+    2. 每次失敗後重新建立全新的 connection
+    3. 使用 connect_timeout 防止連線無限等待
+    4. 所有重試失敗才回傳 None
+
+    retry:
+        第 1 次失敗 → 等 1 秒
+        第 2 次失敗 → 等 2 秒
+        第 3 次失敗 → 回傳 None
+    """
+
+    if not DATABASE_URL:
+        print("❌ DATABASE_URL 未設定")
         return None
+
+    last_error = None
+
+    for attempt in range(
+        1,
+        max_retries + 1
+    ):
+
+        try:
+
+            conn = psycopg2.connect(
+                DATABASE_URL,
+
+                # 最多等待 10 秒建立連線
+                connect_timeout=10,
+
+                # TCP keepalive
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
+
+                # Neon / PostgreSQL 可辨識來源
+                application_name="medical_ai_system"
+            )
+
+            # 確認目前 connection 可用
+            if conn.closed == 0:
+
+                if attempt > 1:
+                    print(
+                        f"✅ 資料庫重新連線成功 "
+                        f"(第 {attempt} 次嘗試)"
+                    )
+
+                return conn
+
+        except psycopg2.OperationalError as e:
+
+            last_error = e
+
+            print(
+                f"⚠️ 資料庫連線失敗 "
+                f"({attempt}/{max_retries})：{e}"
+            )
+
+
+        except Exception as e:
+
+            last_error = e
+
+            print(
+                f"❌ 建立資料庫連線時發生錯誤：{e}"
+            )
+
+            break
+
+
+        # 最後一次失敗就不需要再 sleep
+        if attempt < max_retries:
+
+            wait_seconds = (
+                retry_delay * attempt
+            )
+
+            print(
+                f"🔄 {wait_seconds:.1f} 秒後重新連線..."
+            )
+
+            time.sleep(
+                wait_seconds
+            )
+
+
+    print(
+        "❌ 已達資料庫最大重試次數，"
+        f"最後錯誤：{last_error}"
+    )
+
+    return None
 
 def call_gemini_with_retry(prompt: str, max_retries: int = 5):
     if not client or not GEMINI_API_KEY:
