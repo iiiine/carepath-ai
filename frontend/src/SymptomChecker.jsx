@@ -23,6 +23,15 @@ const FALLBACK_LOCATION = {
 };
 
 
+// 載入歷史對話時的假對話骨架。寬度寫死，每次長一樣，不要亂跳。
+// ponytail: 一個陣列就夠，不做隨機產生器。
+const SKELETON_ROWS = [
+  { mine: false, bars: ['220px', '150px'] },
+  { mine: true, bars: ['180px'] },
+  { mine: false, bars: ['260px', '190px'] },
+  { mine: true, bars: ['120px'] },
+];
+
 function SymptomChecker({
   user,
   isConnected,
@@ -53,6 +62,22 @@ function SymptomChecker({
 
   const [loading, setLoading] =
     useState(false);
+
+  // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
+  // 改成置中的杯麵 + 一句大標，讓使用者知道要打什麼。
+  // 從 Dashboard 點進歷史對話時，要先去撈 /api/v1/history，這段時間畫面不能空著。
+  // selectedSessionId 一開始就有值的話直接從 true 起跳，不然會先閃一下開場畫面。
+  const [sessionLoading, setSessionLoading] =
+    useState(selectedSessionId != null);
+
+  const isOpening = messages.length === 1 && !loading && !sessionLoading;
+
+  // 開場版面沒有左邊側欄，所以自己撈一小份最近問診放在最下面，
+  // 不然使用者在開場畫面完全找不到歷史對話。
+  const [recentSessions, setRecentSessions] = useState([]);
+
+  // 撈這排要 1~2 秒（雲端資料庫在新加坡）。先佔位，畫面才不會突然跳出來。
+  const [recentLoading, setRecentLoading] = useState(true);
 
 
   const [history, setHistory] =
@@ -579,6 +604,50 @@ function SymptomChecker({
 
 
   // ==========================================
+  // 開場畫面的「最近問診」
+  // ==========================================
+  useEffect(() => {
+
+    if (!isOpening) {
+      return;
+    }
+
+    let cancelled = false;
+
+    setRecentLoading(true);
+
+    api
+      .get('/api/v1/history')
+      .then((res) => {
+
+        if (cancelled) {
+          return;
+        }
+
+        setRecentSessions(
+          Array.isArray(res.data)
+            ? res.data.slice(0, 4)
+            : []
+        );
+      })
+      .catch(() => {
+        // 撈不到就不顯示這排，不用擋住開場畫面
+      })
+      .finally(() => {
+
+        if (!cancelled) {
+          setRecentLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+
+  }, [isOpening]);
+
+
+  // ==========================================
   // Dashboard 指定歷史問診
   // ==========================================
   useEffect(() => {
@@ -592,6 +661,8 @@ function SymptomChecker({
 
     let cancelled =
       false;
+
+    setSessionLoading(true);
 
 
     const loadSelectedSession =
@@ -668,6 +739,10 @@ function SymptomChecker({
           }
 
         } finally {
+
+          if (!cancelled) {
+            setSessionLoading(false);
+          }
 
           if (
             !cancelled &&
@@ -837,221 +912,9 @@ function SymptomChecker({
   // ==========================================
   // UI
   // ==========================================
-  return (
-
-    <div
-      style={{
-        display:
-          'flex',
-
-        gap:
-          '16px',
-
-        maxWidth:
-          '1700px',
-
-        height:
-          'calc(100vh - 85px)',
-
-        margin:
-          '0 auto',
-
-        width:
-          '100%',
-
-        position:
-          'relative'
-      }}
-    >
-
-      {/* ==================================== */}
-      {/* 左側歷史紀錄 */}
-      {/* ==================================== */}
-
-      <div
-        style={{
-          width:
-            isSidebarCollapsed
-              ? '60px'
-              : '260px',
-
-          transition:
-            'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-
-          flexShrink:
-            0,
-
-          height:
-            '100%'
-        }}
-      >
-
-        <HistorySidebar
-          user={
-            user
-          }
-
-          onSelectSession={
-            handleSelectSession
-          }
-
-          onNewChat={
-            handleNewChat
-          }
-        />
-
-      </div>
-
-
-      {/* ==================================== */}
-      {/* 主畫面 */}
-      {/* ==================================== */}
-
-      <div
-        style={{
-          flex:
-            1,
-
-          height:
-            '100%',
-
-          minWidth:
-            0,
-
-          position:
-            'relative'
-        }}
-      >
-
-        {/* ================================== */}
-        {/* AI 對話模式 */}
-        {/* ================================== */}
-
-        {viewMode ===
-        'chat-only' ? (
-
-          <div
-            style={{
-              maxWidth:
-                '780px',
-
-              height:
-                '100%',
-
-              margin:
-                '0 auto',
-
-              backgroundColor:
-                t.panel,
-
-              borderRadius:
-                '12px',
-
-              border:
-                `1px solid ${t.border}`,
-
-              padding:
-                '24px',
-
-              boxSizing:
-                'border-box',
-
-              display:
-                'flex',
-
-              flexDirection:
-                'column'
-            }}
-          >
-
-            {/* ============================== */}
-            {/* Header */}
-            {/* ============================== */}
-
-            <div
-              style={{
-                display:
-                  'flex',
-
-                justifyContent:
-                  'space-between',
-
-                alignItems:
-                  'flex-start',
-
-                marginBottom:
-                  '8px',
-
-                paddingBottom:
-                  '16px',
-
-                borderBottom:
-                  `1px solid ${t.border}`
-              }}
-            >
-
-              <div
-                style={{
-                  display:
-                    'flex',
-
-                  alignItems:
-                    'center',
-
-                  gap:
-                    '12px'
-                }}
-              >
-
-                <BaymaxAvatar
-                  size={62}
-                />
-
-
-                <div>
-
-                  <h2
-                    style={{
-                      margin:
-                        0,
-
-                      color:
-                        t.text,
-
-                      fontSize:
-                        '1.05rem',
-
-                      fontWeight:
-                        600,
-
-                      letterSpacing:
-                        '-0.01em'
-                    }}
-                  >
-                    AI 問診助理
-                  </h2>
-
-
-                  <p
-                    style={{
-                      margin:
-                        '3px 0 0',
-
-                      color:
-                        t.muted,
-
-                      fontSize:
-                        '0.85rem'
-                    }}
-                  >
-                    描述您的症狀，我會協助判斷科別並推薦附近院所
-                  </p>
-
-                </div>
-
-              </div>
-
-
+  // 個人健康資料 / 定位 / 不適度 這三顆。開場版面要把它們塞進輸入框裡，
+  // 一般版面則留在標題列右邊，所以抽成變數只寫一次。
+  const controlsRow = (
               <div
                 style={{
                   display:
@@ -1250,8 +1113,234 @@ function SymptomChecker({
                 </div>
 
               </div>
+  );
+
+  return (
+
+    <div
+      style={{
+        display:
+          'flex',
+
+        gap:
+          '16px',
+
+        maxWidth:
+          '1700px',
+
+        flex: 1,
+
+        minHeight: 0,
+
+        margin:
+          '0 auto',
+
+        width:
+          '100%',
+
+        position:
+          'relative'
+      }}
+    >
+
+      {/* ==================================== */}
+      {/* 左側歷史紀錄 */}
+      {/* ==================================== */}
+
+      {!isOpening && (
+      <div
+        style={{
+          width:
+            isSidebarCollapsed
+              ? '60px'
+              : '260px',
+
+          transition:
+            'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+
+          flexShrink:
+            0,
+
+          height:
+            '100%'
+        }}
+      >
+
+        <HistorySidebar
+          user={
+            user
+          }
+
+          onSelectSession={
+            handleSelectSession
+          }
+
+          onNewChat={
+            handleNewChat
+          }
+        />
+
+      </div>
+      )}
+
+
+      {/* ==================================== */}
+      {/* 主畫面 */}
+      {/* ==================================== */}
+
+      <div
+        style={{
+          flex:
+            1,
+
+          height:
+            '100%',
+
+          minWidth:
+            0,
+
+          position:
+            'relative'
+        }}
+      >
+
+        {/* ================================== */}
+        {/* AI 對話模式 */}
+        {/* ================================== */}
+
+        {viewMode ===
+        'chat-only' ? (
+
+          <div
+            style={{
+              maxWidth: isOpening
+                ? '860px'
+                : '780px',
+
+              height:
+                '100%',
+
+              margin:
+                '0 auto',
+
+              backgroundColor: isOpening
+                ? 'transparent'
+                : t.panel,
+
+              borderRadius:
+                '12px',
+
+              border: isOpening
+                ? 'none'
+                : `1px solid ${t.border}`,
+
+              padding:
+                '24px',
+
+              boxSizing:
+                'border-box',
+
+              display:
+                'flex',
+
+              flexDirection:
+                'column'
+            }}
+          >
+
+            {/* ============================== */}
+            {/* Header */}
+            {/* ============================== */}
+
+            {!isOpening && (
+            <div
+              style={{
+                display:
+                  'flex',
+
+                justifyContent:
+                  'space-between',
+
+                alignItems:
+                  'flex-start',
+
+                marginBottom:
+                  '8px',
+
+                paddingBottom:
+                  '16px',
+
+                borderBottom:
+                  `1px solid ${t.border}`
+              }}
+            >
+
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  alignItems:
+                    'center',
+
+                  gap:
+                    '12px'
+                }}
+              >
+
+                <BaymaxAvatar
+                  size={62}
+                />
+
+
+                <div>
+
+                  <h2
+                    style={{
+                      margin:
+                        0,
+
+                      color:
+                        t.text,
+
+                      fontSize:
+                        '1.05rem',
+
+                      fontWeight:
+                        600,
+
+                      letterSpacing:
+                        '-0.01em'
+                    }}
+                  >
+                    AI 問診助理
+                  </h2>
+
+
+                  <p
+                    style={{
+                      margin:
+                        '3px 0 0',
+
+                      color:
+                        t.muted,
+
+                      fontSize:
+                        '0.85rem'
+                    }}
+                  >
+                    描述您的症狀，我會協助判斷科別並推薦附近院所
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {controlsRow}
 
             </div>
+            )}
 
 
             {/* ============================== */}
@@ -1260,21 +1349,112 @@ function SymptomChecker({
 
             <div
               style={{
-                flex:
-                  1,
-
-                overflowY:
-                  'auto',
-
-                padding:
-                  '20px 4px',
-
-                marginBottom:
-                  '12px'
+                flex: isOpening ? '0 0 auto' : 1,
+                overflowY: isOpening ? 'visible' : 'auto',
+                padding: isOpening ? '48px 4px 20px' : '20px 4px',
+                marginBottom: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                alignItems: isOpening ? 'center' : 'stretch',
               }}
             >
 
-              {messages.map(
+              {sessionLoading && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '20px',
+                    width: '100%',
+                    animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                  }}
+                >
+                  {SKELETON_ROWS.map((row, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        gap: '10px',
+                        alignItems: 'flex-start',
+                        flexDirection: row.mine ? 'row-reverse' : 'row',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '30px',
+                          height: '30px',
+                          borderRadius: '50%',
+                          backgroundColor: t.border,
+                          flexShrink: 0,
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '7px',
+                          alignItems: row.mine ? 'flex-end' : 'flex-start',
+                        }}
+                      >
+                        {row.bars.map((w, j) => (
+                          <div
+                            key={j}
+                            style={{
+                              width: w,
+                              height: '13px',
+                              borderRadius: '7px',
+                              backgroundColor: t.border,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {isOpening && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '18px',
+                    textAlign: 'center',
+                    paddingBottom: '8px',
+                  }}
+                >
+                  <BaymaxAvatar size={108} />
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div
+                      style={{
+                        fontSize: '1.65rem',
+                        fontWeight: 700,
+                        color: t.text,
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      今天哪裡不舒服？
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: '0.9rem',
+                        color: t.muted,
+                        maxWidth: '460px',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      用你自己的話講就好，我會判斷該看哪一科，再幫你找附近的院所。
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(isOpening ? [] : messages).map(
                 (
                   msg,
                   index
@@ -1463,23 +1643,16 @@ function SymptomChecker({
             {/* 快捷症狀 */}
             {/* ============================== */}
 
-            {messages.length ===
-              1 &&
-              !loading && (
+            {isOpening && (
 
               <div
                 style={{
-                  display:
-                    'flex',
-
-                  flexWrap:
-                    'wrap',
-
-                  gap:
-                    '8px',
-
-                  marginBottom:
-                    '12px'
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  marginBottom: '12px',
+                  justifyContent: 'center',
+                  order: 2,
                 }}
               >
 
@@ -1548,6 +1721,28 @@ function SymptomChecker({
             {/* 輸入框 */}
             {/* ============================== */}
 
+            {/* 開場版面要把輸入框和三顆控制項合成一張卡。
+                ponytail: 非開場時用 display:contents 讓這層消失，不用寫兩套 JSX。 */}
+            <div
+              style={
+                isOpening
+                  ? {
+                      order: 1,
+                      alignSelf: 'center',
+                      width: '100%',
+                      maxWidth: '760px',
+                      boxSizing: 'border-box',
+                      backgroundColor: t.panel,
+                      border: `1px solid ${t.border}`,
+                      borderRadius: '16px',
+                      padding: '6px 8px 12px',
+                      marginBottom: '18px',
+                      boxShadow: '0 4px 16px rgba(15,40,50,0.06)',
+                    }
+                  : { display: 'contents' }
+              }
+            >
+
             <form
               onSubmit={
                 handleSendMessage
@@ -1563,8 +1758,9 @@ function SymptomChecker({
                 gap:
                   '8px',
 
-                border:
-                  `1px solid ${t.border}`,
+                border: isOpening
+                  ? 'none'
+                  : `1px solid ${t.border}`,
 
                 borderRadius:
                   '24px',
@@ -1572,8 +1768,9 @@ function SymptomChecker({
                 padding:
                   '6px 6px 6px 18px',
 
-                backgroundColor:
-                  t.panel
+                backgroundColor: isOpening
+                  ? 'transparent'
+                  : t.panel
               }}
             >
 
@@ -1687,6 +1884,87 @@ function SymptomChecker({
               </button>
 
             </form>
+
+            {isOpening && (
+              <>
+                <div
+                  style={{
+                    height: '1px',
+                    backgroundColor: t.border,
+                    margin: '4px 10px 10px',
+                  }}
+                />
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    padding: '0 10px',
+                  }}
+                >
+                  {controlsRow}
+                </div>
+              </>
+            )}
+
+            </div>
+
+            {/* 開場版面的最近問診：側欄收起來了，這裡是唯一入口 */}
+            {isOpening && (recentLoading || recentSessions.length > 0) && (
+              <div
+                style={{
+                  order: 3,
+                  marginTop: 'auto',
+                  paddingTop: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: t.muted }}>
+                  最近問診
+                </span>
+
+                {recentLoading
+                  ? ['96px', '96px', '84px'].map((w, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: w,
+                          height: '31px',
+                          borderRadius: '8px',
+                          backgroundColor: t.border,
+                          animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                        }}
+                      />
+                    ))
+                  : recentSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => handleSelectSession(session)}
+                    style={{
+                      border: `1px solid ${t.border}`,
+                      backgroundColor: t.panel,
+                      color: t.text,
+                      borderRadius: '8px',
+                      padding: '7px 13px',
+                      fontSize: '0.76rem',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      maxWidth: '180px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {session.title || session.symptom_text || '未命名問診'}
+                  </button>
+                ))}
+              </div>
+            )}
 
           </div>
 

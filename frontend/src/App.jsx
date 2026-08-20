@@ -8,7 +8,23 @@ import AuthPage from './AuthPage'
 import DashboardPage from './pages/DashboardPage'
 
 import api from './api/axios'
+import { t } from './theme'
 
+
+// 頂部分頁膠囊的樣式，選到的那顆才是白底。
+// ponytail: 一個函式就夠，不做 <Tab> 元件。
+const tabStyle = (active) => ({
+  border: 'none',
+  borderRadius: '999px',
+  padding: '6px 16px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: '0.82rem',
+  fontWeight: active ? 600 : 500,
+  color: active ? t.text : t.muted,
+  backgroundColor: active ? t.panel : 'transparent',
+  boxShadow: active ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
+})
 
 function App() {
   // ==========================================
@@ -352,10 +368,10 @@ function App() {
           justifyContent: 'center',
 
           backgroundColor:
-            '#bee7f7',
+            t.page,
 
           color:
-            '#0550a0',
+            t.text,
 
           fontWeight:
             'bold',
@@ -398,14 +414,17 @@ function App() {
         padding:
           '16px 24px',
 
-        minHeight:
+        height:
           '100vh',
+
+        overflow:
+          'hidden',
 
         boxSizing:
           'border-box',
 
         backgroundColor:
-          '#bee7f7',
+          '#f2f6f7',
 
         display:
           'flex',
@@ -423,246 +442,107 @@ function App() {
       {/* ====================================== */}
       <div
         style={{
-          display:
-            'flex',
-
-          justifyContent:
-            'space-between',
-
-          alignItems:
-            'center',
-
-          width:
-            '100%',
-
-          maxWidth:
-            '1700px',
-
-          margin:
-            '0 auto',
-
-          gap:
-            '16px',
-
-          flexWrap:
-            'wrap',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: '1700px',
+          margin: '0 auto',
+          gap: '16px',
+          flexWrap: 'wrap',
         }}
       >
-
-        {/* 左側導航 */}
-        <div
-          style={{
-            display:
-              'flex',
-
-            alignItems:
-              'center',
-
-            gap:
-              '8px',
-
-            flexWrap:
-              'wrap',
-          }}
-        >
-
-          {/* AI 問診 */}
-          <button
-            type="button"
-
-            onClick={
-              goToConsultation
-            }
-
+        {/* 左側：品牌 + 分頁 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+          {/* 分頁做成一組膠囊，選到的那顆才是白底 */}
+          <div
             style={{
-              border:
-                'none',
-
-              padding:
-                '9px 16px',
-
-              borderRadius:
-                '10px',
-
-              cursor:
-                'pointer',
-
-              fontWeight:
-                700,
-
-              fontSize:
-                '0.9rem',
-
-              backgroundColor:
-                currentPage ===
-                'consultation'
-                  ? '#0550a0'
-                  : 'rgba(255,255,255,0.95)',
-
-              color:
-                currentPage ===
-                'consultation'
-                  ? '#ffffff'
-                  : '#334155',
-
-              boxShadow:
-                '0 2px 8px rgba(0,0,0,0.06)',
-
-              transition:
-                'all 0.2s ease',
+              display: 'flex',
+              gap: '3px',
+              backgroundColor: 'rgba(255,255,255,0.7)',
+              border: `1px solid ${t.border}`,
+              borderRadius: '999px',
+              padding: '3px',
             }}
           >
-            🩺 AI 問診
-          </button>
-
-
-          {/* Dashboard */}
-          {!user.is_guest && (
             <button
               type="button"
-
-              onClick={
-                goToDashboard
-              }
-
-              style={{
-                border:
-                  'none',
-
-                padding:
-                  '9px 16px',
-
-                borderRadius:
-                  '10px',
-
-                cursor:
-                  'pointer',
-
-                fontWeight:
-                  700,
-
-                fontSize:
-                  '0.9rem',
-
-                backgroundColor:
-                  currentPage ===
-                  'dashboard'
-                    ? '#0550a0'
-                    : 'rgba(255,255,255,0.95)',
-
-                color:
-                  currentPage ===
-                  'dashboard'
-                    ? '#ffffff'
-                    : '#334155',
-
-                boxShadow:
-                  '0 2px 8px rgba(0,0,0,0.06)',
-
-                transition:
-                  'all 0.2s ease',
-              }}
+              onClick={goToConsultation}
+              style={tabStyle(currentPage === 'consultation')}
             >
-              📊 健康 Dashboard
+              AI 問診
             </button>
-          )}
 
+            {!user.is_guest && (
+              <button
+                type="button"
+                onClick={goToDashboard}
+                style={tabStyle(currentPage === 'dashboard')}
+              >
+                健康 Dashboard
+              </button>
+            )}
+          </div>
         </div>
 
-
-        {/* ==================================== */}
         {/* 右側使用者 */}
-        {/* ==================================== */}
-        <div
-          style={{
-            display:
-              'flex',
-
-            alignItems:
-              'center',
-
-            gap:
-              '10px',
-
-            padding:
-              '6px 14px',
-
-            backgroundColor:
-              'rgba(255,255,255,0.95)',
-
-            borderRadius:
-              '20px',
-
-            boxShadow:
-              '0 2px 8px rgba(0,0,0,0.08)',
-
-            border:
-              '1px solid #dbeafe',
-
-            fontSize:
-              '0.85rem',
-          }}
-        >
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              color:
-                '#334155',
-
-              fontWeight:
-                600,
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: t.userBubble,
+              color: t.page,
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
-            {user.is_guest
-              ? `👤 訪客 (${user.username})`
-              : `👤 ${user.username}`}
+            {user.username.charAt(0)}
           </span>
 
+          <span style={{ fontSize: '0.8rem', color: t.text }}>
+            {user.is_guest ? `訪客 (${user.username})` : user.username}
+          </span>
 
           <button
             type="button"
-
-            onClick={
-              handleLogout
-            }
-
+            onClick={handleLogout}
             style={{
-              border:
-                'none',
-
-              backgroundColor:
-                '#0550a0',
-
-              color:
-                '#ffffff',
-
-              borderRadius:
-                '14px',
-
-              padding:
-                '4px 12px',
-
-              cursor:
-                'pointer',
-
-              fontWeight:
-                'bold',
-
-              fontSize:
-                '0.8rem',
+              border: 'none',
+              background: 'none',
+              color: t.muted,
+              cursor: 'pointer',
+              fontSize: '0.76rem',
+              fontFamily: 'inherit',
+              padding: '4px 6px',
             }}
           >
             登出
           </button>
-
         </div>
-
       </div>
 
 
       {/* ====================================== */}
       {/* 頁面內容 */}
       {/* ====================================== */}
+
+      {/* 內容自己滾。外層固定 100vh 是為了不要長出整頁捲軸（會把畫面往左擠），
+          所以能滾的責任要交給這一層，不然 Dashboard 比螢幕高就卡住。 */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
 
       {currentPage === 'dashboard' &&
       !user.is_guest ? (
@@ -716,6 +596,8 @@ function App() {
         />
 
       )}
+
+      </div>
 
     </div>
   )
