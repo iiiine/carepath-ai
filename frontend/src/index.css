@@ -25,3 +25,8 @@ body {
   0%, 60%, 100% { opacity: 0.25; }
   30% { opacity: 1; }
 }
+/* 載入歷史對話時的骨架動畫（SymptomChecker 用）：整塊一起淡→濃→淡 */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
