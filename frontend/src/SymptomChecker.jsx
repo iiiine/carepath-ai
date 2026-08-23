@@ -84,9 +84,27 @@ function SymptomChecker({
     useState([]);
 
 
+   // ==========================================
+  // 一般問診完成結果
+  // ==========================================
   const [
     diagnosisResult,
     setDiagnosisResult
+  ] = useState(null);
+
+
+  // ==========================================
+  // Medical Safety Alert
+  //
+  // 專門保存後端回傳：
+  // status = "safety_alert"
+  //
+  // 之後會讓它走獨立的緊急警示 UI，
+  // 不和一般問診完成結果混在一起。
+  // ==========================================
+  const [
+    safetyAlert,
+    setSafetyAlert
   ] = useState(null);
 
 
