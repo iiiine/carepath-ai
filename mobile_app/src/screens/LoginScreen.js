@@ -97,6 +97,16 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
         <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="關閉登入視窗"
+            accessibilityRole="button"
+          >
+            <Text style={styles.closeIcon}>✕</Text>
+          </TouchableOpacity>
+
           <View style={styles.statusBadge}>
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>成功連線</Text>
@@ -160,6 +170,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  closeButton: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  closeIcon: { fontSize: 20, color: '#6B7280', lineHeight: 22 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 20 },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8 },
