@@ -93,6 +93,8 @@ export default function ConsultScreen() {
   const scrollViewRef = useRef(); 
   
   const [inputText, setInputText] = useState('');
+  // ponytail: 鍵盤彈出時收起快捷標籤與控制列，避免畫面被壓扁
+  const [inputFocused, setInputFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [painLevel, setPainLevel] = useState(3);
   
@@ -432,13 +434,15 @@ export default function ConsultScreen() {
 
         {!diagnosisResult && (
           <View style={styles.bottomSection}>
-            <View style={styles.quickTags}>
-              {quickSymptoms.map((sym, i) => (
-                <TouchableOpacity key={i} style={styles.tag} onPress={() => handleSendMessage(sym)}>
-                  <Text style={styles.tagText}>{sym}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!inputFocused && (
+              <View style={styles.quickTags}>
+                {quickSymptoms.map((sym, i) => (
+                  <TouchableOpacity key={i} style={styles.tag} onPress={() => handleSendMessage(sym)}>
+                    <Text style={styles.tagText}>{sym}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             <View style={styles.inputBox}>
               <TextInput
@@ -448,6 +452,8 @@ export default function ConsultScreen() {
                 value={inputText}
                 onChangeText={setInputText}
                 onSubmitEditing={() => handleSendMessage(inputText)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
               />
               <TouchableOpacity 
                 style={[styles.sendButton, (!inputText.trim() || loading) && { backgroundColor: t.subtle }]}
@@ -458,6 +464,7 @@ export default function ConsultScreen() {
               </TouchableOpacity>
             </View>
             
+            {!inputFocused && (
             <View style={styles.controlsRow}>
               <Text style={[styles.controlBadge, locationStatus === 'success' && { color: t.userBubble, borderColor: t.userBubble }]}>
                 {locationStatus === 'loading' ? '📍 定位中...' : locationStatus === 'success' ? '📍 已定位' : '📍 備援定位'}
@@ -468,6 +475,7 @@ export default function ConsultScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
           </View>
         )}
       </KeyboardAvoidingView>
