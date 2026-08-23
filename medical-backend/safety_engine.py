@@ -1,4 +1,5 @@
 # safety_engine.py
+from __future__ import annotations  # ponytail: 本機 venv 是 Python 3.9，沒這行 `X | None` 會炸
 
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping
