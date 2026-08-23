@@ -1,4 +1,5 @@
 # safety_pipeline.py
+from __future__ import annotations  # ponytail: 本機 venv 是 Python 3.9，沒這行 `X | None` 會炸
 
 from typing import Any, Dict, Optional, Sequence
 
