@@ -1,4 +1,4 @@
-# symptom_flag_extractor.py
+
 
 import json
 import time
@@ -15,7 +15,7 @@ from services import client, GEMINI_MODEL_NAME
 # Extractor Version
 # ============================================================
 
-SYMPTOM_EXTRACTOR_VERSION = "2026.08.2"
+SYMPTOM_EXTRACTOR_VERSION = "2026.09.1"
 
 
 # ============================================================
@@ -143,6 +143,35 @@ class SymptomFlagsSchema(BaseModel):
     vaginal_bleeding: FlagState = "unknown"
 
     severe_abdominal_pain: FlagState = "unknown"
+
+
+    # --------------------------------------------------------
+    # Mental health / Harm safety
+    #
+    # thoughts:
+    #   有傷害自己 / 他人的想法、衝動或念頭，
+    #   但不代表已有明確計畫。
+    #
+    # intent_or_plan:
+    #   已表達要做、打算做、已想好方法，
+    #   或已準備手段。
+    #
+    # imminent:
+    #   描述現在 / 馬上 / 即將行動，
+    #   或手段已在身邊且準備執行。
+    # --------------------------------------------------------
+
+    self_harm_thoughts: FlagState = "unknown"
+
+    harm_others_thoughts: FlagState = "unknown"
+
+    self_harm_intent_or_plan: FlagState = "unknown"
+
+    harm_others_intent_or_plan: FlagState = "unknown"
+
+    imminent_self_harm: FlagState = "unknown"
+
+    imminent_harm_to_others: FlagState = "unknown"
 
 
     # --------------------------------------------------------
@@ -413,7 +442,138 @@ recent_resolved_neurologic_deficit = present
 使用 unknown。
 
 
-6. evidence
+6. 自傷 / 傷人風險的分級抽取
+
+這一組旗標必須非常保守，
+不能因為一般負面情緒就自行推論成傷害風險。
+
+------------------------------------------------------------
+A. 一般情緒，不等於傷害想法
+------------------------------------------------------------
+
+例如：
+
+「我很生氣」
+「我很煩」
+「我討厭他」
+「我快氣死了」
+
+若沒有實際表達要傷害自己或他人，
+
+不得因此標記：
+
+self_harm_thoughts = present
+harm_others_thoughts = present
+self_harm_intent_or_plan = present
+harm_others_intent_or_plan = present
+imminent_self_harm = present
+imminent_harm_to_others = present
+
+
+------------------------------------------------------------
+B. 傷害想法 / 衝動
+------------------------------------------------------------
+
+若使用者明確表達有傷害自己或他人的想法、
+念頭或衝動，但沒有明確行動計畫：
+
+「最近有時候會想傷害自己」
+→ self_harm_thoughts = present
+
+「我有點想打人」
+→ harm_others_thoughts = present
+
+「我很想揍他，但我沒有要真的去做」
+→ harm_others_thoughts = present
+→ harm_others_intent_or_plan = absent
+→ imminent_harm_to_others = absent
+
+重要：
+「有想法」不能自動等同於
+「已有計畫」或「即將行動」。
+
+
+------------------------------------------------------------
+C. 明確意圖或計畫
+------------------------------------------------------------
+
+只有在使用者明確表示：
+
+- 打算真的執行
+- 已決定要做
+- 已想好方法
+- 已準備工具 / 藥物 / 武器 / 其他手段
+- 正在安排執行
+
+才能標記 intent_or_plan = present。
+
+例如：
+
+「我已經想好要怎麼傷害自己了」
+→ self_harm_thoughts = present
+→ self_harm_intent_or_plan = present
+
+「我今晚打算去傷害他」
+→ harm_others_thoughts = present
+→ harm_others_intent_or_plan = present
+
+
+------------------------------------------------------------
+D. 立即危險
+------------------------------------------------------------
+
+只有明確表示：
+
+- 現在就要做
+- 馬上要做
+- 正在準備執行
+- 已在危險位置準備行動
+- 手段已在身邊且準備立即使用
+
+才能標記 imminent_* = present。
+
+例如：
+
+「我現在就要傷害自己」
+→ self_harm_thoughts = present
+→ self_harm_intent_or_plan = present
+→ imminent_self_harm = present
+
+「工具就在旁邊，我現在準備去傷害他」
+→ harm_others_thoughts = present
+→ harm_others_intent_or_plan = present
+→ imminent_harm_to_others = present
+
+
+------------------------------------------------------------
+E. 時序與否定
+------------------------------------------------------------
+
+若使用者明確表示只是過去曾有想法，
+目前已沒有：
+
+「以前想過傷害自己，但現在完全沒有了」
+
+應判斷：
+
+self_harm_thoughts = absent
+
+不得因過往對話曾出現想法，
+就忽略使用者最新的明確否認。
+
+若最新描述與過往資訊衝突，
+以「最新且明確的目前狀態」為優先。
+
+如果語意不足以區分
+「只是生氣」
+和
+「真的有傷害念頭」，
+
+應使用 unknown，
+並把缺少的資訊加入 ambiguous_information。
+
+
+7. evidence
 
 只紀錄真正影響 safety flag 判斷的
 使用者原始資訊摘要。
@@ -549,6 +709,34 @@ vaginal_bleeding
 
 severe_abdominal_pain
 劇烈腹痛。
+
+self_harm_thoughts
+目前有明確傷害自己、自殺或自我傷害的想法、念頭或衝動。
+一般低落、難過、想哭、壓力大，不可自動視為此旗標 present。
+
+harm_others_thoughts
+目前有明確傷害、攻擊他人的想法、念頭或衝動。
+一般生氣、討厭某人、抱怨，不可自動視為此旗標 present。
+
+self_harm_intent_or_plan
+目前已表達傷害自己的明確意圖、決定、方法、計畫，
+或已準備相關手段。
+僅有模糊想法時不可標記 present。
+
+harm_others_intent_or_plan
+目前已表達傷害他人的明確意圖、決定、方法、計畫，
+或已準備相關手段。
+僅有模糊想法時不可標記 present。
+
+imminent_self_harm
+目前存在立即或即將執行的自傷 / 自殺危險，
+例如「現在就要做」、「馬上要做」、
+或手段已在身邊且準備立即執行。
+
+imminent_harm_to_others
+目前存在立即或即將傷害他人的危險，
+例如「現在就要去傷害他」、
+或手段已在身邊且準備立即執行。
 
 fever
 目前發燒。
@@ -876,6 +1064,14 @@ if __name__ == "__main__":
         "我只是頭痛，沒有胸痛，也沒有呼吸困難。",
 
         "我右手突然沒力，講話也變得含糊。",
+
+        "我很生氣，但沒有想傷害任何人。",
+
+        "我有點想打人，但沒有要真的去做。",
+
+        "我最近有傷害自己的念頭，但沒有計畫。",
+
+        "我已經想好要怎麼傷害自己，而且現在就準備做。",
 
     ]
 

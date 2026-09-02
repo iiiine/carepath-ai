@@ -1,6 +1,8 @@
 # safety_pipeline.py
 from __future__ import annotations  # ponytail: 本機 venv 是 Python 3.9，沒這行 `X | None` 會炸
 
+import time
+
 from typing import Any, Dict, Optional, Sequence
 
 from symptom_flag_extractor import (
@@ -32,6 +34,29 @@ RISK_LABELS = {
 
 
 # ============================================================
+# Performance Helper
+# ============================================================
+
+def _elapsed_ms(
+    start_time: float,
+    end_time: float,
+) -> float:
+    """
+    將 perf_counter 秒數差轉成毫秒。
+    """
+
+    return round(
+        (
+            end_time
+            -
+            start_time
+        )
+        * 1000,
+        1,
+    )
+
+
+# ============================================================
 # Safety Pipeline
 #
 # Natural Language
@@ -47,6 +72,16 @@ def run_safety_pipeline(
     symptom_text: str,
     history: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
+
+    # ========================================================
+    # Performance：
+    # 整個 Safety Pipeline 起始時間
+    # ========================================================
+
+    pipeline_started_at = (
+        time.perf_counter()
+    )
+
 
     if not symptom_text:
         raise ValueError(
@@ -69,6 +104,11 @@ def run_safety_pipeline(
         # 1. AI 結構化抽取
         # ====================================================
 
+        extractor_started_at = (
+            time.perf_counter()
+        )
+
+
         extraction = (
             extract_symptom_flags(
                 symptom_text=symptom_text,
@@ -77,15 +117,46 @@ def run_safety_pipeline(
         )
 
 
+        extractor_finished_at = (
+            time.perf_counter()
+        )
+
+
+        extractor_ms = (
+            _elapsed_ms(
+                extractor_started_at,
+                extractor_finished_at,
+            )
+        )
+
+
         # ====================================================
         # 2. Rule-based Safety Engine
         # ====================================================
+
+        engine_started_at = (
+            time.perf_counter()
+        )
+
 
         assessment = (
             evaluate_red_flags(
                 extraction[
                     "safety_flags"
                 ]
+            )
+        )
+
+
+        engine_finished_at = (
+            time.perf_counter()
+        )
+
+
+        engine_ms = (
+            _elapsed_ms(
+                engine_started_at,
+                engine_finished_at,
             )
         )
 
@@ -108,6 +179,43 @@ def run_safety_pipeline(
                 "urgent",
                 "emergency",
             }
+        )
+
+
+        # ====================================================
+        # Performance：
+        # 整體 Pipeline 耗時
+        # ====================================================
+
+        pipeline_finished_at = (
+            time.perf_counter()
+        )
+
+
+        total_ms = (
+            _elapsed_ms(
+                pipeline_started_at,
+                pipeline_finished_at,
+            )
+        )
+
+
+        # ====================================================
+        # Performance Log
+        #
+        # 注意：
+        # 只寫後端 Console，
+        # 不修改 API Response Schema，
+        # 避免影響現在前端與 Pydantic Model。
+        # ====================================================
+
+        print(
+            "\n"
+            "⏱️ [Safety Performance]\n"
+            f"   total      = {total_ms} ms\n"
+            f"   extractor  = {extractor_ms} ms\n"
+            f"   rule_engine= {engine_ms} ms\n"
+            f"   risk       = {risk_level}"
         )
 
 
@@ -224,6 +332,32 @@ def run_safety_pipeline(
     except Exception as exc:
 
         # ====================================================
+        # Performance：
+        # 技術失敗時仍記錄整體耗時
+        # ====================================================
+
+        failed_at = (
+            time.perf_counter()
+        )
+
+
+        failed_total_ms = (
+            _elapsed_ms(
+                pipeline_started_at,
+                failed_at,
+            )
+        )
+
+
+        print(
+            "\n"
+            "⏱️ [Safety Performance - FAILED]\n"
+            f"   total      = {failed_total_ms} ms\n"
+            f"   error_type = {type(exc).__name__}"
+        )
+
+
+        # ====================================================
         # FAIL-SAFE
         #
         # 非常重要：
@@ -330,6 +464,11 @@ def run_safety_pipeline(
 # 執行：
 #
 # python safety_pipeline.py
+#
+# 注意：
+# 這會實際執行多次 Gemini Safety Extraction。
+# Performance Profiling 階段不需要執行它，
+# 直接從正式 /diagnose 測一筆即可。
 # ============================================================
 
 if __name__ == "__main__":

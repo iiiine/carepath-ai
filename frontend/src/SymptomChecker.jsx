@@ -1,4 +1,4 @@
-// src/SymptomChecker.jsx
+
 
 import { useState, useRef, useEffect } from 'react';
 import api from './api/axios';
@@ -9,6 +9,12 @@ import UserProfileModal from './UserProfileModal';
 
 // ★ 第 22-4B：醫師門診時段
 import DoctorScheduleInfo from './DoctorScheduleInfo';
+
+// ★ Step 2B-2：縱向健康趨勢儀表板
+import LongitudinalHealthPanel from './LongitudinalHealthPanel';
+
+// ★ Step 3B-2：AI 就醫摘要
+import VisitSummaryPanel from './VisitSummaryPanel';
 
 import { t } from './theme';
 import { BaymaxAvatar } from './Baymax';
@@ -21,6 +27,108 @@ const FALLBACK_LOCATION = {
   latitude: 23.0,
   longitude: 120.2
 };
+
+
+// ==========================================
+// Step 4A-1：高齡友善模式
+// ==========================================
+
+const ELDER_MODE_STORAGE_KEY =
+  'carepath_elder_friendly_mode';
+
+
+const ELDER_MODE_CSS = `
+  [data-elder-mode="true"] {
+    letter-spacing: 0.01em;
+  }
+
+  [data-elder-mode="true"] button,
+  [data-elder-mode="true"] a {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
+  [data-elder-mode="true"] input:not([type="range"]),
+  [data-elder-mode="true"] textarea,
+  [data-elder-mode="true"] select {
+    min-height: 48px !important;
+    font-size: 17px !important;
+    line-height: 1.55 !important;
+  }
+
+  [data-elder-mode="true"] textarea {
+    min-height: 88px !important;
+  }
+
+  [data-elder-mode="true"] input[type="range"] {
+    min-height: 34px !important;
+    height: 34px !important;
+  }
+
+  [data-elder-mode="true"] .elder-readable-text {
+    font-size: 17px !important;
+    line-height: 1.85 !important;
+  }
+
+  [data-elder-mode="true"] .elder-secondary-control {
+    display: none !important;
+  }
+
+  [data-elder-mode="true"] .elder-primary-controls {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  [data-elder-mode="true"] .elder-focus-question {
+    padding: 16px 18px !important;
+    border: 2px solid #2563eb !important;
+    border-radius: 14px !important;
+    background: #eff6ff !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 1.8 !important;
+  }
+
+  [data-elder-mode="true"] .elder-previous-model-message {
+    opacity: 0.68;
+  }
+
+  [data-elder-mode="true"] [role="alert"] {
+    padding: 24px !important;
+    border-width: 3px !important;
+    border-radius: 16px !important;
+  }
+
+  [data-elder-mode="true"] [role="alert"] strong {
+    font-size: 22px !important;
+    line-height: 1.4 !important;
+  }
+
+  [data-elder-mode="true"] [role="alert"] button,
+  [data-elder-mode="true"] [role="alert"] a {
+    min-height: 56px !important;
+    padding: 14px 18px !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+  }
+
+  [data-elder-mode="true"] * {
+    scroll-behavior: auto !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-elder-mode="true"] *,
+    [data-elder-mode="true"] *::before,
+    [data-elder-mode="true"] *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+`;
 
 
 // 載入歷史對話時的假對話骨架。寬度寫死，每次長一樣，不要亂跳。
@@ -37,7 +145,9 @@ function SymptomChecker({
   isConnected,
   statusText,
   selectedSessionId,
-  onSessionLoaded
+  onSessionLoaded,
+  openHistorySidebar = false,
+  onOpenHistory
 }) {
 
   // ==========================================
@@ -63,6 +173,32 @@ function SymptomChecker({
   const [loading, setLoading] =
     useState(false);
 
+
+  // ==========================================
+  // Step 4A-1：高齡友善模式
+  //
+  // 使用 localStorage 記住使用者選擇，
+  // 下次回到 CarePath AI 時維持同一模式。
+  // ==========================================
+  const [
+    elderFriendlyMode,
+    setElderFriendlyMode
+  ] = useState(() => {
+
+    try {
+
+      return (
+        window.localStorage.getItem(
+          ELDER_MODE_STORAGE_KEY
+        ) === 'true'
+      );
+
+    } catch {
+
+      return false;
+    }
+  });
+
   // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
   // 改成置中的杯麵 + 一句大標，讓使用者知道要打什麼。
   // 從 Dashboard 點進歷史對話時，要先去撈 /api/v1/history，這段時間畫面不能空著。
@@ -71,6 +207,19 @@ function SymptomChecker({
     useState(selectedSessionId != null);
 
   const isOpening = messages.length === 1 && !loading && !sessionLoading;
+
+
+  // ==========================================
+  // 修復：Dashboard「查看全部紀錄」
+  //
+  // 一般開場畫面仍維持乾淨版面；
+  // 只有 App.jsx 明確要求時，
+  // 才在開場狀態強制顯示完整 HistorySidebar。
+  // ==========================================
+  const shouldShowHistorySidebar =
+    !isOpening ||
+    openHistorySidebar;
+
 
   // 開場版面沒有左邊側欄，所以自己撈一小份最近問診放在最下面，
   // 不然使用者在開場畫面完全找不到歷史對話。
@@ -84,9 +233,24 @@ function SymptomChecker({
     useState([]);
 
 
+  // ==========================================
+  // 一般問診完成結果
+  // ==========================================
   const [
     diagnosisResult,
     setDiagnosisResult
+  ] = useState(null);
+
+
+  // ==========================================
+  // Medical Safety Alert
+  //
+  // 專門保存後端回傳：
+  // status = "safety_alert"
+  // ==========================================
+  const [
+    safetyAlert,
+    setSafetyAlert
   ] = useState(null);
 
 
@@ -127,6 +291,64 @@ function SymptomChecker({
 
 
   // ==========================================
+  // Safety Alert：尋找附近急診
+  // ==========================================
+  const handleOpenNearbyEmergency = () => {
+
+    const latitude =
+      userLocation?.latitude ??
+      FALLBACK_LOCATION.latitude;
+
+    const longitude =
+      userLocation?.longitude ??
+      FALLBACK_LOCATION.longitude;
+
+    const mapUrl =
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `急診 ${latitude},${longitude}`
+      )}`;
+
+    window.open(
+      mapUrl,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+
+  // ==========================================
+  // 歷史問診 → 返回最近問診
+  // ==========================================
+  const handleReturnToHistory = () => {
+
+    setIsVisitSummaryOpen(
+      false
+    );
+
+
+    setFullscreenSection(
+      null
+    );
+
+
+    if (
+      typeof onOpenHistory ===
+        'function'
+    ) {
+
+      onOpenHistory();
+
+      return;
+    }
+
+
+    // Fallback：若父層沒有提供 callback，
+    // 至少回到新的問診開場。
+    handleNewChat();
+  };
+
+
+  // ==========================================
   // 全螢幕
   // ==========================================
   const [
@@ -141,6 +363,95 @@ function SymptomChecker({
   const [
     isProfileOpen,
     setIsProfileOpen
+  ] = useState(false);
+
+
+  // ==========================================
+  // Step 2B-2：縱向健康趨勢 Modal
+  // ==========================================
+  const [
+    isLongitudinalOpen,
+    setIsLongitudinalOpen
+  ] = useState(false);
+
+
+  // ==========================================
+  // 縱向健康資料刷新 Key
+  //
+  // 每次完成一筆正式問診後遞增，
+  // 如果健康趨勢面板正在開啟，
+  // LongitudinalHealthPanel 會重新取得最新資料。
+  // ==========================================
+  const [
+    longitudinalRefreshKey,
+    setLongitudinalRefreshKey
+  ] = useState(0);
+
+
+  // ==========================================
+  // Step 3B-2：AI 就醫摘要
+  //
+  // currentSessionId：
+  // - 一般新問診完成後由 /diagnose.session_id 取得
+  // - 載入歷史問診時由 session.id 取得
+  //
+  // Emergency 即時警示目前使用背景保存，
+  // Response 不等待資料庫，因此當下不會取得 session_id。
+  // Emergency 歷史紀錄之後仍可從 History 開啟摘要。
+  // ==========================================
+  const [
+    currentSessionId,
+    setCurrentSessionId
+  ] = useState(null);
+
+
+  // ==========================================
+  // 是否正在查看「歷史問診」
+  //
+  // fresh consultation = false
+  // HistorySidebar / Dashboard history = true
+  // ==========================================
+  const [
+    isViewingHistorySession,
+    setIsViewingHistorySession
+  ] = useState(false);
+
+
+  const [
+    isVisitSummaryOpen,
+    setIsVisitSummaryOpen
+  ] = useState(false);
+
+
+  const [
+    visitSummaryRefreshKey,
+    setVisitSummaryRefreshKey
+  ] = useState(0);
+
+
+  // ==========================================
+  // 就醫摘要 Session ID 自動恢復
+  // ==========================================
+
+  const [
+    visitSummaryResolving,
+    setVisitSummaryResolving
+  ] = useState(false);
+
+
+  const [
+    visitSummaryResolveError,
+    setVisitSummaryResolveError
+  ] = useState('');
+
+
+  // ==========================================
+  // 高齡模式：院所清單展開
+  // ==========================================
+
+  const [
+    showAllHospitals,
+    setShowAllHospitals
   ] = useState(false);
 
 
@@ -178,6 +489,29 @@ function SymptomChecker({
       behavior: 'smooth'
     });
   }, [messages, loading]);
+
+
+  // ==========================================
+  // Step 4A-1：保存高齡友善模式設定
+  // ==========================================
+  useEffect(() => {
+
+    try {
+
+      window.localStorage.setItem(
+        ELDER_MODE_STORAGE_KEY,
+        elderFriendlyMode
+          ? 'true'
+          : 'false'
+      );
+
+    } catch {
+
+      // localStorage 不可用時，
+      // 不影響主要問診功能。
+    }
+
+  }, [elderFriendlyMode]);
 
 
   // ==========================================
@@ -281,6 +615,18 @@ function SymptomChecker({
 
 
   // ==========================================
+  // Step 4A-1：切換高齡友善模式
+  // ==========================================
+  const handleToggleElderFriendlyMode = () => {
+
+    setElderFriendlyMode(
+      (current) =>
+        !current
+    );
+  };
+
+
+  // ==========================================
   // 個人健康資料
   // ==========================================
   const handleOpenProfile = () => {
@@ -302,6 +648,299 @@ function SymptomChecker({
 
 
   // ==========================================
+  // Step 2B-2：開啟縱向健康趨勢
+  //
+  // Guest 也允許打開面板，
+  // 由後端 403 + LongitudinalHealthPanel
+  // 顯示「登入會員即可查看健康趨勢」。
+  // ==========================================
+  const handleOpenLongitudinal = () => {
+
+    setLongitudinalRefreshKey(
+      (current) =>
+        current + 1
+    );
+
+
+    setIsLongitudinalOpen(
+      true
+    );
+  };
+
+
+  const handleCloseLongitudinal = () => {
+
+    setIsLongitudinalOpen(
+      false
+    );
+  };
+
+
+  // ==========================================
+  // Step 3B-2 + Fix：
+  // 就醫摘要 Session ID 自動恢復
+  //
+  // 正常情況：
+  // - 新問診：直接使用 /diagnose 回傳 session_id
+  // - 歷史問診：直接使用 session.id
+  //
+  // 若前端暫時沒有拿到 session_id，
+  // 會員可從 /api/v1/history 找回本次最近紀錄。
+  // ==========================================
+
+  const resolveVisitSummarySessionId =
+    async () => {
+
+      if (
+        currentSessionId !== null
+        &&
+        currentSessionId !== undefined
+      ) {
+        return currentSessionId;
+      }
+
+
+      if (user?.is_guest) {
+        return null;
+      }
+
+
+      setVisitSummaryResolving(
+        true
+      );
+
+
+      setVisitSummaryResolveError(
+        ''
+      );
+
+
+      try {
+
+        const response =
+          await api.get(
+            '/api/v1/history'
+          );
+
+
+        const sessions =
+          Array.isArray(
+            response.data
+          )
+            ? [
+                ...response.data
+              ]
+            : [];
+
+
+        sessions.sort(
+          (
+            a,
+            b
+          ) =>
+            (
+              Number(
+                b?.id
+              )
+              ||
+              0
+            )
+            -
+            (
+              Number(
+                a?.id
+              )
+              ||
+              0
+            )
+        );
+
+
+        const targetSymptom =
+          String(
+            diagnosisResult?.symptom
+            ||
+            ''
+          ).trim();
+
+
+        const targetDepartment =
+          String(
+            diagnosisResult
+              ?.suggested_department
+            ||
+            ''
+          ).trim();
+
+
+        const match =
+          sessions.find(
+            (
+              session
+            ) => {
+
+              const originalSymptom =
+                String(
+                  session
+                    ?.original_symptom
+                  ||
+                  ''
+                ).trim();
+
+
+              const latestSymptom =
+                String(
+                  session
+                    ?.symptom_text
+                  ||
+                  ''
+                ).trim();
+
+
+              return (
+                targetSymptom
+                &&
+                (
+                  originalSymptom
+                  ===
+                  targetSymptom
+                  ||
+                  latestSymptom
+                  ===
+                  targetSymptom
+                )
+              );
+            }
+          )
+          ||
+          sessions.find(
+            (
+              session
+            ) => {
+
+              return (
+                targetDepartment
+                &&
+                String(
+                  session
+                    ?.suggested_department
+                  ||
+                  ''
+                ).trim()
+                ===
+                targetDepartment
+                &&
+                Number(
+                  session?.pain_level
+                )
+                ===
+                Number(
+                  painLevel
+                )
+              );
+            }
+          );
+
+
+        if (
+          match?.id !== null
+          &&
+          match?.id !== undefined
+        ) {
+
+          setCurrentSessionId(
+            match.id
+          );
+
+
+          return match.id;
+        }
+
+
+        setVisitSummaryResolveError(
+          '目前找不到對應的就醫摘要紀錄，請重新整理後再試。'
+        );
+
+
+        return null;
+
+      } catch (error) {
+
+        console.error(
+          '就醫摘要 Session ID 同步失敗：',
+          error
+        );
+
+
+        setVisitSummaryResolveError(
+          '就醫摘要同步失敗，請稍後再試。'
+        );
+
+
+        return null;
+
+      } finally {
+
+        setVisitSummaryResolving(
+          false
+        );
+      }
+    };
+
+
+  // ==========================================
+  // 開啟 AI 就醫摘要
+  // ==========================================
+
+  const handleOpenVisitSummary =
+    async () => {
+
+      let sessionId =
+        currentSessionId;
+
+
+      if (
+        sessionId === null
+        ||
+        sessionId === undefined
+      ) {
+
+        sessionId =
+          await resolveVisitSummarySessionId();
+      }
+
+
+      if (
+        sessionId === null
+        ||
+        sessionId === undefined
+      ) {
+
+        return;
+      }
+
+
+      setVisitSummaryRefreshKey(
+        (current) =>
+          current + 1
+      );
+
+
+      setIsVisitSummaryOpen(
+        true
+      );
+    };
+
+
+  const handleCloseVisitSummary = () => {
+
+    setIsVisitSummaryOpen(
+      false
+    );
+  };
+
+
+  // ==========================================
   // 發送 AI 問診
   // ==========================================
   const handleSendMessage = async (e) => {
@@ -311,7 +950,8 @@ function SymptomChecker({
 
     if (
       !inputText.trim() ||
-      loading
+      loading ||
+      safetyAlert
     ) {
       return;
     }
@@ -400,85 +1040,252 @@ function SymptomChecker({
         response.data;
 
 
-      // ======================================
-      // AI 還需要追問
-      // ======================================
-      if (!data.is_complete) {
+      console.log(
+        '診斷 API 回傳：',
+        data
+      );
 
-        setMessages([
-          ...newMessages,
 
-          {
-            role: 'model',
-            content:
-              data.message
-          }
-        ]);
+      // ======================================
+      // Medical Safety Alert
+      //
+      // safety_alert 必須優先於 is_complete。
+      // emergency 會 is_complete = true，
+      // 但不可被當成一般問診完成。
+      // ======================================
+      if (
+        data.status ===
+        'safety_alert'
+      ) {
+
+        console.warn(
+          '🛡️ Medical Safety Alert:',
+          data.safety
+        );
+
+
+        const safetyHistory =
+          Array.isArray(
+            data.history
+          ) &&
+          data.history.length > 0
+            ? data.history
+            : [
+                ...newMessages,
+                {
+                  role: 'model',
+                  content:
+                    data.message ||
+                    '⚠️ 偵測到需要優先處理的醫療安全警訊。'
+                }
+              ];
+
+
+        setMessages(
+          safetyHistory
+        );
 
 
         setHistory(
-          data.history || []
+          safetyHistory
         );
-      }
 
 
-      // ======================================
-      // 問診完成
-      // ======================================
-      else {
-
-        setMessages([
-          ...newMessages,
-
-          {
-            role: 'model',
-            content:
-              data.message
-          }
-        ]);
-
-
-        setDiagnosisResult(
+        setSafetyAlert(
           data
         );
 
 
-        // 更新歷史紀錄
-        window.dispatchEvent(
-          new Event(
-            'refresh-history'
-          )
+        setDiagnosisResult(
+          null
         );
 
 
-        // ====================================
-        // 三燈倒數
-        // ====================================
+        // Emergency 即時 Response 尚未取得背景保存後的 session_id，
+        // 因此清除上一筆摘要狀態，避免誤開舊摘要。
+        setCurrentSessionId(
+          null
+        );
+
+
+        setIsVisitSummaryOpen(
+          false
+        );
+
+
         setShowCompleteModal(
-          true
+          false
         );
 
 
         setCountdownStep(
-          1
+          0
         );
 
 
-        setTimeout(
-          () =>
-            setCountdownStep(2),
-          1000
+        setViewMode(
+          'chat-only'
         );
 
 
-        setTimeout(
-          () =>
-            setCountdownStep(3),
-          2000
+        return;
+      }
+
+
+      // ======================================
+      // 非 safety_alert
+      // ======================================
+      setSafetyAlert(
+        null
+      );
+
+
+      // ======================================
+      // AI 還需要追問
+      //
+      // standard / urgent 都可能走這裡。
+      // ======================================
+      if (!data.is_complete) {
+
+        const nextHistory =
+          Array.isArray(
+            data.history
+          ) &&
+          data.history.length > 0
+            ? data.history
+            : [
+                ...newMessages,
+                {
+                  role: 'model',
+                  content:
+                    data.message
+                }
+              ];
+
+
+        setMessages(
+          nextHistory
         );
 
 
-        setTimeout(() => {
+        setHistory(
+          nextHistory
+        );
+
+
+        return;
+      }
+
+
+      // ======================================
+      // 一般問診完成
+      // ======================================
+      const completedHistory =
+        Array.isArray(
+          data.history
+        ) &&
+        data.history.length > 0
+          ? data.history
+          : [
+              ...newMessages,
+              {
+                role: 'model',
+                content:
+                  data.message
+              }
+            ];
+
+
+      setMessages(
+        completedHistory
+      );
+
+
+      setHistory(
+        completedHistory
+      );
+
+
+      setDiagnosisResult(
+        data
+      );
+
+
+      setIsViewingHistorySession(
+        false
+      );
+
+
+      setVisitSummaryResolveError(
+        ''
+      );
+
+
+      setShowAllHospitals(
+        false
+      );
+
+
+      // ======================================
+      // Step 3B-2：保存本次新問診的 Session ID
+      // ======================================
+      setCurrentSessionId(
+        data.session_id
+        ??
+        null
+      );
+
+
+      // 更新歷史紀錄
+      window.dispatchEvent(
+        new Event(
+          'refresh-history'
+        )
+      );
+
+
+      // ======================================
+      // Step 2B-2：刷新縱向健康資料
+      // ======================================
+      setLongitudinalRefreshKey(
+        (current) =>
+          current + 1
+      );
+
+
+      // ======================================
+      // 三燈倒數
+      // ======================================
+      setShowCompleteModal(
+        true
+      );
+
+
+      setCountdownStep(
+        1
+      );
+
+
+      setTimeout(
+        () =>
+          setCountdownStep(
+            2
+          ),
+        1000
+      );
+
+
+      setTimeout(
+        () =>
+          setCountdownStep(
+            3
+          ),
+        2000
+      );
+
+
+      setTimeout(
+        () => {
 
           setShowCompleteModal(
             false
@@ -494,8 +1301,9 @@ function SymptomChecker({
             'split-screen'
           );
 
-        }, 3000);
-      }
+        },
+        3000
+      );
 
     } catch (error) {
 
@@ -570,12 +1378,50 @@ function SymptomChecker({
     );
 
 
+    setSafetyAlert(
+      null
+    );
+
+
+    // Step 3B-2：歷史問診直接使用資料庫 Session ID
+    setCurrentSessionId(
+      session.id
+      ??
+      null
+    );
+
+
+    setIsViewingHistorySession(
+      true
+    );
+
+
+    setIsVisitSummaryOpen(
+      false
+    );
+
+
+    setVisitSummaryResolveError(
+      ''
+    );
+
+
+    setShowAllHospitals(
+      false
+    );
+
+
     setDiagnosisResult({
       status:
         'completed',
 
       is_complete:
         true,
+
+      session_id:
+        session.id
+        ??
+        null,
 
       symptom:
         session.original_symptom ||
@@ -778,6 +1624,46 @@ function SymptomChecker({
     );
 
 
+    setCurrentSessionId(
+      null
+    );
+
+
+    setIsViewingHistorySession(
+      false
+    );
+
+
+    setIsVisitSummaryOpen(
+      false
+    );
+
+
+    setVisitSummaryResolveError(
+      ''
+    );
+
+
+    setShowAllHospitals(
+      false
+    );
+
+
+    setSafetyAlert(
+      null
+    );
+
+
+    setShowCompleteModal(
+      false
+    );
+
+
+    setCountdownStep(
+      0
+    );
+
+
     setMessages([
       {
         role: 'model',
@@ -910,12 +1796,35 @@ function SymptomChecker({
 
 
   // ==========================================
+  // Step 4A-2：目前最需要回答的 AI 問題
+  //
+  // 高齡模式只特別突出最後一則 AI 訊息，
+  // 過去 AI 訊息降低視覺權重，但不刪除內容。
+  // ==========================================
+
+  const latestModelMessageIndex =
+    messages.reduce(
+      (
+        latestIndex,
+        message,
+        index
+      ) =>
+        message.role === 'model'
+          ? index
+          : latestIndex,
+      -1
+    );
+
+
+  // ==========================================
   // UI
   // ==========================================
-  // 個人健康資料 / 定位 / 不適度 這三顆。開場版面要把它們塞進輸入框裡，
+  // 個人健康資料 / 健康趨勢 / 定位 / 不適度。開場版面要把它們塞進輸入框裡，
   // 一般版面則留在標題列右邊，所以抽成變數只寫一次。
   const controlsRow = (
               <div
+                className="elder-primary-controls"
+
                 style={{
                   display:
                     'flex',
@@ -924,9 +1833,84 @@ function SymptomChecker({
                     'center',
 
                   gap:
-                    '8px'
+                    elderFriendlyMode
+                      ? '10px'
+                      : '8px',
+
+                  flexWrap:
+                    elderFriendlyMode
+                      ? 'wrap'
+                      : 'nowrap'
                 }}
               >
+
+                {/* Step 4A-1：高齡友善模式 */}
+
+                <button
+                  type="button"
+
+                  onClick={
+                    handleToggleElderFriendlyMode
+                  }
+
+                  aria-pressed={
+                    elderFriendlyMode
+                  }
+
+                  title={
+                    elderFriendlyMode
+                      ? '關閉高齡友善模式'
+                      : '開啟高齡友善模式'
+                  }
+
+                  style={{
+                    backgroundColor:
+                      elderFriendlyMode
+                        ? '#0f172a'
+                        : t.panel,
+
+                    color:
+                      elderFriendlyMode
+                        ? '#ffffff'
+                        : t.text,
+
+                    border:
+                      elderFriendlyMode
+                        ? '2px solid #0f172a'
+                        : `1px solid ${t.border}`,
+
+                    borderRadius:
+                      '8px',
+
+                    padding:
+                      elderFriendlyMode
+                        ? '8px 14px'
+                        : '6px 12px',
+
+                    fontSize:
+                      elderFriendlyMode
+                        ? '0.9rem'
+                        : '0.8rem',
+
+                    fontWeight:
+                      elderFriendlyMode
+                        ? 700
+                        : 500,
+
+                    cursor:
+                      'pointer',
+
+                    whiteSpace:
+                      'nowrap'
+                  }}
+                >
+                  {
+                    elderFriendlyMode
+                      ? '✓ 高齡友善'
+                      : '高齡友善'
+                  }
+                </button>
+
 
                 {/* 個人健康資料 */}
 
@@ -969,9 +1953,52 @@ function SymptomChecker({
                 </button>
 
 
+                {/* Step 2B-2：健康趨勢 */}
+
+                <button
+                  className="elder-secondary-control"
+
+                  type="button"
+
+                  onClick={
+                    handleOpenLongitudinal
+                  }
+
+                  style={{
+                    backgroundColor:
+                      t.panel,
+
+                    color:
+                      t.text,
+
+                    border:
+                      `1px solid ${t.border}`,
+
+                    borderRadius:
+                      '8px',
+
+                    padding:
+                      '6px 12px',
+
+                    fontSize:
+                      '0.8rem',
+
+                    fontWeight:
+                      500,
+
+                    cursor:
+                      'pointer'
+                  }}
+                >
+                  健康趨勢
+                </button>
+
+
                 {/* 定位狀態 */}
 
                 <div
+                  className="elder-secondary-control"
+
                   title={
                     locationStatus ===
                     'success'
@@ -1118,6 +2145,12 @@ function SymptomChecker({
   return (
 
     <div
+      data-elder-mode={
+        elderFriendlyMode
+          ? 'true'
+          : 'false'
+      }
+
       style={{
         display:
           'flex',
@@ -1143,11 +2176,16 @@ function SymptomChecker({
       }}
     >
 
+      <style>
+        {ELDER_MODE_CSS}
+      </style>
+
+
       {/* ==================================== */}
       {/* 左側歷史紀錄 */}
       {/* ==================================== */}
 
-      {!isOpening && (
+      {shouldShowHistorySidebar && (
       <div
         style={{
           width:
@@ -1344,6 +2382,221 @@ function SymptomChecker({
 
 
             {/* ============================== */}
+            {/* Medical Safety Alert */}
+            {/* ============================== */}
+
+            {safetyAlert && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                style={{
+                  margin: '14px 4px 8px',
+                  padding: '18px',
+                  borderRadius: '14px',
+                  border: '1px solid #dc2626',
+                  backgroundColor: '#fff7f7',
+                  boxShadow: '0 6px 18px rgba(127, 29, 29, 0.08)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '50%',
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      fontSize: '1.15rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    !
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color: '#991b1b',
+                          fontSize: '1rem',
+                        }}
+                      >
+                        緊急醫療警示
+                      </strong>
+
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          backgroundColor: '#dc2626',
+                          color: '#ffffff',
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {safetyAlert?.safety?.risk_label || '緊急'}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: '8px',
+                        color: '#7f1d1d',
+                        fontSize: '0.88rem',
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      {safetyAlert?.safety?.safety_action ||
+                        safetyAlert?.message ||
+                        '偵測到需要立即處理的高風險警訊，請儘速尋求緊急醫療協助。'}
+                    </div>
+
+                    {Array.isArray(
+                      safetyAlert?.safety?.red_flags
+                    ) &&
+                    safetyAlert.safety.red_flags.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                        }}
+                      >
+                        {safetyAlert.safety.red_flags.map(
+                          (flag, index) => (
+                            <div
+                              key={`${flag.code || 'safety'}-${index}`}
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #fecaca',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  color: '#991b1b',
+                                  fontWeight: 600,
+                                  fontSize: '0.82rem',
+                                }}
+                              >
+                                {flag.title || flag.code}
+                              </div>
+
+                              {flag.reason && (
+                                <div
+                                  style={{
+                                    marginTop: '3px',
+                                    color: '#7f1d1d',
+                                    fontSize: '0.78rem',
+                                    lineHeight: 1.55,
+                                  }}
+                                >
+                                  {flag.reason}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: '14px',
+                        display: 'flex',
+                        gap: '8px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleOpenNearbyEmergency}
+                        style={{
+                          border: 'none',
+                          backgroundColor: '#dc2626',
+                          color: '#ffffff',
+                          borderRadius: '8px',
+                          padding: '9px 14px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        尋找附近急診
+                      </button>
+
+                      <a
+                        href="tel:119"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          border: '1px solid #dc2626',
+                          color: '#991b1b',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '8px',
+                          padding: '9px 14px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        撥打 119
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={handleNewChat}
+                        style={{
+                          border: `1px solid ${t.border}`,
+                          backgroundColor: t.panel,
+                          color: t.text,
+                          borderRadius: '8px',
+                          padding: '9px 14px',
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        開始新問診
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: '10px',
+                        color: '#991b1b',
+                        fontSize: '0.74rem',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      此警示為安全風險篩檢結果，不是疾病診斷；若症狀嚴重、快速惡化或您感到生命受到威脅，請立即尋求緊急醫療協助。
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+            {/* ============================== */}
             {/* 對話 */}
             {/* ============================== */}
 
@@ -1494,6 +2747,28 @@ function SymptomChecker({
 
 
                     <div
+                      className={
+                        [
+                          'elder-readable-text',
+                          (
+                            msg.role === 'model'
+                            &&
+                            index === latestModelMessageIndex
+                          )
+                            ? 'elder-focus-question'
+                            : '',
+                          (
+                            msg.role === 'model'
+                            &&
+                            index !== latestModelMessageIndex
+                          )
+                            ? 'elder-previous-model-message'
+                            : ''
+                        ]
+                          .filter(Boolean)
+                          .join(' ')
+                      }
+
                       style={
                         msg.role ===
                         'user'
@@ -1723,6 +2998,7 @@ function SymptomChecker({
 
             {/* 開場版面要把輸入框和三顆控制項合成一張卡。
                 ponytail: 非開場時用 display:contents 讓這層消失，不用寫兩套 JSX。 */}
+            {!safetyAlert && (
             <div
               style={
                 isOpening
@@ -1742,6 +3018,52 @@ function SymptomChecker({
                   : { display: 'contents' }
               }
             >
+
+            {
+              elderFriendlyMode
+              &&
+              !isOpening
+              &&
+              messages[
+                latestModelMessageIndex
+              ]?.role === 'model'
+              &&
+              (
+                <div
+                  style={{
+                    margin:
+                      '0 0 10px',
+
+                    padding:
+                      '10px 14px',
+
+                    borderRadius:
+                      '10px',
+
+                    backgroundColor:
+                      '#f8fafc',
+
+                    border:
+                      '1px solid #cbd5e1',
+
+                    color:
+                      '#334155',
+
+                    fontSize:
+                      '0.95rem',
+
+                    fontWeight:
+                      700,
+
+                    lineHeight:
+                      1.6
+                  }}
+                >
+                  請先回答上方目前這一題即可。
+                </div>
+              )
+            }
+
 
             <form
               onSubmit={
@@ -1909,8 +3231,23 @@ function SymptomChecker({
 
             </div>
 
+            )}
+
             {/* 開場版面的最近問診：側欄收起來了，這裡是唯一入口 */}
-            {isOpening && (recentLoading || recentSessions.length > 0) && (
+            {
+              isOpening
+              &&
+              !openHistorySidebar
+              &&
+              !elderFriendlyMode
+              &&
+              (
+                recentLoading
+                ||
+                recentSessions.length > 0
+              )
+              &&
+              (
               <div
                 style={{
                   order: 3,
@@ -1980,15 +3317,143 @@ function SymptomChecker({
                 'grid',
 
               gridTemplateColumns:
-                '1fr 1fr',
+                elderFriendlyMode
+                  ? 'minmax(360px, 0.9fr) minmax(520px, 1.1fr)'
+                  : '1fr 1fr',
 
               gap:
-                '20px',
+                elderFriendlyMode
+                  ? '16px'
+                  : '20px',
 
               height:
-                '100%'
+                '100%',
+
+              overflowY:
+                'visible',
+
+              paddingBottom:
+                0
             }}
           >
+
+            {/* ============================== */}
+            {/* 結果頁模式切換 */}
+            {/* ============================== */}
+
+            <div
+              style={{
+                gridColumn:
+                  '1 / -1',
+
+                display:
+                  'flex',
+
+                justifyContent:
+                  'space-between',
+
+                alignItems:
+                  'center',
+
+                gap:
+                  '10px',
+
+                minHeight:
+                  '38px'
+              }}
+            >
+
+              <div>
+
+                {
+                  isViewingHistorySession
+                  &&
+                  !user?.is_guest
+                  &&
+                  (
+                    <button
+                      type="button"
+
+                      onClick={
+                        handleReturnToHistory
+                      }
+
+                      style={{
+                        border:
+                          `1px solid ${t.border}`,
+
+                        backgroundColor:
+                          t.panel,
+
+                        color:
+                          t.text,
+
+                        borderRadius:
+                          '8px',
+
+                        padding:
+                          '7px 12px',
+
+                        fontSize:
+                          '0.8rem',
+
+                        fontWeight:
+                          600,
+
+                        cursor:
+                          'pointer'
+                      }}
+                    >
+                      ← 返回最近問診
+                    </button>
+                  )
+                }
+
+              </div>
+
+
+              <button
+                type="button"
+
+                onClick={
+                  handleToggleElderFriendlyMode
+                }
+
+                style={{
+                  border:
+                    `1px solid ${t.border}`,
+
+                  backgroundColor:
+                    t.panel,
+
+                  color:
+                    t.text,
+
+                  borderRadius:
+                    '8px',
+
+                  padding:
+                    '7px 12px',
+
+                  fontSize:
+                    '0.8rem',
+
+                  fontWeight:
+                    600,
+
+                  cursor:
+                    'pointer'
+                }}
+              >
+                {
+                  elderFriendlyMode
+                    ? '切回一般模式'
+                    : '切換簡易大字'
+                }
+              </button>
+
+            </div>
+
 
             {/* ============================== */}
             {/* 左側地圖 */}
@@ -2001,7 +3466,15 @@ function SymptomChecker({
                 ),
 
                 height:
-                  '100%'
+                  '100%',
+
+                minHeight:
+                  elderFriendlyMode
+                    ? '520px'
+                    : 0,
+
+                order:
+                  0
               }}
             >
 
@@ -2134,6 +3607,9 @@ function SymptomChecker({
                   '100%',
 
                 minHeight:
+                  0,
+
+                order:
                   0
               }}
             >
@@ -2149,7 +3625,12 @@ function SymptomChecker({
                   ),
 
                   flex:
-                    1
+                    1,
+
+                  display:
+                    elderFriendlyMode
+                      ? 'none'
+                      : 'flex'
                 }}
               >
 
@@ -2238,6 +3719,82 @@ function SymptomChecker({
                     >
                       個人資料
                     </button>
+
+
+                    <button
+                      type="button"
+
+                      onClick={
+                        handleOpenLongitudinal
+                      }
+
+                      style={{
+                        backgroundColor:
+                          t.panel,
+
+                        color:
+                          t.text,
+
+                        border:
+                          `1px solid ${t.border}`,
+
+                        borderRadius:
+                          '6px',
+
+                        padding:
+                          '3px 8px',
+
+                        fontSize:
+                          '0.75rem',
+
+                        fontWeight:
+                          500,
+
+                        cursor:
+                          'pointer'
+                      }}
+                    >
+                      健康趨勢
+                    </button>
+
+
+                    {currentSessionId != null && (
+                      <button
+                        type="button"
+
+                        onClick={
+                          handleOpenVisitSummary
+                        }
+
+                        style={{
+                          backgroundColor:
+                            t.panel,
+
+                          color:
+                            t.text,
+
+                          border:
+                            `1px solid ${t.border}`,
+
+                          borderRadius:
+                            '6px',
+
+                          padding:
+                            '3px 8px',
+
+                          fontSize:
+                            '0.75rem',
+
+                          fontWeight:
+                            500,
+
+                          cursor:
+                            'pointer'
+                        }}
+                      >
+                        就醫摘要
+                      </button>
+                    )}
 
 
                     <button
@@ -2339,6 +3896,28 @@ function SymptomChecker({
 
 
                         <div
+                          className={
+                            [
+                              'elder-readable-text',
+                              (
+                                msg.role === 'model'
+                                &&
+                                index === latestModelMessageIndex
+                              )
+                                ? 'elder-focus-question'
+                                : '',
+                              (
+                                msg.role === 'model'
+                                &&
+                                index !== latestModelMessageIndex
+                              )
+                                ? 'elder-previous-model-message'
+                                : ''
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                          }
+
                           style={
                             msg.role ===
                             'user'
@@ -2623,8 +4202,206 @@ function SymptomChecker({
 
 
                       {/* ====================== */}
+                      {/* Step 3B-2 Fix */}
+                      {/* AI 就醫摘要主要入口 */}
+                      {/* ====================== */}
+
+                      <div
+                        style={{
+                          marginBottom:
+                            '12px'
+                        }}
+                      >
+
+                        <button
+                          type="button"
+
+                          onClick={
+                            handleOpenVisitSummary
+                          }
+
+                          disabled={
+                            user?.is_guest
+                            ||
+                            visitSummaryResolving
+                          }
+
+                          style={{
+                            width:
+                              '100%',
+
+                            display:
+                              'flex',
+
+                            alignItems:
+                              'center',
+
+                            justifyContent:
+                              'center',
+
+                            gap:
+                              '8px',
+
+                            padding:
+                              '11px 14px',
+
+                            borderRadius:
+                              '9px',
+
+                            border:
+                              user?.is_guest
+                                ? `1px solid ${t.border}`
+                                : '1px solid #2563eb',
+
+                            backgroundColor:
+                              user?.is_guest
+                                ? t.subtle
+                                : '#2563eb',
+
+                            color:
+                              user?.is_guest
+                                ? t.muted
+                                : '#ffffff',
+
+                            fontSize:
+                              '0.85rem',
+
+                            fontWeight:
+                              700,
+
+                            cursor:
+                              visitSummaryResolving
+                                ? 'wait'
+                                : user?.is_guest
+                                  ? 'not-allowed'
+                                  : 'pointer',
+
+                            opacity:
+                              user?.is_guest
+                                ? 0.72
+                                : 1
+                          }}
+                        >
+
+                          <span>
+                            📄
+                          </span>
+
+
+                          <span>
+                            {
+                              user?.is_guest
+                                ? '會員可使用 AI 就醫摘要'
+                                : visitSummaryResolving
+                                  ? '正在同步就醫摘要…'
+                                  : '查看 AI 就醫摘要'
+                            }
+                          </span>
+
+                        </button>
+
+
+                        {
+                          visitSummaryResolveError
+                          &&
+                          (
+                            <div
+                              style={{
+                                marginTop:
+                                  '6px',
+
+                                color:
+                                  '#b45309',
+
+                                fontSize:
+                                  '0.74rem',
+
+                                lineHeight:
+                                  1.5,
+
+                                textAlign:
+                                  'center'
+                              }}
+                            >
+                              {
+                                visitSummaryResolveError
+                              }
+                            </div>
+                          )
+                        }
+
+                      </div>
+
+
+                      {/* ====================== */}
                       {/* 醫療院所 */}
                       {/* ====================== */}
+
+                      {
+                        elderFriendlyMode
+                        &&
+                        !showAllHospitals
+                        &&
+                        Array.isArray(
+                          diagnosisResult
+                            .nearby_medical_resources
+                        )
+                        &&
+                        diagnosisResult
+                          .nearby_medical_resources
+                          .length > 3
+                        &&
+                        (
+                          <button
+                            type="button"
+
+                            onClick={() =>
+                              setShowAllHospitals(
+                                true
+                              )
+                            }
+
+                            style={{
+                              width:
+                                '100%',
+
+                              marginBottom:
+                                '10px',
+
+                              padding:
+                                '10px 12px',
+
+                              borderRadius:
+                                '9px',
+
+                              backgroundColor:
+                                t.panel,
+
+                              border:
+                                `1px solid ${t.border}`,
+
+                              color:
+                                t.text,
+
+                              fontSize:
+                                '0.82rem',
+
+                              fontWeight:
+                                600,
+
+                              cursor:
+                                'pointer'
+                            }}
+                          >
+                            查看全部 {
+                              diagnosisResult
+                                .nearby_medical_resources
+                                .length
+                            } 間院所
+                          </button>
+                        )
+                      }
+
 
                       {Array.isArray(
                         diagnosisResult
@@ -2634,8 +4411,19 @@ function SymptomChecker({
                         .nearby_medical_resources
                         .length > 0 ? (
 
-                        diagnosisResult
-                          .nearby_medical_resources
+                        (
+                          elderFriendlyMode
+                          &&
+                          !showAllHospitals
+                            ? diagnosisResult
+                                .nearby_medical_resources
+                                .slice(
+                                  0,
+                                  3
+                                )
+                            : diagnosisResult
+                                .nearby_medical_resources
+                        )
                           .map(
                             (
                               hospital,
@@ -2891,7 +4679,14 @@ function SymptomChecker({
                                       .length >
                                       0 ? (
 
-                                      hospital.available_doctors.map(
+                                      (
+                                        elderFriendlyMode
+                                          ? hospital.available_doctors.slice(
+                                              0,
+                                              1
+                                            )
+                                          : hospital.available_doctors
+                                      ).map(
                                         (
                                           doctor,
                                           doctorIndex
@@ -3242,6 +5037,475 @@ function SymptomChecker({
                     );
                   }
                 )}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+
+        {/* ================================== */}
+        {/* Step 2B-2：縱向健康趨勢 Modal */}
+        {/* ================================== */}
+
+        {isLongitudinalOpen && (
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="我的健康趨勢"
+
+            onClick={
+              handleCloseLongitudinal
+            }
+
+            style={{
+              position:
+                'fixed',
+
+              top:
+                0,
+
+              left:
+                0,
+
+              width:
+                '100vw',
+
+              height:
+                '100vh',
+
+              backgroundColor:
+                'rgba(15, 23, 42, 0.52)',
+
+              display:
+                'flex',
+
+              justifyContent:
+                'center',
+
+              alignItems:
+                'center',
+
+              padding:
+                '24px',
+
+              boxSizing:
+                'border-box',
+
+              zIndex:
+                100000
+            }}
+          >
+
+            <div
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+
+              style={{
+                width:
+                  'min(1100px, 100%)',
+
+                height:
+                  'min(880px, calc(100vh - 48px))',
+
+                backgroundColor:
+                  t.bg || '#f8fafc',
+
+                border:
+                  `1px solid ${t.border}`,
+
+                borderRadius:
+                  '20px',
+
+                boxShadow:
+                  '0 24px 70px rgba(15, 23, 42, 0.22)',
+
+                overflow:
+                  'hidden',
+
+                display:
+                  'flex',
+
+                flexDirection:
+                  'column'
+              }}
+            >
+
+              {/* Modal Header */}
+
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  justifyContent:
+                    'space-between',
+
+                  alignItems:
+                    'center',
+
+                  gap:
+                    '12px',
+
+                  padding:
+                    '16px 20px',
+
+                  backgroundColor:
+                    t.panel,
+
+                  borderBottom:
+                    `1px solid ${t.border}`
+                }}
+              >
+
+                <div>
+
+                  <div
+                    style={{
+                      color:
+                        t.text,
+
+                      fontSize:
+                        '1rem',
+
+                      fontWeight:
+                        700
+                    }}
+                  >
+                    我的健康趨勢
+                  </div>
+
+
+                  <div
+                    style={{
+                      marginTop:
+                        '3px',
+
+                      color:
+                        t.muted,
+
+                      fontSize:
+                        '0.78rem'
+                    }}
+                  >
+                    Longitudinal Health Intelligence
+                  </div>
+
+                </div>
+
+
+                <button
+                  type="button"
+
+                  onClick={
+                    handleCloseLongitudinal
+                  }
+
+                  aria-label="關閉健康趨勢"
+
+                  style={{
+                    width:
+                      '34px',
+
+                    height:
+                      '34px',
+
+                    borderRadius:
+                      '50%',
+
+                    border:
+                      `1px solid ${t.border}`,
+
+                    backgroundColor:
+                      t.panel,
+
+                    color:
+                      t.text,
+
+                    cursor:
+                      'pointer',
+
+                    fontSize:
+                      '1.15rem',
+
+                    lineHeight:
+                      1
+                  }}
+                >
+                  ×
+                </button>
+
+              </div>
+
+
+              {/* Modal Content */}
+
+              <div
+                style={{
+                  flex:
+                    1,
+
+                  minHeight:
+                    0,
+
+                  overflowY:
+                    'auto',
+
+                  padding:
+                    '20px',
+
+                  boxSizing:
+                    'border-box'
+                }}
+              >
+
+                <LongitudinalHealthPanel
+                  windowDays={90}
+                  refreshKey={
+                    longitudinalRefreshKey
+                  }
+                />
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+
+        {/* ================================== */}
+        {/* Step 3B-2：AI 就醫摘要 Modal */}
+        {/* ================================== */}
+
+        {isVisitSummaryOpen && currentSessionId != null && (
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="AI 就醫摘要"
+
+            onClick={
+              handleCloseVisitSummary
+            }
+
+            style={{
+              position:
+                'fixed',
+
+              top:
+                0,
+
+              left:
+                0,
+
+              width:
+                '100vw',
+
+              height:
+                '100vh',
+
+              backgroundColor:
+                'rgba(15, 23, 42, 0.56)',
+
+              display:
+                'flex',
+
+              justifyContent:
+                'center',
+
+              alignItems:
+                'center',
+
+              padding:
+                '24px',
+
+              boxSizing:
+                'border-box',
+
+              zIndex:
+                100001
+            }}
+          >
+
+            <div
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+
+              style={{
+                width:
+                  'min(980px, 100%)',
+
+                height:
+                  'min(900px, calc(100vh - 48px))',
+
+                backgroundColor:
+                  t.bg || '#f8fafc',
+
+                border:
+                  `1px solid ${t.border}`,
+
+                borderRadius:
+                  '20px',
+
+                boxShadow:
+                  '0 24px 70px rgba(15, 23, 42, 0.24)',
+
+                overflow:
+                  'hidden',
+
+                display:
+                  'flex',
+
+                flexDirection:
+                  'column'
+              }}
+            >
+
+              {/* Modal Header */}
+
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  justifyContent:
+                    'space-between',
+
+                  alignItems:
+                    'center',
+
+                  gap:
+                    '12px',
+
+                  padding:
+                    '16px 20px',
+
+                  backgroundColor:
+                    t.panel,
+
+                  borderBottom:
+                    `1px solid ${t.border}`
+                }}
+              >
+
+                <div>
+
+                  <div
+                    style={{
+                      color:
+                        t.text,
+
+                      fontSize:
+                        '1rem',
+
+                      fontWeight:
+                        700
+                    }}
+                  >
+                    AI 就醫摘要
+                  </div>
+
+
+                  <div
+                    style={{
+                      marginTop:
+                        '3px',
+
+                      color:
+                        t.muted,
+
+                      fontSize:
+                        '0.78rem'
+                    }}
+                  >
+                    Visit Summary · Session #{currentSessionId}
+                  </div>
+
+                </div>
+
+
+                <button
+                  type="button"
+
+                  onClick={
+                    handleCloseVisitSummary
+                  }
+
+                  aria-label="關閉就醫摘要"
+
+                  style={{
+                    width:
+                      '34px',
+
+                    height:
+                      '34px',
+
+                    borderRadius:
+                      '50%',
+
+                    border:
+                      `1px solid ${t.border}`,
+
+                    backgroundColor:
+                      t.panel,
+
+                    color:
+                      t.text,
+
+                    cursor:
+                      'pointer',
+
+                    fontSize:
+                      '1.15rem',
+
+                    lineHeight:
+                      1
+                  }}
+                >
+                  ×
+                </button>
+
+              </div>
+
+
+              {/* Modal Content */}
+
+              <div
+                style={{
+                  flex:
+                    1,
+
+                  minHeight:
+                    0,
+
+                  overflowY:
+                    'auto',
+
+                  padding:
+                    '20px',
+
+                  boxSizing:
+                    'border-box'
+                }}
+              >
+
+                <VisitSummaryPanel
+                  sessionId={
+                    currentSessionId
+                  }
+
+                  refreshKey={
+                    visitSummaryRefreshKey
+                  }
+                />
 
               </div>
 

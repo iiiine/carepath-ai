@@ -188,6 +188,16 @@ class DiagnosisResponse(BaseModel):
 
     is_complete: bool = True
 
+    # --------------------------------------------------------
+    # Step 3B-2A
+    #
+    # 一般完成問診成功寫入 chat_sessions 後，
+    # 回傳新建立的 session ID。
+    #
+    # Guest 或歷史保存失敗時可能為 None。
+    # --------------------------------------------------------
+    session_id: Optional[int] = None
+
     symptom: str
 
     suggested_department: str

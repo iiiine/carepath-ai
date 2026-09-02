@@ -1,11 +1,20 @@
 import os
-from datetime import datetime, timedelta, timezone
+import uuid
+
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
 
 import jwt
-from jwt.exceptions import InvalidTokenError
+
+from jwt.exceptions import (
+    InvalidTokenError,
+)
+
 from pwdlib import PasswordHash
 
-import uuid
 from fastapi import (
     APIRouter,
     Depends,
@@ -18,12 +27,9 @@ from fastapi.security import (
     HTTPBearer,
 )
 
-try:
-    from psycopg2.extras import RealDictCursor
-except Exception:  # pragma: no cover - fallback for environments without psycopg2
-    # Provide a lightweight fallback for type compatibility in environments
-    # where psycopg2 is not available (e.g., linting or static analysis).
-    RealDictCursor = dict
+from psycopg2.extras import (
+    RealDictCursor,
+)
 
 from models import (
     UserRegister,
@@ -32,152 +38,327 @@ from models import (
     TokenResponse,
 )
 
-from services import get_db_connection
+from services import (
+    get_db_connection,
+)
 
+
+# ============================================================
+# Router
+# ============================================================
 
 router = APIRouter(
     prefix="/api/v1/auth",
-    tags=["Auth"]
+    tags=["Auth"],
 )
 
 
-# =========================
+# ============================================================
 # JWT 設定
-# =========================
+# ============================================================
 
-SECRET_KEY = os.getenv("AUTH_SECRET_KEY")
+SECRET_KEY = os.getenv(
+    "AUTH_SECRET_KEY"
+)
+
 
 if not SECRET_KEY:
+
     raise RuntimeError(
-        "找不到 AUTH_SECRET_KEY，請先在後端 .env 設定"
+        "找不到 AUTH_SECRET_KEY，"
+        "請先在後端 .env 設定"
     )
+
 
 ALGORITHM = "HS256"
 
+
 ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("AUTH_TOKEN_EXPIRE_MINUTES", "1440")
+    os.getenv(
+        "AUTH_TOKEN_EXPIRE_MINUTES",
+        "1440",
+    )
 )
 
 
-# =========================
+# ============================================================
 # 密碼雜湊
-# =========================
+# ============================================================
 
-password_hash = PasswordHash.recommended()
+password_hash = (
+    PasswordHash.recommended()
+)
 
-# 防止不存在帳號和存在帳號的驗證時間差異過大
-DUMMY_HASH = password_hash.hash("dummy-password")
+
+# ------------------------------------------------------------
+# 防止不存在帳號和存在帳號的
+# password verification 時間差距過大
+# ------------------------------------------------------------
+
+DUMMY_HASH = password_hash.hash(
+    "dummy-password"
+)
 
 
-def hash_password(password: str):
-    return password_hash.hash(password)
+def hash_password(
+    password: str,
+):
+
+    return password_hash.hash(
+        password
+    )
 
 
 def verify_password(
     plain_password: str,
-    hashed_password: str
+    hashed_password: str,
 ):
+
     return password_hash.verify(
         plain_password,
-        hashed_password
+        hashed_password,
     )
 
 
-# =========================
+# ============================================================
 # JWT
-# =========================
+# ============================================================
 
 def create_access_token(
     subject,
     actor_type: str = "user",
-    expires_minutes: int = None
 ):
-    if expires_minutes is None:
-        expires_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+    """
+    建立 JWT。
 
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=expires_minutes
+    subject：
+    - users table：user id
+    - guest_sessions：guest UUID
+
+    actor_type：
+    - user
+    - guest
+
+    注意：
+    actor_type = user
+    不代表一定是正式會員。
+
+    users.is_guest = TRUE
+    仍然代表該 user 是訪客帳號。
+    """
+
+    expire = (
+        datetime.now(
+            timezone.utc
+        )
+        +
+        timedelta(
+            minutes=(
+                ACCESS_TOKEN_EXPIRE_MINUTES
+            )
+        )
     )
 
+
     payload = {
-        "sub": str(subject),
-        "actor_type": actor_type,
-        "exp": expire,
+
+        "sub":
+            str(
+                subject
+            ),
+
+        "actor_type":
+            actor_type,
+
+        "exp":
+            expire,
     }
+
 
     token = jwt.encode(
         payload,
         SECRET_KEY,
-        algorithm=ALGORITHM
+        algorithm=ALGORITHM,
     )
+
 
     return token
 
 
-# =========================
+# ============================================================
 # Bearer Token
-# =========================
+# ============================================================
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer(
+    auto_error=False
+)
 
+
+# ============================================================
+# Current User
+# ============================================================
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(
+        security
+    ),
 ):
+    """
+    解析目前登入身分。
+
+    系統目前支援兩種來源：
+
+    ----------------------------------------------------------
+    A. actor_type == "guest"
+    ----------------------------------------------------------
+
+    使用 guest_sessions UUID Session。
+
+    ----------------------------------------------------------
+    B. actor_type == "user"
+    ----------------------------------------------------------
+
+    使用 users table。
+
+    users table 中又可能是：
+
+    is_guest = FALSE
+        → 正式會員
+
+    is_guest = TRUE
+        → 訪客型使用者
+
+    ----------------------------------------------------------
+
+    重要：
+    actor_type == "user"
+    絕對不能直接推論為正式會員。
+
+    是否為 Guest，
+    最終必須依資料庫的 is_guest 判斷。
+    """
+
+    # ========================================================
+    # 1. Authorization Header
+    # ========================================================
+
     if credentials is None:
+
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="請先登入"
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="請先登入",
         )
 
-    token = credentials.credentials
+
+    token = (
+        credentials.credentials
+    )
+
+
+    # ========================================================
+    # 2. Decode JWT
+    # ========================================================
 
     try:
+
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[
+                ALGORITHM
+            ],
         )
 
-        subject = payload.get("sub")
-        actor_type = payload.get("actor_type", "user")
+
+        subject = payload.get(
+            "sub"
+        )
+
+
+        actor_type = payload.get(
+            "actor_type",
+            "user",
+        )
+
 
         if not subject:
+
             raise HTTPException(
-                status_code=401,
-                detail="登入憑證無效"
+                status_code=(
+                    status.HTTP_401_UNAUTHORIZED
+                ),
+                detail="登入憑證無效",
             )
 
+
     except InvalidTokenError:
+
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="登入憑證無效或已過期"
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="登入憑證無效或已過期",
         )
+
+
+    # ========================================================
+    # 3. Database
+    # ========================================================
 
     conn = get_db_connection()
 
+
     if not conn:
+
         raise HTTPException(
-            status_code=500,
-            detail="無法連線至資料庫"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail="無法連線至資料庫",
         )
 
+
     try:
+
         with conn.cursor(
             cursor_factory=RealDictCursor
         ) as cur:
 
-            # =========================
-            # 訪客
-            # =========================
+
+            # =================================================
+            # A. guest_sessions 型訪客
+            # =================================================
+
             if actor_type == "guest":
+
                 try:
-                    guest_id = uuid.UUID(subject)
-                except ValueError:
-                    raise HTTPException(
-                        status_code=401,
-                        detail="訪客憑證格式錯誤"
+
+                    guest_id = uuid.UUID(
+                        str(
+                            subject
+                        )
                     )
+
+
+                except (
+                    ValueError,
+                    TypeError,
+                    AttributeError,
+                ):
+
+                    raise HTTPException(
+                        status_code=(
+                            status.HTTP_401_UNAUTHORIZED
+                        ),
+                        detail="訪客憑證格式錯誤",
+                    )
+
+
+                # ---------------------------------------------
+                # 查 Guest Session
+                # ---------------------------------------------
 
                 cur.execute(
                     """
@@ -190,70 +371,177 @@ def get_current_user(
                     FROM guest_sessions
                     WHERE id = %s;
                     """,
-                    (str(guest_id),)
+                    (
+                        str(
+                            guest_id
+                        ),
+                    ),
                 )
 
-                guest = cur.fetchone()
+
+                guest = (
+                    cur.fetchone()
+                )
+
+
+                # ---------------------------------------------
+                # Session 不存在
+                # ---------------------------------------------
 
                 if not guest:
+
                     raise HTTPException(
-                        status_code=401,
-                        detail="找不到訪客 Session"
+                        status_code=(
+                            status.HTTP_401_UNAUTHORIZED
+                        ),
+                        detail="找不到訪客 Session",
                     )
 
-                if not guest["is_active"]:
+
+                # ---------------------------------------------
+                # Session 已停用
+                # ---------------------------------------------
+
+                if not guest[
+                    "is_active"
+                ]:
+
                     raise HTTPException(
-                        status_code=401,
-                        detail="此訪客 Session 已失效"
+                        status_code=(
+                            status.HTTP_401_UNAUTHORIZED
+                        ),
+                        detail="此訪客 Session 已失效",
                     )
 
-                now = datetime.now(timezone.utc)
+
+                now = datetime.now(
+                    timezone.utc
+                )
+
+
+                # ---------------------------------------------
+                # Session 過期
+                # ---------------------------------------------
 
                 if (
-                    guest["expires_at"]
-                    and guest["expires_at"] < now
+                    guest[
+                        "expires_at"
+                    ]
+                    and
+                    guest[
+                        "expires_at"
+                    ] < now
                 ):
+
                     raise HTTPException(
-                        status_code=401,
-                        detail="訪客 Session 已過期"
+                        status_code=(
+                            status.HTTP_401_UNAUTHORIZED
+                        ),
+                        detail="訪客 Session 已過期",
                     )
 
-                if guest["migrated_to_user_id"] is not None:
+
+                # ---------------------------------------------
+                # Guest 已經轉移成會員
+                # ---------------------------------------------
+
+                if (
+                    guest[
+                        "migrated_to_user_id"
+                    ]
+                    is not None
+                ):
+
                     raise HTTPException(
-                        status_code=401,
-                        detail="此訪客資料已轉移至會員"
+                        status_code=(
+                            status.HTTP_401_UNAUTHORIZED
+                        ),
+                        detail="此訪客資料已轉移至會員",
                     )
 
+
+                # ---------------------------------------------
                 # 更新最後活動時間
+                # ---------------------------------------------
+
                 cur.execute(
                     """
                     UPDATE guest_sessions
-                    SET last_seen_at = CURRENT_TIMESTAMP
+                    SET
+                        last_seen_at = CURRENT_TIMESTAMP
                     WHERE id = %s;
                     """,
-                    (str(guest_id),)
+                    (
+                        str(
+                            guest_id
+                        ),
+                    ),
                 )
+
 
                 conn.commit()
 
+
                 return {
-                    "id": str(guest["id"]),
-                    "username": f"Guest_{str(guest['id'])[:8]}",
-                    "email": None,
-                    "is_guest": True,
-                    "actor_type": "guest"
+
+                    "id":
+                        str(
+                            guest[
+                                "id"
+                            ]
+                        ),
+
+                    "username":
+                        (
+                            "Guest_"
+                            +
+                            str(
+                                guest[
+                                    "id"
+                                ]
+                            )[
+                                :8
+                            ]
+                        ),
+
+                    "email":
+                        None,
+
+                    "is_guest":
+                        True,
+
+                    "actor_type":
+                        "guest",
                 }
 
-            # =========================
-            # 正式會員
-            # =========================
+
+            # =================================================
+            # B. users table 型使用者
+            # =================================================
+
             try:
-                user_id = int(subject)
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=401,
-                    detail="會員憑證格式錯誤"
+
+                user_id = int(
+                    subject
                 )
+
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                raise HTTPException(
+                    status_code=(
+                        status.HTTP_401_UNAUTHORIZED
+                    ),
+                    detail="會員憑證格式錯誤",
+                )
+
+
+            # ---------------------------------------------
+            # 從 DB 取得真正身分
+            # ---------------------------------------------
 
             cur.execute(
                 """
@@ -262,60 +550,158 @@ def get_current_user(
                     username,
                     email,
                     is_active,
-                    is_guest
+                    COALESCE(
+                        is_guest,
+                        FALSE
+                    ) AS is_guest
                 FROM users
                 WHERE id = %s;
                 """,
-                (user_id,)
+                (
+                    user_id,
+                ),
             )
 
-            user = cur.fetchone()
+
+            user = (
+                cur.fetchone()
+            )
+
+
+            # ---------------------------------------------
+            # User 不存在
+            # ---------------------------------------------
 
             if not user:
+
                 raise HTTPException(
-                    status_code=401,
-                    detail="找不到使用者"
+                    status_code=(
+                        status.HTTP_401_UNAUTHORIZED
+                    ),
+                    detail="找不到使用者",
                 )
 
-            if not user["is_active"]:
+
+            # ---------------------------------------------
+            # 帳號停用
+            # ---------------------------------------------
+
+            if not user[
+                "is_active"
+            ]:
+
                 raise HTTPException(
-                    status_code=403,
-                    detail="此帳號已停用"
+                    status_code=(
+                        status.HTTP_403_FORBIDDEN
+                    ),
+                    detail="此帳號已停用",
                 )
+
+
+            # =================================================
+            # ★ Guest Identity Fix
+            #
+            # 原本錯誤：
+            #
+            # "is_guest": False
+            #
+            # 導致：
+            #
+            # DB:
+            # users.is_guest = TRUE
+            #
+            # ↓
+            #
+            # get_current_user()
+            #
+            # ↓
+            #
+            # is_guest = False
+            #
+            # ↓
+            #
+            # Guest 被錯誤當成正式會員。
+            #
+            # 現在直接採用 PostgreSQL 的實際值。
+            # =================================================
+
+            is_guest = bool(
+                user[
+                    "is_guest"
+                ]
+            )
+
 
             return {
-                "id": user["id"],
-                "username": user["username"],
-                "email": user["email"],
-                "is_guest": False,
-                "actor_type": "user"
+
+                "id":
+                    user[
+                        "id"
+                    ],
+
+                "username":
+                    user[
+                        "username"
+                    ],
+
+                "email":
+                    user[
+                        "email"
+                    ],
+
+                "is_guest":
+                    is_guest,
+
+                "actor_type":
+                    "user",
             }
 
+
     finally:
+
         conn.close()
 
 
-# =========================
-# 註冊
-# =========================
+# ============================================================
+# Register
+# ============================================================
 
 @router.post(
     "/register",
     response_model=TokenResponse,
-    status_code=201
+    status_code=status.HTTP_201_CREATED,
 )
-def register(payload: UserRegister):
+def register(
+    payload: UserRegister,
+):
 
-    username = payload.username.strip()
-    email = str(payload.email).strip().lower()
+    username = (
+        payload.username
+        .strip()
+    )
+
+
+    email = (
+        str(
+            payload.email
+        )
+        .strip()
+        .lower()
+    )
+
 
     conn = get_db_connection()
 
+
     if not conn:
+
         raise HTTPException(
-            status_code=500,
-            detail="無法連線至資料庫"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail="無法連線至資料庫",
         )
+
 
     try:
 
@@ -323,43 +709,81 @@ def register(payload: UserRegister):
             cursor_factory=RealDictCursor
         ) as cur:
 
-            # 檢查帳號
+
+            # =================================================
+            # 檢查 Username
+            # =================================================
+
             cur.execute(
                 """
-                SELECT id
+                SELECT
+                    id
                 FROM users
-                WHERE LOWER(username) = LOWER(%s);
+                WHERE
+                    LOWER(username)
+                    =
+                    LOWER(%s);
                 """,
-                (username,)
+                (
+                    username,
+                ),
             )
+
 
             if cur.fetchone():
 
                 raise HTTPException(
-                    status_code=409,
-                    detail="此帳號已被使用"
+                    status_code=(
+                        status.HTTP_409_CONFLICT
+                    ),
+                    detail="此帳號已被使用",
                 )
 
+
+            # =================================================
             # 檢查 Email
+            # =================================================
+
             cur.execute(
                 """
-                SELECT id
+                SELECT
+                    id
                 FROM users
-                WHERE LOWER(email) = LOWER(%s);
+                WHERE
+                    LOWER(email)
+                    =
+                    LOWER(%s);
                 """,
-                (email,)
+                (
+                    email,
+                ),
             )
+
 
             if cur.fetchone():
 
                 raise HTTPException(
-                    status_code=409,
-                    detail="此 Email 已被註冊"
+                    status_code=(
+                        status.HTTP_409_CONFLICT
+                    ),
+                    detail="此 Email 已被註冊",
                 )
+
+
+            # =================================================
+            # Password Hash
+            # =================================================
 
             hashed = hash_password(
                 payload.password
             )
+
+
+            # =================================================
+            # 建立正式會員
+            #
+            # 明確設定 is_guest = FALSE
+            # =================================================
 
             cur.execute(
                 """
@@ -367,78 +791,151 @@ def register(payload: UserRegister):
                 (
                     username,
                     email,
-                    password_hash
+                    password_hash,
+                    is_guest
                 )
-                VALUES (%s, %s, %s)
+                VALUES
+                (
+                    %s,
+                    %s,
+                    %s,
+                    FALSE
+                )
                 RETURNING
                     id,
                     username,
-                    email;
+                    email,
+                    is_guest;
                 """,
                 (
                     username,
                     email,
-                    hashed
-                )
+                    hashed,
+                ),
             )
 
-            user = cur.fetchone()
+
+            user = (
+                cur.fetchone()
+            )
+
 
         conn.commit()
+
 
     except HTTPException:
 
         conn.rollback()
+
         raise
 
-    except Exception as e:
+
+    except Exception as exc:
 
         conn.rollback()
 
+
         raise HTTPException(
-            status_code=500,
-            detail=f"註冊失敗：{str(e)}"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                f"註冊失敗：{str(exc)}"
+            ),
         )
 
+
     finally:
+
         conn.close()
 
+
+    # ========================================================
+    # JWT
+    # ========================================================
+
     token = create_access_token(
-        user["id"]
+        subject=user[
+            "id"
+        ],
+        actor_type="user",
     )
 
+
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": user
+
+        "access_token":
+            token,
+
+        "token_type":
+            "bearer",
+
+        "user":
+            {
+
+                "id":
+                    user[
+                        "id"
+                    ],
+
+                "username":
+                    user[
+                        "username"
+                    ],
+
+                "email":
+                    user[
+                        "email"
+                    ],
+
+                "is_guest":
+                    bool(
+                        user.get(
+                            "is_guest",
+                            False,
+                        )
+                    ),
+            },
     }
 
 
-# =========================
-# 登入
-# =========================
+# ============================================================
+# Login
+# ============================================================
 
 @router.post(
     "/login",
-    response_model=TokenResponse
+    response_model=TokenResponse,
 )
-def login(payload: UserLogin):
+def login(
+    payload: UserLogin,
+):
 
-    identifier = payload.identifier.strip()
+    identifier = (
+        payload.identifier
+        .strip()
+    )
+
 
     conn = get_db_connection()
 
+
     if not conn:
+
         raise HTTPException(
-            status_code=500,
-            detail="無法連線至資料庫"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail="無法連線至資料庫",
         )
+
 
     try:
 
         with conn.cursor(
             cursor_factory=RealDictCursor
         ) as cur:
+
 
             cur.execute(
                 """
@@ -447,143 +944,396 @@ def login(payload: UserLogin):
                     username,
                     email,
                     password_hash,
-                    is_active
+                    is_active,
+                    COALESCE(
+                        is_guest,
+                        FALSE
+                    ) AS is_guest
                 FROM users
                 WHERE
-                    LOWER(username) = LOWER(%s)
-                    OR
-                    LOWER(email) = LOWER(%s)
+                    LOWER(username)
+                    =
+                    LOWER(%s)
+                OR
+                    LOWER(email)
+                    =
+                    LOWER(%s)
                 LIMIT 1;
                 """,
                 (
                     identifier,
-                    identifier
-                )
+                    identifier,
+                ),
             )
 
-            user = cur.fetchone()
+
+            user = (
+                cur.fetchone()
+            )
+
 
     finally:
+
         conn.close()
+
+
+    # ========================================================
+    # 帳號不存在
+    # ========================================================
 
     if not user:
 
-        # 執行一次 hash 驗證避免明顯時間差
+        # ----------------------------------------------------
+        # 防止帳號存在與不存在產生明顯 timing difference
+        # ----------------------------------------------------
+
         password_hash.verify(
             payload.password,
-            DUMMY_HASH
+            DUMMY_HASH,
         )
 
+
         raise HTTPException(
-            status_code=401,
-            detail="帳號 / Email 或密碼錯誤"
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="帳號 / Email 或密碼錯誤",
         )
+
+
+    # ========================================================
+    # Password
+    # ========================================================
 
     if not verify_password(
         payload.password,
-        user["password_hash"]
+        user[
+            "password_hash"
+        ],
     ):
 
         raise HTTPException(
-            status_code=401,
-            detail="帳號 / Email 或密碼錯誤"
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="帳號 / Email 或密碼錯誤",
         )
 
-    if not user["is_active"]:
+
+    # ========================================================
+    # Active
+    # ========================================================
+
+    if not user[
+        "is_active"
+    ]:
 
         raise HTTPException(
-            status_code=403,
-            detail="此帳號已停用"
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail="此帳號已停用",
         )
 
-    token = create_access_token(
-        user["id"]
+
+    # ========================================================
+    # Guest 型 user 不允許使用正式會員密碼登入
+    #
+    # 正常 Guest 密碼為隨機產生，
+    # 理論上不會走到這裡。
+    # ========================================================
+
+    is_guest = bool(
+        user.get(
+            "is_guest",
+            False,
+        )
     )
 
+
+    # ========================================================
+    # JWT
+    # ========================================================
+
+    token = create_access_token(
+        subject=user[
+            "id"
+        ],
+        actor_type="user",
+    )
+
+
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user["email"]
-        }
+
+        "access_token":
+            token,
+
+        "token_type":
+            "bearer",
+
+        "user":
+            {
+
+                "id":
+                    user[
+                        "id"
+                    ],
+
+                "username":
+                    user[
+                        "username"
+                    ],
+
+                "email":
+                    user[
+                        "email"
+                    ],
+
+                "is_guest":
+                    is_guest,
+            },
     }
 
 
-# =========================
-# 目前登入使用者
-# =========================
+# ============================================================
+# Current User API
+# ============================================================
 
 @router.get(
     "/me",
-    response_model=UserPublic
+    response_model=UserPublic,
 )
 def get_me(
-    current_user=Depends(get_current_user)
+    current_user=Depends(
+        get_current_user
+    ),
 ):
+
     return {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "email": current_user.get("email"),
-        "is_guest": current_user.get("is_guest", False)
+
+        "id":
+            current_user[
+                "id"
+            ],
+
+        "username":
+            current_user[
+                "username"
+            ],
+
+        "email":
+            current_user.get(
+                "email"
+            ),
+
+        "is_guest":
+            bool(
+                current_user.get(
+                    "is_guest",
+                    False,
+                )
+            ),
     }
 
-# =========================
-# 訪客登入 (Guest Login)
-# =========================
+
+# ============================================================
+# Guest Login
+#
+# 目前前端使用的是 users-table Guest。
+#
+# 也就是：
+#
+# users.is_guest = TRUE
+#
+# JWT：
+# actor_type = user
+#
+# 之後 get_current_user()
+# 會再從 DB 的 is_guest 判斷真正 Guest 身分。
+# ============================================================
 
 @router.post(
     "/guest-login",
     response_model=TokenResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 def guest_login():
     """
-    產生臨時訪客帳號並回傳 JWT Token
+    建立匿名訪客帳號。
+
+    此 Guest：
+    - 存在 users table
+    - is_guest = TRUE
+    - 有 JWT
+    - 無法知道隨機產生的密碼
     """
-    # 產生不重複的匿名訪客名稱與 Email
-    unique_id = uuid.uuid4().hex[:8]
-    guest_username = f"Guest_{unique_id}"
-    guest_email = f"guest_{unique_id}@anonymous.local"
-    
+
+    # ========================================================
+    # 1. 建立匿名識別資料
+    # ========================================================
+
+    unique_id = (
+        uuid.uuid4()
+        .hex[
+            :8
+        ]
+    )
+
+
+    guest_username = (
+        f"Guest_{unique_id}"
+    )
+
+
+    guest_email = (
+        f"guest_{unique_id}"
+        "@anonymous.local"
+    )
+
+
+    # ========================================================
+    # 2. Database
+    # ========================================================
+
     conn = get_db_connection()
+
+
     if not conn:
+
         raise HTTPException(
-            status_code=500,
-            detail="無法連線至資料庫"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail="無法連線至資料庫",
         )
+
 
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 建立訪客帳號，is_guest 設為 True，密碼給隨機雜湊
-            dummy_hashed = hash_password(uuid.uuid4().hex)
-            
+
+        with conn.cursor(
+            cursor_factory=RealDictCursor
+        ) as cur:
+
+
+            # ------------------------------------------------
+            # Guest 使用完全隨機密碼
+            # 使用者本身不知道這個密碼
+            # ------------------------------------------------
+
+            dummy_hashed = (
+                hash_password(
+                    uuid.uuid4().hex
+                )
+            )
+
+
             cur.execute(
                 """
-                INSERT INTO users (username, email, password_hash, is_guest)
-                VALUES (%s, %s, %s, TRUE)
-                RETURNING id, username, email, is_guest;
+                INSERT INTO users
+                (
+                    username,
+                    email,
+                    password_hash,
+                    is_guest
+                )
+                VALUES
+                (
+                    %s,
+                    %s,
+                    %s,
+                    TRUE
+                )
+                RETURNING
+                    id,
+                    username,
+                    email,
+                    is_guest;
                 """,
-                (guest_username, guest_email, dummy_hashed)
+                (
+                    guest_username,
+                    guest_email,
+                    dummy_hashed,
+                ),
             )
-            user = cur.fetchone()
+
+
+            user = (
+                cur.fetchone()
+            )
+
 
         conn.commit()
-    except Exception as e:
+
+
+    except Exception as exc:
+
         conn.rollback()
+
+
         raise HTTPException(
-            status_code=500,
-            detail=f"訪客登入建立失敗：{str(e)}"
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                "訪客登入建立失敗："
+                f"{str(exc)}"
+            ),
         )
+
+
     finally:
+
         conn.close()
 
-    # 發放該訪客的 JWT Token
-    token = create_access_token(user["id"])
+
+    # ========================================================
+    # 3. JWT
+    #
+    # actor_type 仍然是 user，
+    # 因為 subject 指向 users.id。
+    #
+    # 是否 Guest 由 users.is_guest 判斷。
+    # ========================================================
+
+    token = create_access_token(
+        subject=user[
+            "id"
+        ],
+        actor_type="user",
+    )
+
+
+    # ========================================================
+    # 4. Response
+    # ========================================================
 
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": user
+
+        "access_token":
+            token,
+
+        "token_type":
+            "bearer",
+
+        "user":
+            {
+
+                "id":
+                    user[
+                        "id"
+                    ],
+
+                "username":
+                    user[
+                        "username"
+                    ],
+
+                "email":
+                    user[
+                        "email"
+                    ],
+
+                "is_guest":
+                    True,
+            },
     }
