@@ -79,6 +79,15 @@ function App() {
 
 
   // ==========================================
+  // 完整歷史問診側欄
+  // ==========================================
+  const [
+    openHistorySidebar,
+    setOpenHistorySidebar
+  ] = useState(false)
+
+
+  // ==========================================
   // 檢查後端
   // ==========================================
   useEffect(() => {
@@ -146,6 +155,10 @@ function App() {
           null
         )
 
+        setOpenHistorySidebar(
+          false
+        )
+
         setCurrentPage(
           'consultation'
         )
@@ -169,6 +182,10 @@ function App() {
 
       setSelectedSessionId(
         null
+      )
+
+      setOpenHistorySidebar(
+        false
       )
 
       setCurrentPage(
@@ -212,6 +229,10 @@ function App() {
       null
     )
 
+    setOpenHistorySidebar(
+      false
+    )
+
     setCurrentPage(
       'consultation'
     )
@@ -249,6 +270,39 @@ function App() {
       null
     )
 
+    setOpenHistorySidebar(
+      false
+    )
+
+    setCurrentPage(
+      'consultation'
+    )
+  }
+
+
+  // ==========================================
+  // 最近問診
+  // ==========================================
+  const goToHistory = () => {
+    if (user?.is_guest) {
+      return
+    }
+
+    setSelectedSessionId(
+      null
+    )
+
+    setOpenHistorySidebar(
+      true
+    )
+
+    // 從任何問診畫面進入「最近問診」時，
+    // 重新建立 SymptomChecker，回到乾淨的歷史入口，
+    // 避免停留在上一筆歷史問診結果頁。
+    setConsultationResetKey(
+      (prev) => prev + 1
+    )
+
     setCurrentPage(
       'consultation'
     )
@@ -262,6 +316,10 @@ function App() {
     if (user?.is_guest) {
       return
     }
+
+    setOpenHistorySidebar(
+      false
+    )
 
     setCurrentPage(
       'dashboard'
@@ -279,6 +337,10 @@ function App() {
     // 不載入任何歷史紀錄
     setSelectedSessionId(
       null
+    )
+
+    setOpenHistorySidebar(
+      false
     )
 
 
@@ -307,6 +369,10 @@ function App() {
       null
     )
 
+    setOpenHistorySidebar(
+      true
+    )
+
     setCurrentPage(
       'consultation'
     )
@@ -328,6 +394,11 @@ function App() {
     console.log(
       'Dashboard 選擇問診:',
       session
+    )
+
+
+    setOpenHistorySidebar(
+      false
     )
 
 
@@ -468,10 +539,26 @@ function App() {
             <button
               type="button"
               onClick={goToConsultation}
-              style={tabStyle(currentPage === 'consultation')}
+              style={tabStyle(
+                currentPage === 'consultation' &&
+                !openHistorySidebar
+              )}
             >
               AI 問診
             </button>
+
+            {!user.is_guest && (
+              <button
+                type="button"
+                onClick={goToHistory}
+                style={tabStyle(
+                  currentPage === 'consultation' &&
+                  openHistorySidebar
+                )}
+              >
+                最近問診
+              </button>
+            )}
 
             {!user.is_guest && (
               <button
@@ -591,6 +678,14 @@ function App() {
 
           onSessionLoaded={
             handleSessionLoaded
+          }
+
+          openHistorySidebar={
+            openHistorySidebar
+          }
+
+          onOpenHistory={
+            goToHistory
           }
 
         />

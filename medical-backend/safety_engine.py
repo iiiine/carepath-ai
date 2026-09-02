@@ -1,4 +1,4 @@
-# safety_engine.py
+
 
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping
@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Mapping
 # 方便未來追蹤某次問診使用的是哪一版安全規則。
 # ============================================================
 
-SAFETY_ENGINE_VERSION = "2026.08.2"
+SAFETY_ENGINE_VERSION = "2026.09.1"
 
 
 # ============================================================
@@ -147,6 +147,43 @@ def all_of(
 # ============================================================
 
 EMERGENCY_RULES: List[SafetyRule] = [
+
+    # --------------------------------------------------------
+    # Mental health / Harm risk
+    #
+    # 明確意圖、計畫或立即危險：
+    # 中止一般 AI 問診流程。
+    # --------------------------------------------------------
+
+    SafetyRule(
+        code="SELF_HARM_INTENT_OR_PLAN",
+        risk_level=RISK_EMERGENCY,
+        title="自傷或自殺高風險警訊",
+        reason=(
+            "使用者明確表達傷害自己的意圖、"
+            "計畫、方法或已準備相關手段。"
+        ),
+        predicate=lambda f: any_of(
+            f,
+            "self_harm_intent_or_plan",
+            "imminent_self_harm",
+        ),
+    ),
+
+    SafetyRule(
+        code="HARM_TO_OTHERS_INTENT_OR_PLAN",
+        risk_level=RISK_EMERGENCY,
+        title="傷害他人高風險警訊",
+        reason=(
+            "使用者明確表達傷害他人的意圖、"
+            "計畫、方法或已準備相關手段。"
+        ),
+        predicate=lambda f: any_of(
+            f,
+            "harm_others_intent_or_plan",
+            "imminent_harm_to_others",
+        ),
+    ),
 
     # --------------------------------------------------------
     # Stroke / Acute neurological signs
@@ -415,6 +452,44 @@ EMERGENCY_RULES: List[SafetyRule] = [
 # ============================================================
 
 URGENT_RULES: List[SafetyRule] = [
+
+    # --------------------------------------------------------
+    # Mental health / Harm thoughts
+    #
+    # 有明確傷害念頭，但尚未抽取到明確意圖 / 計畫：
+    # 需要儘快由真人進一步評估。
+    #
+    # 若同時有 intent_or_plan，
+    # Emergency 規則會自動取得較高風險等級。
+    # --------------------------------------------------------
+
+    SafetyRule(
+        code="SELF_HARM_THOUGHTS",
+        risk_level=RISK_URGENT,
+        title="自傷或自殺想法需要儘快評估",
+        reason=(
+            "使用者目前表達有傷害自己的想法、"
+            "念頭或衝動，需要儘快由醫療或心理健康專業人員評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "self_harm_thoughts",
+        ),
+    ),
+
+    SafetyRule(
+        code="HARM_TO_OTHERS_THOUGHTS",
+        risk_level=RISK_URGENT,
+        title="傷害他人的想法需要儘快評估",
+        reason=(
+            "使用者目前表達有傷害他人的想法、"
+            "念頭或衝動，需要儘快由真人進一步評估安全風險。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "harm_others_thoughts",
+        ),
+    ),
 
     SafetyRule(
         code="CHEST_PAIN",
@@ -716,6 +791,74 @@ if __name__ == "__main__":
 
             "flags": {
                 "recent_resolved_neurologic_deficit":
+                    True,
+            },
+        },
+
+        {
+            "name":
+                "只有生氣，沒有傷害想法",
+
+            "flags": {},
+        },
+
+        {
+            "name":
+                "有傷害他人的想法但無計畫",
+
+            "flags": {
+                "harm_others_thoughts":
+                    True,
+
+                "harm_others_intent_or_plan":
+                    False,
+
+                "imminent_harm_to_others":
+                    False,
+            },
+        },
+
+        {
+            "name":
+                "有自傷想法但無計畫",
+
+            "flags": {
+                "self_harm_thoughts":
+                    True,
+
+                "self_harm_intent_or_plan":
+                    False,
+
+                "imminent_self_harm":
+                    False,
+            },
+        },
+
+        {
+            "name":
+                "明確自傷計畫",
+
+            "flags": {
+                "self_harm_thoughts":
+                    True,
+
+                "self_harm_intent_or_plan":
+                    True,
+            },
+        },
+
+        {
+            "name":
+                "立即傷害他人危險",
+
+            "flags": {
+                "harm_others_thoughts":
+                    True,
+
+                "harm_others_intent_or_plan":
+                    True,
+
+                "imminent_harm_to_others":
                     True,
             },
         },

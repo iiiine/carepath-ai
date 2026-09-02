@@ -1390,6 +1390,16 @@ async def diagnose_symptom(
 
 
                     # ----------------------------------------
+                    # Safety Snapshot
+                    #
+                    # 保存本次 Medical Safety Pipeline 的完整結果，
+                    # 供 Visit Summary / Audit 後續直接使用。
+                    #
+                    # 注意：
+                    # 不重新推論、不改寫 Safety 結果。
+                    # ----------------------------------------
+
+                    # ----------------------------------------
                     # DB INSERT
                     # ----------------------------------------
 
@@ -1406,7 +1416,8 @@ async def diagnose_symptom(
                                 suggested_department,
                                 possible_causes,
                                 history_json,
-                                medical_resources_json
+                                medical_resources_json,
+                                safety_snapshot
                             )
                             VALUES (
                                 %s,
@@ -1415,6 +1426,7 @@ async def diagnose_symptom(
                                 %s,
                                 %s,
                                 %s,
+                                %s::jsonb,
                                 %s::jsonb,
                                 %s::jsonb,
                                 %s::jsonb
@@ -1439,6 +1451,11 @@ async def diagnose_symptom(
                                 ),
                                 json.dumps(
                                     medical_resources_data,
+                                    ensure_ascii=False,
+                                    default=str,
+                                ),
+                                json.dumps(
+                                    safety_result,
                                     ensure_ascii=False,
                                     default=str,
                                 ),
