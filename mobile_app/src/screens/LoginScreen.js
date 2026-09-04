@@ -115,8 +115,8 @@ export default function LoginScreen() {
           <View style={styles.headerRow}>
             <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.mascot} resizeMode="contain" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.mainTitle}>智慧 AI 醫療問診系統</Text>
-              <Text style={styles.subTitle}>建立帳號後即可使用問診與醫院地圖功能</Text>
+              <Text style={styles.mainTitle}>CarePath AI</Text>
+              <Text style={styles.subTitle}>登入帳號後可使用個人化健康資訊功能</Text>
             </View>
           </View>
 
