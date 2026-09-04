@@ -56,11 +56,10 @@ export default function HistoryListScreen() {
     <TouchableOpacity 
       style={styles.card} 
       onPress={() => {
+        // ponytail: 不再假等 600ms，直接跳；真正的載入提示由 ConsultScreen 顯示
         setIsNavigating(true);
-        setTimeout(() => {
-          setIsNavigating(false);
-          navigation.navigate('Main', { screen: 'Consult', params: { sessionId: item.id } });
-        }, 600);
+        navigation.navigate('Main', { screen: 'Consult', params: { sessionId: item.id } });
+        setIsNavigating(false);
       }}
     >
       <View style={styles.cardHeader}>

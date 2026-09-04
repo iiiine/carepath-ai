@@ -21,6 +21,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'trend'
 
   const fetchDashboardData = async () => {
     try {
@@ -75,6 +76,20 @@ export default function DashboardScreen() {
     </View>
   );
 
+  const renderTabs = () => (
+    <View style={styles.tabBar}>
+      {[['dashboard', '儀表板'], ['trend', '健康趨勢']].map(([key, label]) => (
+        <TouchableOpacity
+          key={key}
+          style={[styles.tabBtn, tab === key && styles.tabBtnActive]}
+          onPress={() => setTab(key)}
+        >
+          <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   if (!user || user.is_guest) {
     return (
       <View style={styles.container}>
@@ -94,6 +109,7 @@ export default function DashboardScreen() {
   return (
     <View style={styles.container}>
       {renderHeader()}
+      {renderTabs()}
       {loading && !refreshing ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={t.userBubble} />
@@ -105,11 +121,12 @@ export default function DashboardScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {/* 🎯 新增：個人化長期縱向健康趨勢分析面板 */}
-          {user && !user.is_guest && (
+          {tab === 'trend' && user && !user.is_guest && (
             <View style={{ marginBottom: 16 }}>
               <LongitudinalHealthPanel />
             </View>
           )}
+          {tab === 'dashboard' && (<>
           <View style={styles.heroCard}>
             <Text style={styles.heroEyebrow}>
               {summary?.latest_department ? `最近一次問診 · ${fmtDate(summary.latest_consultation_at)}` : '尚無問診紀錄'}
@@ -150,11 +167,8 @@ export default function DashboardScreen() {
                   key={session.id || idx}
                   style={styles.recentRow}
                   onPress={() => {
-                    setIsNavigating(true);
-                    setTimeout(() => {
-                      setIsNavigating(false);
-                      navigation.navigate('Main', { screen: 'Consult', params: { sessionId: session.id } });
-                    }, 600);
+                    // ponytail: 不再假等 600ms，載入提示由 ConsultScreen 顯示
+                    navigation.navigate('Main', { screen: 'Consult', params: { sessionId: session.id } });
                   }}
                 >
                   <Text style={styles.recentDate}>{fmtDate(session.created_at)}</Text>
@@ -192,6 +206,7 @@ export default function DashboardScreen() {
               ))
             )}
           </View>
+          </>)}
         </ScrollView>
       )}
 
@@ -210,6 +225,11 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: t.page },
+  tabBar: { flexDirection: 'row', backgroundColor: t.panel, paddingHorizontal: 16, paddingBottom: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: t.border },
+  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: t.subtle, alignItems: 'center' },
+  tabBtnActive: { backgroundColor: t.userBubble },
+  tabText: { fontSize: 14, fontWeight: '700', color: t.muted },
+  tabTextActive: { color: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: t.panel, borderBottomWidth: 1, borderBottomColor: t.border, zIndex: 100 },
   backButton: { paddingRight: 16, paddingVertical: 4 },
   backIcon: { fontSize: 24, color: t.text, fontWeight: 'bold' },
