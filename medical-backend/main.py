@@ -35,6 +35,10 @@ from routes.profile import (
     router as profile_router,
 )
 
+from routes.dashboard import (
+    router as dashboard_router,
+)
+
 from routes.longitudinal import (
     router as longitudinal_router,
 )
@@ -145,6 +149,15 @@ app.include_router(
 
 app.include_router(
     profile_router
+)
+
+
+# ------------------------------------------------------------
+# Dashboard Summary & Statistics
+# ------------------------------------------------------------
+
+app.include_router(
+    dashboard_router
 )
 
 

@@ -9,6 +9,8 @@ import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
 import client from '../api/client';
 
+import LongitudinalHealthPanel from './LongitudinalHealthPanel'; // 🎯 引入縱向健康趨勢分析面板
+
 export default function DashboardScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -102,6 +104,12 @@ export default function DashboardScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
+          {/* 🎯 新增：個人化長期縱向健康趨勢分析面板 */}
+          {user && !user.is_guest && (
+            <View style={{ marginBottom: 16 }}>
+              <LongitudinalHealthPanel />
+            </View>
+          )}
           <View style={styles.heroCard}>
             <Text style={styles.heroEyebrow}>
               {summary?.latest_department ? `最近一次問診 · ${fmtDate(summary.latest_consultation_at)}` : '尚無問診紀錄'}
@@ -110,12 +118,11 @@ export default function DashboardScreen() {
               {summary?.latest_department ? `偏向：${summary.latest_department}` : '尚無紀錄'}
             </Text>
             <Text style={styles.heroText}>
-              {summary?.latest_department 
+              {summary?.latest_department
                 ? `最近 30 天已問診 ${summary.consultation_count_30d} 次，最近不適程度 ${summary.latest_pain_level ?? '—'} / 5。`
                 : '開始您的第一次 AI 問診，這裡將為您自動統計健康數據。'}
             </Text>
           </View>
-
           <View style={styles.tileRow}>
             <View style={styles.tile}>
               <Text style={styles.tileLabel}>30天問診</Text>
@@ -139,8 +146,8 @@ export default function DashboardScreen() {
               <Text style={styles.emptyText}>目前沒有歷史問診紀錄</Text>
             ) : (
               recentSessions.map((session, idx) => (
-                <TouchableOpacity 
-                  key={session.id || idx} 
+                <TouchableOpacity
+                  key={session.id || idx}
                   style={styles.recentRow}
                   onPress={() => {
                     setIsNavigating(true);
