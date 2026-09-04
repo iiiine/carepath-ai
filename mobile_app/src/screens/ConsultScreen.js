@@ -3,12 +3,12 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
   KeyboardAvoidingView, Platform, ScrollView, Alert, Linking, Image,
-  Modal, Animated, TouchableWithoutFeedback, PanResponder
+  Modal, Animated, TouchableWithoutFeedback, PanResponder, Pressable, ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthContext } from '../context/AuthContext';
@@ -122,6 +122,7 @@ export default function ConsultScreen() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const slideAnim = useRef(new Animated.Value(-300)).current; 
 
   // 初始化時加載高齡友善設定
@@ -210,6 +211,7 @@ export default function ConsultScreen() {
   const loadHistoricalSession = async (id) => {
     try {
       setLoading(true);
+      setLoadingHistory(true);
       const res = await client.get('/api/v1/history');
       const sessionList = Array.isArray(res.data) ? res.data : [];
       const targetSession = sessionList.find(session => String(session.id) === String(id));
@@ -241,6 +243,7 @@ export default function ConsultScreen() {
       Alert.alert('提示', '無法載入該筆紀錄，請確認網路連線');
     } finally {
       setLoading(false);
+      setLoadingHistory(false);
     }
   };
 
@@ -557,7 +560,6 @@ export default function ConsultScreen() {
                 {/* 🎯 地圖修復與定位座標防禦 */}
                   <View style={styles.mapCard}>
                     <MapView 
-                      provider={PROVIDER_GOOGLE}
                       style={styles.map}
                       initialRegion={{
                       latitude: Number(userLocation?.latitude ?? FALLBACK_LOCATION.latitude),
@@ -684,9 +686,6 @@ export default function ConsultScreen() {
       {/* 智慧醫療選單 Drawer */}
       <Modal visible={isDrawerOpen} transparent={true} animationType="none" onRequestClose={() => toggleDrawer(false)}>
         <View style={styles.drawerOverlay}>
-          <TouchableWithoutFeedback onPress={() => toggleDrawer(false)}>
-            <View style={styles.drawerBackdrop} />
-          </TouchableWithoutFeedback>
           <Animated.View {...drawerPanResponder.panHandlers} style={[styles.drawerContent, { transform: [{ translateX: slideAnim }] }]}>
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>智慧醫療選單</Text>
@@ -704,8 +703,20 @@ export default function ConsultScreen() {
               <Text style={styles.drawerItemText}>個人化健康資料</Text>
             </TouchableOpacity>
           </Animated.View>
+          {/* ponytail: 側邊欄以外的區域＝一塊可點的遮罩，點了就收起來 */}
+          <Pressable style={styles.drawerBackdrop} onPress={() => toggleDrawer(false)} />
         </View>
       </Modal>
+
+      {/* 跳轉／載入歷史紀錄提示 */}
+      {(isNavigating || loadingHistory) && (
+        <View style={styles.navigatingOverlay} pointerEvents="auto">
+          <View style={styles.navigatingBox}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.navigatingText}>{loadingHistory ? '載入紀錄中...' : '跳轉中...'}</Text>
+          </View>
+        </View>
+      )}
 
       {/* 🎯 AI 就醫摘要 Modal */}
       <Modal
@@ -867,8 +878,11 @@ const styles = StyleSheet.create({
   controlBadge: { fontSize: 12, color: t.muted, backgroundColor: '#FAFAFA', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: t.border },
   controlBadgeElder: { fontSize: 15, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0' },
 
-  drawerOverlay: { flex: 1, flexDirection: 'row' },
-  drawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  drawerOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.5)' },
+  drawerBackdrop: { flex: 1 },
+  navigatingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
+  navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', elevation: 5 },
+  navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
   drawerContent: { width: 270, height: '100%', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 10, padding: 24 },
   drawerHeader: { marginTop: 40, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: t.border, marginBottom: 12 },
   drawerTitle: { fontSize: 22, fontWeight: '900', color: t.text },
