@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 
 import LongitudinalHealthPanel from './LongitudinalHealthPanel'; // 🎯 引入縱向健康趨勢分析面板
@@ -20,7 +21,6 @@ export default function DashboardScreen() {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'trend'
 
   const fetchDashboardData = async () => {
@@ -95,7 +95,7 @@ export default function DashboardScreen() {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContainer}>
-          <Text style={styles.mascot}>🔒</Text>
+          <Icon name="lock-outline" size={52} color={t.muted} style={{ marginBottom: 12 }} />
           <Text style={styles.guestTitle}>訪客模式無法檢視儀表板</Text>
           <Text style={styles.guestSub}>請先登入會員，解鎖您的個人健康趨勢與歷史問診紀錄。</Text>
           <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
@@ -210,15 +210,6 @@ export default function DashboardScreen() {
         </ScrollView>
       )}
 
-      {/* 🌟 改良版跳轉 Loading (透明背景，只留黑框) */}
-      {isNavigating && (
-        <View style={styles.navigatingOverlay}>
-          <View style={styles.navigatingBox}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.navigatingText}>載入紀錄中...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -269,7 +260,4 @@ const styles = StyleSheet.create({
   barFill: { height: '100%', backgroundColor: t.userBubble, borderRadius: 3 },
   
   // 🌟 將 backgroundColor 改為 transparent
-  navigatingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
-  navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
 });

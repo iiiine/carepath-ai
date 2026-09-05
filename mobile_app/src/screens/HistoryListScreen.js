@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { t } from '../theme';
+import Icon from '@react-native-vector-icons/material-design-icons';
 
 export default function HistoryListScreen() {
   const navigation = useNavigation();
@@ -13,7 +14,6 @@ export default function HistoryListScreen() {
   const { user } = useContext(AuthContext);
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     if (user && !user.is_guest) {
@@ -41,7 +41,7 @@ export default function HistoryListScreen() {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContainer}>
-          <Text style={styles.mascot}>🔒</Text>
+          <Icon name="lock-outline" size={52} color={t.muted} style={{ marginBottom: 12 }} />
           <Text style={styles.guestTitle}>訪客無法檢視歷史紀錄</Text>
           <Text style={styles.guestSub}>請先登入會員，解鎖您的個人歷史問診資料。</Text>
           <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
@@ -57,9 +57,7 @@ export default function HistoryListScreen() {
       style={styles.card} 
       onPress={() => {
         // ponytail: 不再假等 600ms，直接跳；真正的載入提示由 ConsultScreen 顯示
-        setIsNavigating(true);
         navigation.navigate('Main', { screen: 'Consult', params: { sessionId: item.id } });
-        setIsNavigating(false);
       }}
     >
       <View style={styles.cardHeader}>
@@ -88,15 +86,6 @@ export default function HistoryListScreen() {
         />
       )}
 
-      {/* 🌟 改良版跳轉 Loading (透明背景，只留黑框) */}
-      {isNavigating && (
-        <View style={styles.navigatingOverlay}>
-          <View style={styles.navigatingBox}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.navigatingText}>載入紀錄中...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -123,7 +112,4 @@ const styles = StyleSheet.create({
   emptyText: { textAlign: 'center', color: t.muted, marginTop: 40, fontSize: 14 },
   
   // 🌟 將 backgroundColor 改為 transparent
-  navigatingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
-  navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
 });
