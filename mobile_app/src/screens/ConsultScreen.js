@@ -19,6 +19,46 @@ import VisitSummaryPanel from './VisitSummaryPanel';
 
 const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
 
+// ============================================================
+// 快捷症狀
+// ============================================================
+//
+// 預設值：新會員、訪客、或縱向分析取不到資料時使用。
+// 個人化：會員的「常問症狀」排在前面，不足的名額用預設值補齊。
+//
+// 之所以是補齊而不是整組替換：後端 analyze_recurring_symptoms()
+// 要求同一症狀出現兩次以上才算常問，因此新會員會有很長一段時間
+// 拿到空陣列。整組替換會讓快捷列時有時無，補齊制則讓新會員看到的
+// 畫面跟現在完全一樣。
+// ============================================================
+
+const DEFAULT_QUICK_SYMPTOMS = ['頭痛', '發燒', '喉嚨痛', '肚子痛', '皮膚起疹', '牙齒痛'];
+
+const QUICK_SYMPTOM_LIMIT = 6;
+
+// 縱向分析的時間窗。快捷標籤只需要近期習慣，不必拉滿 365 天。
+const QUICK_SYMPTOM_WINDOW_DAYS = 90;
+
+// 純函式：合併常問症狀與預設值，回傳含來源標記的清單。
+// personalized 供畫面決定要不要上淡底色，不影響送出的文字。
+// 後端已依 session_count 由多到少排序，這裡不重排。
+const mergeQuickSymptoms = (recurringSymptoms) => {
+  const merged = [];
+  const seen = new Set();
+
+  const push = (label, personalized) => {
+    const text = typeof label === 'string' ? label.trim() : '';
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    merged.push({ label: text, personalized });
+  };
+
+  (Array.isArray(recurringSymptoms) ? recurringSymptoms : []).forEach((item) => push(item?.symptom, true));
+  DEFAULT_QUICK_SYMPTOMS.forEach((label) => push(label, false));
+
+  return merged.slice(0, QUICK_SYMPTOM_LIMIT);
+};
+
 // 仿 Gemini 的起伏點點動畫元件
 const TypingIndicator = () => {
   const { s } = useElderMode();
@@ -125,7 +165,23 @@ export default function ConsultScreen() {
   const [tempSummaryData, setTempSummaryData] = useState(null);
 
   const sessionId = route.params?.sessionId || diagnosisResult?.session_id;
-  const quickSymptoms = ['頭痛', '發燒', '喉嚨痛', '肚子痛', '皮膚起疹', '牙齒痛'];
+  // 快捷標籤：只存後端回來的常問症狀原始資料，實際清單由 useMemo 推導。
+  //
+  // 連同 userId 一起存的理由：訪客、登出、換帳號都只要靠推導條件擋掉，
+  // 不需要在 effect 裡同步 setState 清空（那會造成串聯 render），
+  // 也不會讓上一個帳號的常問症狀閃現在下一個帳號的畫面上。
+  const [recurringSymptoms, setRecurringSymptoms] = useState({ userId: null, items: [] });
+
+  const isMember = !!user && !user.is_guest;
+
+  // 先渲染預設值，個人化資料回來後再換掉。
+  // 刻意不擋畫面：問診是主要入口，快捷標籤不值得讓使用者等一個網路來回。
+  const quickSymptoms = useMemo(
+    () => mergeQuickSymptoms(
+      isMember && recurringSymptoms.userId === user?.id ? recurringSymptoms.items : []
+    ),
+    [isMember, recurringSymptoms, user?.id]
+  );
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -169,6 +225,33 @@ export default function ConsultScreen() {
   useEffect(() => {
     handleResetChat();
   }, [user]);
+
+  // 讀取會員常問症狀，填入快捷標籤。
+  // 訪客不打這支 API——後端一定回 403，沒必要每次進畫面都製造一筆失敗請求。
+  // 任何失敗都靜默不處理：清單自然維持預設值，快捷標籤是輔助功能，不該干擾問診。
+  useEffect(() => {
+    if (!isMember) return;
+
+    const userId = user?.id;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await client.get('/api/v1/longitudinal', {
+          params: { window_days: QUICK_SYMPTOM_WINDOW_DAYS },
+        });
+        if (cancelled) return;
+        if (response.data?.status !== 'success') return;
+        setRecurringSymptoms({ userId, items: response.data.recurring_symptoms || [] });
+      } catch (err) {
+        if (!cancelled) {
+          console.log('⚠️ 常問症狀載入失敗，快捷標籤退回預設值', err?.response?.status || err?.message);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isMember, user?.id]);
 
   useEffect(() => {
     (async () => {
@@ -639,9 +722,22 @@ export default function ConsultScreen() {
                 contentContainerStyle={styles.quickTags}
                 keyboardShouldPersistTaps="handled"
               >
-                {quickSymptoms.map((sym, i) => (
-                  <TouchableOpacity key={i} style={styles.tag} onPress={() => handleSendMessage(sym)}>
-                    <Text style={styles.tagText}>{sym}</Text>
+                {quickSymptoms.map((item) => (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={[styles.tag, item.personalized && styles.tagPersonalized]}
+                    onPress={() => handleSendMessage(item.label)}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.personalized ? `${item.label}，您常問的症狀` : item.label}
+                  >
+                    <View style={styles.tagInner}>
+                      {item.personalized && (
+                        <Icon name="history" size={s.caption + 2} color={t.userBubble} />
+                      )}
+                      <Text style={[styles.tagText, item.personalized && styles.tagTextPersonalized]}>
+                        {item.label}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -897,8 +993,13 @@ const makeStyles = (s) => StyleSheet.create({
   // 讓標籤列滿版可滑：向外抵銷 bottomSection 的左右 padding，再由 contentContainer 補回
   quickTagsScroll: { marginHorizontal: -s.pad, marginBottom: s.pad },
   quickTags: { flexDirection: 'row', gap: s.gap, paddingHorizontal: s.pad },
-  tag: { backgroundColor: t.subtle, paddingHorizontal: s.pad, paddingVertical: s.gap, borderRadius: s.radiusLg, minHeight: s.touch, justifyContent: 'center' },
+  tag: { backgroundColor: t.subtle, paddingHorizontal: s.pad, paddingVertical: s.gap, borderRadius: s.radiusLg, minHeight: s.touch, justifyContent: 'center', borderWidth: s.border, borderColor: 'transparent' },
+  tagInner: { flexDirection: 'row', alignItems: 'center', gap: s.gap / 2 },
   tagText: { fontSize: s.body, color: t.text, fontWeight: '600' },
+  // 常問症狀：淡藍底 + 同色框線，與預設標籤的灰底區隔。
+  // 高齡模式框線隨 s.border 加粗，不另外寫條件式。
+  tagPersonalized: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
+  tagTextPersonalized: { color: t.userBubble },
   
   inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: s.radiusLg + 4, paddingHorizontal: s.pad, paddingVertical: 6, borderWidth: s.border, borderColor: s.borderStrong, marginBottom: s.gapLg },
   textInput: { flex: 1, fontSize: s.input, paddingVertical: 10, color: t.text },

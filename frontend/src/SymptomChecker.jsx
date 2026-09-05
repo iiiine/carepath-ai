@@ -1,6 +1,6 @@
 
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import api from './api/axios';
 
 import HospitalMap from './HospitalMap';
@@ -26,6 +26,114 @@ import { BaymaxAvatar } from './Baymax';
 const FALLBACK_LOCATION = {
   latitude: 23.0,
   longitude: 120.2
+};
+
+
+// ==========================================
+// 快捷症狀
+//
+// 預設值：新會員、訪客、或縱向分析取不到資料時使用。
+// 個人化：會員的「常問症狀」排在前面，
+//         不足的名額用預設值補齊。
+//
+// 之所以是補齊而不是整組替換：
+// 後端 analyze_recurring_symptoms() 要求同一症狀
+// 出現兩次以上才算常問，因此新會員會有很長一段時間
+// 拿到空陣列。整組替換會讓快捷列時有時無，
+// 補齊制則讓新會員看到的畫面跟現在完全一樣。
+//
+// 這段邏輯與行動端 ConsultScreen.js 為同一份契約，
+// 改動時兩端要一起改。
+// ==========================================
+
+const DEFAULT_QUICK_SYMPTOMS = [
+  '頭痛',
+  '發燒',
+  '喉嚨痛',
+  '肚子痛',
+  '皮膚起疹',
+  '牙齒痛'
+];
+
+
+const QUICK_SYMPTOM_LIMIT = 6;
+
+
+// 縱向分析的時間窗。
+// 快捷標籤只需要近期習慣，不必拉滿 365 天。
+const QUICK_SYMPTOM_WINDOW_DAYS = 90;
+
+
+// 純函式：合併常問症狀與預設值，
+// 回傳含來源標記的清單。
+//
+// personalized 供畫面決定要不要上淡底色，
+// 不影響填入輸入框的文字。
+// 後端已依 session_count 由多到少排序，這裡不重排。
+const mergeQuickSymptoms = (
+  recurringSymptoms
+) => {
+
+  const merged = [];
+
+  const seen = new Set();
+
+
+  const push = (
+    label,
+    personalized
+  ) => {
+
+    const text =
+      typeof label === 'string'
+        ? label.trim()
+        : '';
+
+
+    if (
+      !text ||
+      seen.has(text)
+    ) {
+      return;
+    }
+
+
+    seen.add(text);
+
+
+    merged.push({
+      label: text,
+      personalized
+    });
+  };
+
+
+  (
+    Array.isArray(recurringSymptoms)
+      ? recurringSymptoms
+      : []
+  ).forEach(
+    (item) =>
+      push(
+        item?.symptom,
+        true
+      )
+  );
+
+
+  DEFAULT_QUICK_SYMPTOMS.forEach(
+    (label) =>
+      push(
+        label,
+        false
+      )
+  );
+
+
+  return merged.slice(
+    0,
+    QUICK_SYMPTOM_LIMIT
+  );
 };
 
 
@@ -478,6 +586,52 @@ function SymptomChecker({
 
 
   // ==========================================
+  // 快捷症狀清單
+  //
+  // 只存後端回來的常問症狀原始資料，
+  // 實際清單由 useMemo 推導。
+  //
+  // 連同 userId 一起存的理由：
+  // 訪客、登出、換帳號都只要靠推導條件擋掉，
+  // 不需要在 effect 裡同步 setState 清空
+  // （那會造成串聯 render），
+  // 也不會讓上一個帳號的常問症狀
+  // 閃現在下一個帳號的畫面上。
+  // ==========================================
+  const [
+    recurringSymptoms,
+    setRecurringSymptoms
+  ] = useState({
+    userId: null,
+    items: []
+  });
+
+
+  const isMember =
+    !!user &&
+    !user.is_guest;
+
+
+  // 先渲染預設值，個人化資料回來後再換掉。
+  // 刻意不擋畫面：問診是主要入口，
+  // 快捷標籤不值得讓使用者等一個網路來回。
+  const quickSymptoms = useMemo(
+    () =>
+      mergeQuickSymptoms(
+        isMember &&
+          recurringSymptoms.userId === user?.id
+          ? recurringSymptoms.items
+          : []
+      ),
+    [
+      isMember,
+      recurringSymptoms,
+      user?.id
+    ]
+  );
+
+
+  // ==========================================
   // 自動捲動
   // ==========================================
   const messagesEndRef =
@@ -489,6 +643,83 @@ function SymptomChecker({
       behavior: 'smooth'
     });
   }, [messages, loading]);
+
+
+  // ==========================================
+  // 讀取會員常問症狀，填入快捷標籤
+  //
+  // 訪客不打這支 API——後端一定回 403，
+  // 沒必要每次進畫面都製造一筆失敗請求。
+  //
+  // 任何失敗都靜默不處理：
+  // 清單自然維持預設值，
+  // 快捷標籤是輔助功能，不該干擾問診。
+  // ==========================================
+  useEffect(() => {
+
+    if (!isMember) {
+      return;
+    }
+
+
+    const userId = user?.id;
+
+    let cancelled = false;
+
+
+    (async () => {
+
+      try {
+
+        const response = await api.get(
+          '/api/v1/longitudinal',
+          {
+            params: {
+              window_days:
+                QUICK_SYMPTOM_WINDOW_DAYS
+            }
+          }
+        );
+
+
+        if (cancelled) {
+          return;
+        }
+
+
+        if (
+          response.data?.status !== 'success'
+        ) {
+          return;
+        }
+
+
+        setRecurringSymptoms({
+          userId,
+          items:
+            response.data
+              .recurring_symptoms || []
+        });
+
+      } catch (error) {
+
+        if (!cancelled) {
+
+          console.log(
+            '⚠️ 常問症狀載入失敗，快捷標籤退回預設值',
+            error?.response?.status ||
+              error?.message
+          );
+        }
+      }
+    })();
+
+
+    return () => {
+      cancelled = true;
+    };
+
+  }, [isMember, user?.id]);
 
 
   // ==========================================
@@ -2931,40 +3162,47 @@ function SymptomChecker({
                 }}
               >
 
-                {[
-                  '頭痛',
-                  '發燒',
-                  '喉嚨痛',
-                  '肚子痛',
-                  '皮膚起疹',
-                  '牙齒痛'
-                ].map(
+                {quickSymptoms.map(
                   (
-                    symptom
+                    item
                   ) => (
 
                     <button
                       key={
-                        symptom
+                        item.label
                       }
 
                       type="button"
 
                       onClick={() =>
                         setInputText(
-                          symptom
+                          item.label
                         )
                       }
 
+                      title={
+                        item.personalized
+                          ? '您常問的症狀'
+                          : undefined
+                      }
+
                       style={{
+                        // 常問症狀：淡藍底 + 同色框線，
+                        // 與預設標籤的白底灰框區隔。
                         border:
-                          `1px solid ${t.border}`,
+                          item.personalized
+                            ? '1px solid #BFDBFE'
+                            : `1px solid ${t.border}`,
 
                         backgroundColor:
-                          t.panel,
+                          item.personalized
+                            ? '#EFF6FF'
+                            : t.panel,
 
                         color:
-                          t.muted,
+                          item.personalized
+                            ? t.text
+                            : t.muted,
 
                         borderRadius:
                           '16px',
@@ -2975,12 +3213,30 @@ function SymptomChecker({
                         fontSize:
                           '0.8rem',
 
+                        display:
+                          'inline-flex',
+
+                        alignItems:
+                          'center',
+
+                        gap:
+                          '4px',
+
                         cursor:
                           'pointer'
                       }}
                     >
                       {
-                        symptom
+                        item.personalized &&
+                          <span
+                            aria-hidden="true"
+                          >
+                            ↺
+                          </span>
+                      }
+
+                      {
+                        item.label
                       }
                     </button>
 
