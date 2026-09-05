@@ -1,30 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "./api/axios";
+import Icon from "./Icon";
+import {
+  mdiCheckCircle,
+  mdiCalendarRemove,
+  mdiCloseOctagon,
+  mdiAccountSwitch,
+  mdiInformationOutline,
+  mdiHospitalBuilding,
+  mdiPhoneOutline,
+  mdiClockOutline,
+  mdiAlertCircleOutline,
+  mdiCalendarMonthOutline,
+  mdiDoorOpen,
+  mdiDoctor,
+  mdiOpenInNew,
+  mdiCheck,
+} from "@mdi/js";
 
 
 const STATUS_CONFIG = {
   available: {
-    icon: "✅",
+    icon: mdiCheckCircle,
     label: "可掛號",
   },
 
   full: {
-    icon: "⛔",
+    icon: mdiCalendarRemove,
     label: "預約額滿",
   },
 
   closed: {
-    icon: "🚫",
+    icon: mdiCloseOctagon,
     label: "停診",
   },
 
   substitute: {
-    icon: "🔄",
+    icon: mdiAccountSwitch,
     label: "代診",
   },
 
   unknown: {
-    icon: "ℹ️",
+    icon: mdiInformationOutline,
     label: "請至院方確認",
   },
 };
@@ -116,7 +133,7 @@ function BookingInfo({
           fontSize: 14,
         }}
       >
-        🏥 查看院方最新門診／掛號
+        <Icon path={mdiHospitalBuilding} size="1em" /> 查看院方最新門診／掛號
       </a>
     );
   }
@@ -136,7 +153,7 @@ function BookingInfo({
           lineHeight: 1.6,
         }}
       >
-        ☎️ 掛號方式：{bookingNote}
+        <Icon path={mdiPhoneOutline} size="1em" /> 掛號方式：{bookingNote}
       </div>
     );
   }
@@ -291,7 +308,7 @@ function DoctorScheduleInfo({
           fontSize: 14,
         }}
       >
-        🕐 正在確認近期門診...
+        <Icon path={mdiClockOutline} size="1em" /> 正在確認近期門診...
       </div>
     );
   }
@@ -312,7 +329,7 @@ function DoctorScheduleInfo({
           fontSize: 14,
         }}
       >
-        ⚠️ {error}
+        <Icon path={mdiAlertCircleOutline} size="1em" /> {error}
       </div>
     );
   }
@@ -347,7 +364,7 @@ function DoctorScheduleInfo({
             marginBottom: 6,
           }}
         >
-          📅 近期門診
+          <Icon path={mdiCalendarMonthOutline} size="1em" /> 近期門診
         </div>
 
 
@@ -410,7 +427,7 @@ function DoctorScheduleInfo({
           marginBottom: 10,
         }}
       >
-        📅 近期門診
+        <Icon path={mdiCalendarMonthOutline} size="1em" /> 近期門診
       </div>
 
 
@@ -472,7 +489,7 @@ function DoctorScheduleInfo({
                       marginBottom: 4,
                     }}
                   >
-                    🕐{" "}
+                    <Icon path={mdiClockOutline} size="1em" />{" "}
                     {schedule.time_text}
                   </div>
                 )}
@@ -487,12 +504,20 @@ function DoctorScheduleInfo({
                   }}
                 >
                   {schedule.time_precision ===
-                  "session_window"
-                    ? "⚠️ 此時間為院方公布之門診時段，非保證醫師於起始時間準時開始看診。"
-                    : schedule.time_precision ===
-                      "exact"
-                    ? "✓ 此時間為官方公布之醫師門診時間。"
-                    : "院方未公布可可靠確認的明確時間。"}
+                  "session_window" ? (
+                    <>
+                      <Icon path={mdiAlertCircleOutline} size="1em" />{" "}
+                      此時間為院方公布之門診時段，非保證醫師於起始時間準時開始看診。
+                    </>
+                  ) : schedule.time_precision ===
+                    "exact" ? (
+                    <>
+                      <Icon path={mdiCheck} size="1em" />{" "}
+                      此時間為官方公布之醫師門診時間。
+                    </>
+                  ) : (
+                    "院方未公布可可靠確認的明確時間。"
+                  )}
                 </div>
 
 
@@ -503,7 +528,7 @@ function DoctorScheduleInfo({
                       marginBottom: 4,
                     }}
                   >
-                    🚪{" "}
+                    <Icon path={mdiDoorOpen} size="1em" />{" "}
                     {schedule.clinic_room}
                   </div>
                 )}
@@ -515,7 +540,7 @@ function DoctorScheduleInfo({
                     marginBottom: 4,
                   }}
                 >
-                  {status.icon}{" "}
+                  <Icon path={status.icon} size="1em" />{" "}
                   {schedule.registration_status_label ||
                     status.label}
                 </div>
@@ -528,7 +553,7 @@ function DoctorScheduleInfo({
                       marginBottom: 4,
                     }}
                   >
-                    👨‍⚕️ 代診醫師：
+                    <Icon path={mdiDoctor} size="1em" /> 代診醫師：
                     {
                       schedule.substitute_doctor_name
                     }
@@ -581,7 +606,7 @@ function DoctorScheduleInfo({
                         "none",
                     }}
                   >
-                    🔗 官方掛號
+                    <Icon path={mdiOpenInNew} size="1em" /> 官方掛號
                   </a>
                 )}
               </div>

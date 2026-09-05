@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import api from './api/axios';
 import { t } from './theme';
+import Icon from './Icon';
+import { mdiClose } from '@mdi/js';
 
 function UserProfileModal({ isOpen, onClose, user }) {
   const [formData, setFormData] = useState({
@@ -110,7 +112,7 @@ function UserProfileModal({ isOpen, onClose, user }) {
           <h3 style={{ margin: 0, color: t.text, fontSize: '1rem', fontWeight: 600 }}>
             個人健康基本資料
           </h3>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.1rem', cursor: 'pointer', color: t.muted }}>✕</button>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.1rem', cursor: 'pointer', color: t.muted }} aria-label="關閉"><Icon path={mdiClose} size="1.1rem" /></button>
         </div>
 
         {loading ? (

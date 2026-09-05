@@ -6,6 +6,8 @@ import {
 } from 'react';
 
 import api from './api/axios';
+import Icon from './Icon';
+import { mdiFileDocumentOutline } from '@mdi/js';
 
 
 // ============================================================
@@ -956,13 +958,11 @@ export default function VisitSummaryPanel({
           }}
         >
 
-          <div
-            style={{
-              fontSize:
-                26,
-            }}
-          >
-            📄
+          <div>
+            <Icon
+              path={mdiFileDocumentOutline}
+              size="26px"
+            />
           </div>
 
 
@@ -1133,7 +1133,10 @@ export default function VisitSummaryPanel({
                 styles.heroIcon
               }
             >
-              📄
+              <Icon
+                path={mdiFileDocumentOutline}
+                size="1em"
+              />
             </div>
 
 

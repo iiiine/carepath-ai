@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import api from './api/axios';
 import { t } from './theme';
+import Icon from './Icon';
+import { mdiMenu, mdiCheck, mdiClose, mdiPencilOutline } from '@mdi/js';
 
 function HistorySidebar({ user, onSelectSession, onNewChat }) {
   const [historyList, setHistoryList] = useState([]);
@@ -108,7 +110,7 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
               justifyContent: 'center', flexShrink: 0
             }}
           >
-            ☰
+            <Icon path={mdiMenu} size="1.1rem" />
           </button>
 
           {!isCollapsed && (
@@ -188,8 +190,8 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
                         borderRadius: '6px', border: `1px solid ${t.userBubble}`, outline: 'none'
                       }}
                     />
-                    <button onClick={(e) => handleSaveTitle(e, session.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="確定">✔</button>
-                    <button onClick={handleCancelEdit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="取消">✖</button>
+                    <button onClick={(e) => handleSaveTitle(e, session.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="確定"><Icon path={mdiCheck} size="1rem" /></button>
+                    <button onClick={handleCancelEdit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.9rem' }} title="取消"><Icon path={mdiClose} size="1rem" /></button>
                   </div>
                 ) : (
                   /* 💬 情況 B：正常顯示標題 (修正：優先讀取 session.title) */
@@ -203,21 +205,21 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
                       </div>
                     </div>
 
-                    {/* 操作按鈕群：編輯 ✏️ & 刪除 ✕ */}
+                    {/* 操作按鈕群：重命名與刪除 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <button 
                         onClick={(e) => handleStartEdit(e, session)}
                         style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: t.muted, fontSize: '0.85rem', padding: '2px' }}
                         title="重命名"
                       >
-                        ✎
+                        <Icon path={mdiPencilOutline} size="1rem" />
                       </button>
                       <button
                         onClick={(e) => handleDelete(e, session.id)}
                         style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: t.muted, fontSize: '0.85rem', padding: '2px' }}
                         title="刪除紀錄"
                       >
-                        ✕
+                        <Icon path={mdiClose} size="1rem" />
                       </button>
                     </div>
                   </>

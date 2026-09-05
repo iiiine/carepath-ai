@@ -6,6 +6,18 @@ import {
 } from 'react';
 
 import api from './api/axios';
+import Icon from './Icon';
+import {
+  mdiAccountCircleOutline,
+  mdiAlertCircleOutline,
+  mdiTrendingUp,
+  mdiChartLine,
+  mdiRepeatVariant,
+  mdiHospitalBuilding,
+  mdiLightbulbOutline,
+  mdiPuzzleOutline,
+  mdiTimelineClockOutline,
+} from '@mdi/js';
 
 
 // ============================================================
@@ -1128,12 +1140,11 @@ export default function LongitudinalHealthPanel({
         }
       >
 
-        <div
-          style={{
-            fontSize: 26,
-          }}
-        >
-          👤
+        <div>
+          <Icon
+            path={mdiAccountCircleOutline}
+            size="26px"
+          />
         </div>
 
 
@@ -1185,12 +1196,11 @@ export default function LongitudinalHealthPanel({
         }
       >
 
-        <div
-          style={{
-            fontSize: 22,
-          }}
-        >
-          ⚠
+        <div>
+          <Icon
+            path={mdiAlertCircleOutline}
+            size="22px"
+          />
         </div>
 
 
@@ -1298,7 +1308,7 @@ export default function LongitudinalHealthPanel({
                 styles.heroIcon
               }
             >
-              📈
+              <Icon path={mdiTrendingUp} size="1em" />
             </div>
 
 
@@ -1593,7 +1603,7 @@ export default function LongitudinalHealthPanel({
                 styles.sectionIcon
               }
             >
-              📊
+              <Icon path={mdiChartLine} size="1em" />
             </span>
 
 
@@ -1852,7 +1862,7 @@ export default function LongitudinalHealthPanel({
                 styles.sectionIcon
               }
             >
-              🔁
+              <Icon path={mdiRepeatVariant} size="1em" />
             </span>
 
 
@@ -1950,7 +1960,7 @@ export default function LongitudinalHealthPanel({
                 styles.sectionIcon
               }
             >
-              🏥
+              <Icon path={mdiHospitalBuilding} size="1em" />
             </span>
 
 
@@ -2048,7 +2058,7 @@ export default function LongitudinalHealthPanel({
                 styles.sectionIcon
               }
             >
-              ✨
+              <Icon path={mdiLightbulbOutline} size="1em" />
             </span>
 
 
@@ -2213,7 +2223,7 @@ export default function LongitudinalHealthPanel({
                     styles.sectionIcon
                   }
                 >
-                  🧩
+                  <Icon path={mdiPuzzleOutline} size="1em" />
                 </span>
 
 
@@ -2324,7 +2334,7 @@ export default function LongitudinalHealthPanel({
                 styles.sectionIcon
               }
             >
-              🕒
+              <Icon path={mdiTimelineClockOutline} size="1em" />
             </span>
 
 

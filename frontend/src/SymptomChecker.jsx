@@ -18,6 +18,8 @@ import VisitSummaryPanel from './VisitSummaryPanel';
 
 import { t } from './theme';
 import { BaymaxAvatar } from './Baymax';
+import Icon from './Icon';
+import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } from '@mdi/js';
 
 
 // ==========================================
@@ -2176,11 +2178,12 @@ function SymptomChecker({
                       'nowrap'
                   }}
                 >
-                  {
-                    elderFriendlyMode
-                      ? '✓ 高齡友善'
-                      : '高齡友善'
-                  }
+                  {elderFriendlyMode && (
+                    <Icon path={mdiCheck} size="1em" />
+                  )}
+                  {elderFriendlyMode
+                    ? ' 高齡友善'
+                    : '高齡友善'}
                 </button>
 
 
@@ -2314,13 +2317,21 @@ function SymptomChecker({
                   }}
                 >
 
+                  <Icon
+                    path={
+                      locationStatus === 'success'
+                        ? mdiMapMarkerCheck
+                        : mdiMapMarker
+                    }
+                    size="1em"
+                  />
                   {locationStatus ===
                   'success'
-                    ? '📍 已定位'
+                    ? ' 已定位'
                     : locationStatus ===
                       'loading'
-                      ? '📍 定位中'
-                      : '📍 備援位置'}
+                      ? ' 定位中'
+                      : ' 備援位置'}
 
                 </div>
 
@@ -4581,7 +4592,10 @@ function SymptomChecker({
                         >
 
                           <span>
-                            📄
+                            <Icon
+                              path={mdiFileDocumentOutline}
+                              size="1em"
+                            />
                           </span>
 
 
