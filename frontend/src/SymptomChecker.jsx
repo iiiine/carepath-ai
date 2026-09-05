@@ -285,13 +285,12 @@ function SymptomChecker({
   // ==========================================
   // AI 對話
   // ==========================================
-  const [messages, setMessages] = useState([
-    {
-      role: 'model',
-      content:
-        '您好！我是您的 AI 健康助理。請先在右上角選擇不舒服的程度，並跟我描述您的症狀。'
-    }
-  ]);
+  // 開場不放招呼語：開場畫面本身就有「今天哪裡不舒服？」與使用說明，
+  // 再擺一則同義的 AI 訊息只是重複。而且開場狀態刻意不渲染訊息陣列，
+  // 招呼語會在使用者送出第一則之後才回頭冒出來，看起來像 bug。
+  //
+  // 這則訊息從未進過送給後端的 history（那是另一個 state），拿掉不影響問診上下文。
+  const [messages, setMessages] = useState([]);
 
 
   const [inputText, setInputText] =
@@ -338,7 +337,7 @@ function SymptomChecker({
   const [sessionLoading, setSessionLoading] =
     useState(selectedSessionId != null);
 
-  const isOpening = messages.length === 1 && !loading && !sessionLoading;
+  const isOpening = messages.length === 0 && !loading && !sessionLoading;
 
 
   // ==========================================
@@ -1938,13 +1937,7 @@ function SymptomChecker({
     );
 
 
-    setMessages([
-      {
-        role: 'model',
-        content:
-          '您好！我是您的 AI 健康助理。請問您今天哪裡不舒服呢？'
-      }
-    ]);
+    setMessages([]);
 
 
     setHistory(
@@ -2990,7 +2983,7 @@ function SymptomChecker({
                 </div>
               )}
 
-              {(isOpening ? [] : messages).map(
+              {messages.map(
                 (
                   msg,
                   index
