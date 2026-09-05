@@ -8,7 +8,7 @@
 // 交給 Metro 依副檔名解析，才能真正把它排除在 web bundle 之外。
 
 import React from 'react';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 
 export default function NearbyHospitalMap({
@@ -22,6 +22,9 @@ export default function NearbyHospitalMap({
 
     return (
         <MapView
+            // Android 一律走 Google Maps，明講 provider 才會吃 app.config.js 掛的金鑰。
+            // 金鑰沒設時地圖是一片灰底，marker 也不會出現，但不影響其他功能。
+            provider={PROVIDER_GOOGLE}
             style={style}
             initialRegion={{
                 latitude: lat,
