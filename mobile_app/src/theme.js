@@ -66,6 +66,9 @@ export const scale = {
     textStrong: t.text,
     borderStrong: t.border,
     pageBg: t.page,
+
+    // ---- 版面 ----
+    drawerWidth: 270,
   },
 
   elder: {
@@ -95,5 +98,8 @@ export const scale = {
     textStrong: '#0F172A',   // 比 t.text 更深，提高長者的閱讀對比
     borderStrong: '#CBD5E1', // 比 t.border 更深，讓區塊邊界更明確
     pageBg: '#F8FAFC',
+
+    // 選單文字放大後 270 會擠，但也不能寬到蓋滿小螢幕
+    drawerWidth: 320,
   },
 };

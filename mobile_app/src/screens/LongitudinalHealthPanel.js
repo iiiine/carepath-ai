@@ -391,7 +391,7 @@ const makeStyles = (s) => StyleSheet.create({
   hero: { padding: 18, borderRadius: 16, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border, marginHorizontal: 14, marginTop: 14 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   heroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  heroIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(37, 99, 235, 0.08)', alignItems: 'center', justifyContent: 'center' },
+  heroIcon: { width: s.touch - 8, height: s.touch - 8, borderRadius: s.radius, backgroundColor: 'rgba(37, 99, 235, 0.08)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: s.subtitle, fontWeight: '800', color: t.text },
   subtitle: { fontSize: s.micro, color: t.muted, marginTop: 3 },
   periodBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: '#eff6ff' },
