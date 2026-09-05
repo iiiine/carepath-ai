@@ -36,6 +36,17 @@ const DEFAULT_QUICK_SYMPTOMS = ['頭痛', '發燒', '喉嚨痛', '肚子痛', '�
 
 const QUICK_SYMPTOM_LIMIT = 6;
 
+// 後端的症狀概念用臨床用語，預設快捷用口語，兩者指同一件事。
+// 不做對應的話，會員問過「肚子痛」會同時出現「腹痛」與「肚子痛」兩顆標籤。
+// 統一換成口語說法：既能去重，也符合本 app 的高齡友善取向。
+//
+// 只涵蓋預設六項會撞到的詞。對應來源是
+// longitudinal_intelligence.py 的症狀概念詞庫，該處若調整這兩個詞要一起改。
+const QUICK_SYMPTOM_ALIASES = {
+  腹痛: '肚子痛',
+  牙痛: '牙齒痛',
+};
+
 // 縱向分析的時間窗。快捷標籤只需要近期習慣，不必拉滿 365 天。
 const QUICK_SYMPTOM_WINDOW_DAYS = 90;
 
@@ -47,7 +58,8 @@ const mergeQuickSymptoms = (recurringSymptoms) => {
   const seen = new Set();
 
   const push = (label, personalized) => {
-    const text = typeof label === 'string' ? label.trim() : '';
+    const raw = typeof label === 'string' ? label.trim() : '';
+    const text = QUICK_SYMPTOM_ALIASES[raw] || raw;
     if (!text || seen.has(text)) return;
     seen.add(text);
     merged.push({ label: text, personalized });
@@ -242,7 +254,17 @@ export default function ConsultScreen() {
         });
         if (cancelled) return;
         if (response.data?.status !== 'success') return;
-        setRecurringSymptoms({ userId, items: response.data.recurring_symptoms || [] });
+        // recurring_symptoms 巢狀在 analysis 底下，與 LongitudinalHealthPanel 讀法一致
+        const items = response.data.analysis?.recurring_symptoms;
+
+        // 「查無常問症狀」會回空陣列；完全沒有這個欄位代表回傳結構跟預期不符。
+        // 靜默退回預設值會讓這種錯誤看不出來，因此這裡明確警告。
+        if (!Array.isArray(items)) {
+          console.warn('⚠️ 縱向分析回傳缺少 analysis.recurring_symptoms，快捷標籤沿用預設值');
+          return;
+        }
+
+        setRecurringSymptoms({ userId, items });
       } catch (err) {
         if (!cancelled) {
           console.log('⚠️ 常問症狀載入失敗，快捷標籤退回預設值', err?.response?.status || err?.message);
