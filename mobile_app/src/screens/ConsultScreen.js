@@ -9,16 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import NearbyHospitalMap from '../components/NearbyHospitalMap';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
 import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 import VisitSummaryPanel from './VisitSummaryPanel';
 
 const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
-const ELDER_MODE_KEY = 'carepath_elder_friendly_mode_mobile';
 
 // 仿 Gemini 的起伏點點動畫元件
 const TypingIndicator = () => {
@@ -111,7 +110,8 @@ export default function ConsultScreen() {
   const [diagnosisResult, setDiagnosisResult] = useState(null);
 
   // 🎯 亮點功能狀態：高齡友善、安全阻斷、就醫摘要Modal
-  const [elderMode, setElderMode] = useState(false);
+  // 高齡友善模式已抽到 context，所有畫面共用同一個開關
+  const { elderMode, s, toggleElderMode } = useElderMode();
   const [safetyAlert, setSafetyAlert] = useState(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
 
@@ -124,29 +124,6 @@ export default function ConsultScreen() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const slideAnim = useRef(new Animated.Value(-300)).current; 
-
-  // 初始化時加載高齡友善設定
-  useEffect(() => {
-    (async () => {
-      try {
-        const val = await AsyncStorage.getItem(ELDER_MODE_KEY);
-        if (val === 'true') setElderMode(true);
-      } catch (e) {
-        console.error('無法讀取高齡友善設定:', e);
-      }
-    })();
-  }, []);
-
-  // 切換高齡友善模式
-  const handleToggleElderMode = async () => {
-    const nextState = !elderMode;
-    setElderMode(nextState);
-    try {
-      await AsyncStorage.setItem(ELDER_MODE_KEY, nextState ? 'true' : 'false');
-    } catch (e) {
-      console.error('無法儲長高齡友善設定:', e);
-    }
-  };
 
   // onClosed 會在關閉動畫真的跑完、Modal 也卸載之後才呼叫
   const toggleDrawer = (open, onClosed) => {
@@ -412,7 +389,7 @@ export default function ConsultScreen() {
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {/* 高齡友善快速切換按鈕 */}
           <TouchableOpacity 
-            onPress={handleToggleElderMode} 
+            onPress={toggleElderMode} 
             style={[styles.elderToggleBtn, elderMode && styles.elderToggleBtnActive]}
           >
             <Text style={[styles.elderToggleText, elderMode && styles.elderToggleTextActive]}>
