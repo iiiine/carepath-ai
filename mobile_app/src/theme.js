@@ -59,6 +59,13 @@ export const scale = {
 
     // ---- 觸控目標（WCAG 2.5.5 建議至少 44）----
     touch: 44,
+
+    // ---- 對比 ----
+    // 高齡模式不只放大，也刻意加深文字與框線。
+    // 原本這是散在各處的硬編碼色碼，收進級距後才會一致。
+    textStrong: t.text,
+    borderStrong: t.border,
+    pageBg: t.page,
   },
 
   elder: {
@@ -84,5 +91,9 @@ export const scale = {
     border: 2,
 
     touch: 56,
+
+    textStrong: '#0F172A',   // 比 t.text 更深，提高長者的閱讀對比
+    borderStrong: '#CBD5E1', // 比 t.border 更深，讓區塊邊界更明確
+    pageBg: '#F8FAFC',
   },
 };
