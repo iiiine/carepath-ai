@@ -8,7 +8,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
+import NearbyHospitalMap from '../components/NearbyHospitalMap';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthContext } from '../context/AuthContext';
@@ -559,21 +559,12 @@ export default function ConsultScreen() {
 
                 {/* 🎯 地圖修復與定位座標防禦 */}
                   <View style={styles.mapCard}>
-                    <MapView 
+                    <NearbyHospitalMap
                       style={styles.map}
-                      initialRegion={{
-                      latitude: Number(userLocation?.latitude ?? FALLBACK_LOCATION.latitude),
-                      longitude: Number(userLocation?.longitude ?? FALLBACK_LOCATION.longitude),
-                        latitudeDelta: 0.02, longitudeDelta: 0.02,
-                      }}
-                    >
-                    <Marker coordinate={{ latitude: Number(userLocation?.latitude ?? FALLBACK_LOCATION.latitude), longitude: Number(userLocation?.longitude ?? FALLBACK_LOCATION.longitude) }} title="目前位置" pinColor="red" />
-                      {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
-                        const hLat = parseFloat(hospital.latitude); const hLng = parseFloat(hospital.longitude);
-                        if (isNaN(hLat) || isNaN(hLng)) return null;
-                        return <Marker key={idx} coordinate={{ latitude: hLat, longitude: hLng }} title={hospital.name} description={hospital.address} pinColor="blue" />;
-                      })}
-                    </MapView>
+                      userLocation={userLocation}
+                      fallbackLocation={FALLBACK_LOCATION}
+                      hospitals={diagnosisResult.nearby_medical_resources}
+                    />
                   </View>
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
                   const hasBookingUrl = hospital.booking_url?.trim() && /^https?:\/\//i.test(hospital.booking_url?.trim());
