@@ -2572,7 +2572,7 @@ function SymptomChecker({
                         '-0.01em'
                     }}
                   >
-                    AI 問診助理
+                    CarePath AI
                   </h2>
 
 
@@ -3357,7 +3357,7 @@ function SymptomChecker({
                   )
                 }
 
-                placeholder="傳訊息給助理..."
+                placeholder="傳訊息給 CarePath AI..."
 
                 disabled={
                   loading

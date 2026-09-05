@@ -770,7 +770,7 @@ export default function ConsultScreen() {
             <View style={styles.inputBox}>
               <TextInput
                 style={styles.textInput}
-                placeholder="傳訊息給助理..."
+                placeholder="傳訊息給 CarePath AI..."
                 placeholderTextColor={t.muted}
                 value={inputText}
                 onChangeText={setInputText}

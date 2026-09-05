@@ -198,7 +198,7 @@ function UserProfileModal({ isOpen, onClose, user }) {
 
             {/* 提示訊息 */}
             <div style={{ fontSize: '0.78rem', color: t.muted, backgroundColor: t.subtle, padding: '10px 12px', borderRadius: '8px', lineHeight: 1.6 }}>
-              填寫資料後，AI 助手在進行問診評估時會自動參考您的健康背景資訊。
+              填寫資料後，CarePath AI 在進行問診評估時會自動參考您的健康背景資訊。
             </div>
 
             {/* 按鈕組 */}
