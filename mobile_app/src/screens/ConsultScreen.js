@@ -163,7 +163,7 @@ export default function ConsultScreen() {
   const [locationStatus, setLocationStatus] = useState('loading');
   const [history, setHistory] = useState([]);
   const [messages, setMessages] = useState([
-    { role: 'model', content: '您好！我是您的 AI 健康助理。請先在下方設定不舒服的程度，並跟我描述您的症狀。' }
+    { role: 'model', content: '您好！我是 CarePath AI，請在下方選擇您不舒服的程度。您今天哪裡不舒服呢？' }
   ]);
   const [diagnosisResult, setDiagnosisResult] = useState(null);
 
@@ -425,7 +425,7 @@ export default function ConsultScreen() {
     setSafetyAlert(null);
     setTempSummaryData(null); // 重設暫存摘要
     setHistory([]);
-    setMessages([{ role: 'model', content: '您好！我是您的 AI 健康助理。請問您今天哪裡不舒服呢？' }]);
+    setMessages([{ role: 'model', content: '您好！我是 CarePath AI，請在下方選擇您不舒服的程度。您今天哪裡不舒服呢？' }]);
   };
 
   const handleNearbyEmergency = () => {
