@@ -21,6 +21,8 @@ const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
 
 // 仿 Gemini 的起伏點點動畫元件
 const TypingIndicator = () => {
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
@@ -62,23 +64,26 @@ const TypingIndicator = () => {
 };
 
 // 摺疊/全螢幕包裝元件
-const CollapsibleBox = ({ title, icon, children, defaultExpanded = true, maxHeight = 350, isElder = false }) => {
+const CollapsibleBox = ({ title, icon, children, defaultExpanded = true, maxHeight = 350 }) => {
+  // 級距直接取自 context，不再由外部傳 isElder 進來
+  const { elderMode, s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [expanded, setExpanded] = useState(defaultExpanded);
   return (
-    <View style={[styles.modernCard, isElder && styles.modernCardElder]}>
+    <View style={styles.modernCard}>
       <TouchableOpacity activeOpacity={0.7} onPress={() => setExpanded(!expanded)} style={styles.cardHeaderRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={[styles.cardIcon, isElder && { fontSize: 24 }]}>{icon}</Text>
-          <Text style={[styles.resultTitle, isElder && styles.resultTitleElder]}>{title}</Text>
+          <Text style={styles.cardIcon}>{icon}</Text>
+          <Text style={styles.resultTitle}>{title}</Text>
         </View>
-        <View style={[styles.expandBox, isElder && { paddingVertical: 10, paddingHorizontal: 14 }]}>
-          <Text style={[styles.expandBoxText, isElder && { fontSize: 14 }]}>{expanded ? '收合' : '展開'}</Text>
+        <View style={styles.expandBox}>
+          <Text style={styles.expandBoxText}>{expanded ? '收合' : '展開'}</Text>
         </View>
       </TouchableOpacity>
       {expanded && (
         <>
           <View style={styles.divider} />
-          <View style={{ maxHeight: isElder ? maxHeight * 1.5 : maxHeight }}>
+          <View style={{ maxHeight: elderMode ? maxHeight * 1.5 : maxHeight }}>
             <ScrollView nestedScrollEnabled={true} contentContainerStyle={{ paddingRight: 4 }}>
               {children}
             </ScrollView>
@@ -492,12 +497,12 @@ export default function ConsultScreen() {
           {diagnosisResult ? (
             <View style={styles.resultSection}>
               {!elderMode && (
-                <CollapsibleBox title="對話紀錄" defaultExpanded={false} maxHeight={300} isElder={elderMode}>
+                <CollapsibleBox title="對話紀錄" defaultExpanded={false} maxHeight={300}>
                   {renderMessages()}
                 </CollapsibleBox>
               )}
 
-              <CollapsibleBox title="診斷結果與建議" defaultExpanded={true} isElder={elderMode}>
+              <CollapsibleBox title="診斷結果與建議" defaultExpanded={true}>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>推薦科別</Text>
                   <View style={styles.badge}><Text style={styles.badgeText}>{diagnosisResult.suggested_department}</Text></View>
@@ -520,7 +525,7 @@ export default function ConsultScreen() {
                 )}
               </CollapsibleBox>
 
-              <CollapsibleBox title="附近推薦醫療院所" defaultExpanded={true} maxHeight={600} isElder={elderMode}>
+              <CollapsibleBox title="附近推薦醫療院所" defaultExpanded={true} maxHeight={600}>
                 
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.length > 0 && (
                   (() => {
@@ -624,14 +629,22 @@ export default function ConsultScreen() {
 
         {!diagnosisResult && !safetyAlert && (
           <View style={styles.bottomSection}>
+            {/* 單行橫向捲動：原本是置中換行，六個標籤會排成參差的 3+3 或 4+2，
+                高齡模式字級放大後更亂。改成一行可滑，字級變動也不會重排。 */}
             {!inputFocused && (
-              <View style={styles.quickTags}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.quickTagsScroll}
+                contentContainerStyle={styles.quickTags}
+                keyboardShouldPersistTaps="handled"
+              >
                 {quickSymptoms.map((sym, i) => (
                   <TouchableOpacity key={i} style={styles.tag} onPress={() => handleSendMessage(sym)}>
                     <Text style={styles.tagText}>{sym}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             )}
 
             <View style={styles.inputBox}>
@@ -767,9 +780,11 @@ export default function ConsultScreen() {
 const makeStyles = (s) => StyleSheet.create({
   container: { flex: 1, backgroundColor: s.pageBg },
   edgeTouchZone: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 25, zIndex: 99 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.border, borderBottomColor: s.borderStrong, zIndex: 100 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.dividerWidth, borderBottomColor: s.dividerColor, boxShadow: s.dividerShadow, zIndex: 100 },
   userSection: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  menuButton: { paddingRight: 4, paddingVertical: 4 },
+  // 原本只有 4px padding，實際觸控區遠小於可靠點擊所需，長輩只能靠邊緣滑動。
+  // 補到 s.touch 並加淡底色，讓它是一個看得出來、按得到的目標。
+  menuButton: { width: s.touch, height: s.touch, marginLeft: -6, borderRadius: s.radius, backgroundColor: t.subtle, alignItems: 'center', justifyContent: 'center' },
   menuIcon: { fontSize: s.title, color: t.text, fontWeight: '900' },
   avatar: { width: s.touch - 14, height: s.touch - 14, borderRadius: (s.touch - 14) / 2, backgroundColor: t.userBubble, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontSize: s.caption, fontWeight: 'bold' },
@@ -878,9 +893,11 @@ const makeStyles = (s) => StyleSheet.create({
   doctorName: { fontSize: s.body, fontWeight: '800', color: t.text, marginBottom: 4 },
   doctorSpecialty: { fontSize: s.body, color: t.muted, lineHeight: 20 },
 
-  bottomSection: { padding: s.pad, backgroundColor: t.panel, borderTopWidth: s.border, borderTopColor: s.borderStrong },
-  quickTags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 16 },
-  tag: { backgroundColor: '#FAFAFA', paddingHorizontal: s.pad, paddingVertical: s.gap, borderRadius: s.radiusLg, borderWidth: s.border, borderColor: t.border, minHeight: s.touch, justifyContent: 'center' },
+  bottomSection: { padding: s.pad, backgroundColor: t.panel, borderTopWidth: s.dividerWidth, borderTopColor: s.dividerColor, boxShadow: s.dividerShadowUp },
+  // 讓標籤列滿版可滑：向外抵銷 bottomSection 的左右 padding，再由 contentContainer 補回
+  quickTagsScroll: { marginHorizontal: -s.pad, marginBottom: s.pad },
+  quickTags: { flexDirection: 'row', gap: s.gap, paddingHorizontal: s.pad },
+  tag: { backgroundColor: t.subtle, paddingHorizontal: s.pad, paddingVertical: s.gap, borderRadius: s.radiusLg, minHeight: s.touch, justifyContent: 'center' },
   tagText: { fontSize: s.body, color: t.text, fontWeight: '600' },
   
   inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: s.radiusLg + 4, paddingHorizontal: s.pad, paddingVertical: 6, borderWidth: s.border, borderColor: s.borderStrong, marginBottom: s.gapLg },

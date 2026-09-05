@@ -69,6 +69,15 @@ export const scale = {
 
     // ---- 版面 ----
     drawerWidth: 270,
+
+    // ---- 區塊分隔 ----
+    // 一般模式不畫線，用很淡的陰影帶出層次；高齡模式改回實線，
+    // 因為長者需要明確的區塊邊界。
+    // 用 boxShadow 而非 shadowOffset/Opacity/Radius——後者只有 iOS 生效。
+    dividerWidth: 0,
+    dividerColor: 'transparent',
+    dividerShadow: '0px 2px 8px rgba(15, 23, 42, 0.07)',
+    dividerShadowUp: '0px -2px 8px rgba(15, 23, 42, 0.07)',
   },
 
   elder: {
@@ -101,5 +110,10 @@ export const scale = {
 
     // 選單文字放大後 270 會擠，但也不能寬到蓋滿小螢幕
     drawerWidth: 320,
+
+    dividerWidth: 2,
+    dividerColor: '#CBD5E1',
+    dividerShadow: null,
+    dividerShadowUp: null,
   },
 };
