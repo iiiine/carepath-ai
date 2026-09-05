@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import client from '../api/client';
 
 export const AuthContext = createContext();
@@ -16,7 +17,15 @@ const TOKEN_KEY = 'access_token';
 // 而 SecureStore 若殘留舊 token，攔截器反而會用它蓋掉正確的那個。
 // 這裡統一到 SecureStore，並把殘留的 AsyncStorage token 搬過去後清掉。
 // ------------------------------------------------------------
+// expo-secure-store 沒有 web 實作（呼叫會丟
+// ExpoSecureStore.default.getValueWithKeyAsync is not a function），
+// 因此瀏覽器預覽退回 AsyncStorage（底層就是 localStorage）。
+// 手機端一律走 SecureStore。
+const useSecureStore = Platform.OS !== 'web';
+
 const getToken = async () => {
+  if (!useSecureStore) return AsyncStorage.getItem(TOKEN_KEY);
+
   const token = await SecureStore.getItemAsync(TOKEN_KEY);
   if (token) return token;
 
@@ -31,11 +40,15 @@ const getToken = async () => {
 };
 
 const saveToken = async (token) => {
+  if (!useSecureStore) return AsyncStorage.setItem(TOKEN_KEY, token);
+
   await SecureStore.setItemAsync(TOKEN_KEY, token);
   await AsyncStorage.removeItem(TOKEN_KEY);
 };
 
 const clearToken = async () => {
+  if (!useSecureStore) return AsyncStorage.removeItem(TOKEN_KEY);
+
   await SecureStore.deleteItemAsync(TOKEN_KEY);
   await AsyncStorage.removeItem(TOKEN_KEY);
 };

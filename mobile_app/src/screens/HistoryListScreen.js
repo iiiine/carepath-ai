@@ -1,17 +1,20 @@
 // src/screens/HistoryListScreen.js
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
 import Icon from '@react-native-vector-icons/material-design-icons';
 
 export default function HistoryListScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useContext(AuthContext);
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,26 +93,24 @@ export default function HistoryListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 樣式改為級距的函式：高齡模式切換時整組跟著變，不需個別加條件式
+const makeStyles = (s) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.page },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: t.panel, borderBottomWidth: 1, borderBottomColor: t.border, zIndex: 100 },
-  backButton: { paddingRight: 16, paddingVertical: 4 },
-  backIcon: { fontSize: 24, color: t.text, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: t.text },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.border, borderBottomColor: t.border, zIndex: 100 },
+  backButton: { paddingRight: s.pad, paddingVertical: 4, minHeight: s.touch, justifyContent: 'center' },
+  backIcon: { fontSize: s.title, color: t.text, fontWeight: 'bold' },
+  headerTitle: { fontSize: s.subtitle, fontWeight: '900', color: t.text },
   placeholder: { width: 32 },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  mascot: { fontSize: 60, marginBottom: 12 },
-  guestTitle: { fontSize: 18, fontWeight: 'bold', color: t.text, marginBottom: 6 },
-  guestSub: { fontSize: 14, color: t.muted, textAlign: 'center', marginBottom: 20 },
-  loginBtn: { backgroundColor: t.userBubble, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  loginBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  listContent: { padding: 16, paddingBottom: 40 },
-  card: { backgroundColor: t.panel, padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: t.border },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' },
-  deptBadge: { fontSize: 12, backgroundColor: t.subtle, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, color: t.text, fontWeight: '600' },
-  dateText: { fontSize: 12, color: t.muted },
-  symptomText: { fontSize: 14, color: t.text, lineHeight: 20 },
-  emptyText: { textAlign: 'center', color: t.muted, marginTop: 40, fontSize: 14 },
-  
-  // 🌟 將 backgroundColor 改為 transparent
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: s.padLg },
+  guestTitle: { fontSize: s.subtitle, fontWeight: 'bold', color: t.text, marginBottom: 6 },
+  guestSub: { fontSize: s.body, color: t.muted, textAlign: 'center', marginBottom: 20, lineHeight: s.lineBody },
+  loginBtn: { backgroundColor: t.userBubble, paddingHorizontal: s.padLg, paddingVertical: s.gapLg, borderRadius: s.radius, minHeight: s.touch, justifyContent: 'center' },
+  loginBtnText: { color: '#fff', fontWeight: 'bold', fontSize: s.input },
+  listContent: { padding: s.pad, paddingBottom: 40 },
+  card: { backgroundColor: t.panel, padding: s.pad, borderRadius: s.radius, marginBottom: s.gapLg, borderWidth: s.border, borderColor: t.border },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: s.gap, alignItems: 'center' },
+  deptBadge: { fontSize: s.caption, backgroundColor: t.subtle, paddingHorizontal: s.gap, paddingVertical: 4, borderRadius: 6, color: t.text, fontWeight: '600' },
+  dateText: { fontSize: s.caption, color: t.muted },
+  symptomText: { fontSize: s.body, color: t.text, lineHeight: s.lineBody },
+  emptyText: { textAlign: 'center', color: t.muted, marginTop: 40, fontSize: s.body },
 });
