@@ -7,6 +7,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
+import Icon from '@react-native-vector-icons/material-design-icons';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -104,7 +105,7 @@ export default function LoginScreen() {
             accessibilityLabel="關閉登入視窗"
             accessibilityRole="button"
           >
-            <Text style={styles.closeIcon}>✕</Text>
+            <Icon name="close" size={22} color="#6B7280" />
           </TouchableOpacity>
 
           <View style={styles.statusBadge}>

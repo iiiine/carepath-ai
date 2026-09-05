@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import client from '../api/client';
 import { t } from '../theme';
+import Icon from '@react-native-vector-icons/material-design-icons';
 
 function getRiskPresentation(riskLevel) {
   switch (riskLevel) {
@@ -183,7 +184,7 @@ export default function VisitSummaryPanel({ sessionId, refreshKey = 0, tempSumma
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.heroTitleWrap}>
-            <View style={styles.heroIcon}><Text style={{ fontSize: 20 }}>📄</Text></View>
+            <View style={styles.heroIcon}><Icon name="file-document-outline" size={20} color={t.text} /></View>
             <View>
               <Text style={styles.title}>AI 就醫摘要</Text>
               <Text style={styles.subtitle}>將問診整理成方便向醫護說明的重點。</Text>

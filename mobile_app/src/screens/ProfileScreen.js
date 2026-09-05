@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 
 export default function ProfileScreen() {
@@ -103,7 +104,7 @@ export default function ProfileScreen() {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContainer}>
-          <Text style={styles.mascot}>🔒</Text>
+          <Icon name="lock-outline" size={52} color={t.muted} style={{ marginBottom: 12 }} />
           <Text style={styles.guestTitle}>訪客無法建立健康檔案</Text>
           <Text style={styles.guestSub}>請登入會員以管理您的專屬健康資料表。</Text>
         </View>
