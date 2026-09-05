@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile_app",
-    "slug": "mobile_app",
+    "name": "CarePath AI",
+    "slug": "carepath-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,9 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.carepathai.app"
     },
     "android": {
+      "package": "com.carepathai.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -28,7 +31,13 @@
     "plugins": [
       "expo-secure-store",
       "@react-native-vector-icons/material-design-icons",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CarePath AI 需要您的位置，才能推薦附近的醫院與診所。"
+        }
+      ]
     ]
   }
 }
