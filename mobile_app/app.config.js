@@ -15,6 +15,8 @@ module.exports = {
   expo: {
     name: 'CarePath AI',
     slug: 'carepath-ai',
+    // 帳號有個人與團隊兩個，明寫 owner 才不用每次 eas 指令都帶 --account
+    owner: 'iiiine',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
@@ -44,6 +46,13 @@ module.exports = {
 
     web: {
       favicon: './assets/favicon.png',
+    },
+
+    // eas init 建立的專案識別。動態 config 沒辦法讓 CLI 自動寫入，只能手動補。
+    extra: {
+      eas: {
+        projectId: 'b00168ee-fa2a-4b64-840d-2918ca1d9766',
+      },
     },
 
     plugins: [
