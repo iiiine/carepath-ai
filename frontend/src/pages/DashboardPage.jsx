@@ -584,104 +584,6 @@ const DashboardPage = ({
     )
 
 
-  // ==========================================
-  // SVG spark line
-  // ==========================================
-
-  const sparkPoints =
-    (
-      values,
-      width,
-      height
-    ) => {
-
-      if (
-        !values
-        ||
-        values.length < 2
-      ) {
-
-        return null
-      }
-
-
-      const max =
-        Math.max(
-          ...values
-        )
-
-
-      const min =
-        Math.min(
-          ...values
-        )
-
-
-      const span =
-        max -
-        min
-        ||
-        1
-
-
-      const step =
-        (
-          width -
-          12
-        )
-        /
-        (
-          values.length -
-          1
-        )
-
-
-      return values
-        .map(
-          (
-            value,
-            index
-          ) => {
-
-            const x =
-              6
-              +
-              index
-              *
-              step
-
-
-            const y =
-              height
-              -
-              6
-              -
-              (
-                (
-                  value -
-                  min
-                )
-                /
-                span
-              )
-              *
-              (
-                height -
-                12
-              )
-
-
-            return (
-              `${x.toFixed(1)},${y.toFixed(1)}`
-            )
-          }
-        )
-        .join(
-          ' '
-        )
-    }
-
-
   const maxDeptCount =
     departmentStats.reduce(
       (
@@ -1077,46 +979,6 @@ const DashboardPage = ({
 
             </div>
 
-
-            {
-              sparkPoints(
-                trendCount,
-                120,
-                40
-              )
-              &&
-              (
-                <svg
-                  viewBox="0 0 120 40"
-
-                  style={
-                    styles.spark
-                  }
-                >
-
-                  <polyline
-                    points={
-                      sparkPoints(
-                        trendCount,
-                        120,
-                        40
-                      )
-                    }
-
-                    fill="none"
-
-                    stroke="#c9cdd0"
-
-                    strokeWidth="2"
-
-                    strokeLinecap="round"
-
-                    strokeLinejoin="round"
-                  />
-
-                </svg>
-              )
-            }
 
           </div>
 
@@ -2242,18 +2104,6 @@ const styles = {
 
     lineHeight:
       1.4,
-  },
-
-
-  spark: {
-    width:
-      '120px',
-
-    height:
-      '40px',
-
-    flexShrink:
-      0,
   },
 
 
