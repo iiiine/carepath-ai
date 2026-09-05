@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import client from '../api/client';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
 import Icon from '@react-native-vector-icons/material-design-icons';
 
 function formatDate(value) {
@@ -69,6 +70,8 @@ function getInsightColor(level) {
 }
 
 export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 0 }) {
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [guestBlocked, setGuestBlocked] = useState(false);
@@ -382,79 +385,80 @@ export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 
   );
 }
 
-const styles = StyleSheet.create({
+// 樣式改為級距的函式：高齡模式切換時整組跟著變
+const makeStyles = (s) => StyleSheet.create({
   panel: { flex: 1, backgroundColor: t.page },
-  hero: { padding: 18, borderRadius: 16, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', marginHorizontal: 14, marginTop: 14 },
+  hero: { padding: 18, borderRadius: 16, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border, marginHorizontal: 14, marginTop: 14 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   heroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  heroIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(37, 99, 235, 0.08)', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 18, fontWeight: '800', color: t.text },
-  subtitle: { fontSize: 11, color: t.muted, marginTop: 3 },
+  heroIcon: { width: s.touch - 8, height: s.touch - 8, borderRadius: s.radius, backgroundColor: 'rgba(37, 99, 235, 0.08)', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: s.subtitle, fontWeight: '800', color: t.text },
+  subtitle: { fontSize: s.micro, color: t.muted, marginTop: 3 },
   periodBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: '#eff6ff' },
-  periodBadgeText: { fontSize: 11, fontWeight: '700', color: '#2563eb' },
+  periodBadgeText: { fontSize: s.micro, fontWeight: '700', color: '#2563eb' },
   overallBox: { marginTop: 14, padding: 12, borderRadius: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  overallIcon: { fontSize: 16, marginTop: 1 },
-  overallTitle: { fontSize: 13, fontWeight: '800' },
-  overallDescription: { fontSize: 12, marginTop: 3, lineHeight: 17 },
+  overallIcon: { fontSize: s.input, marginTop: 1 },
+  overallTitle: { fontSize: s.body, fontWeight: '800' },
+  overallDescription: { fontSize: s.caption, marginTop: 3, lineHeight: s.lineBody },
   statsGrid: { flexDirection: 'row', paddingHorizontal: 14, gap: 8, marginTop: 12 },
-  statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0' },
-  statLabel: { fontSize: 11, color: t.muted, fontWeight: '600' },
-  statValue: { fontSize: 18, fontWeight: '800', color: t.text, marginTop: 4 },
-  section: { padding: 16, borderRadius: 16, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', marginHorizontal: 14, marginTop: 12 },
+  statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border },
+  statLabel: { fontSize: s.micro, color: t.muted, fontWeight: '600' },
+  statValue: { fontSize: s.subtitle, fontWeight: '800', color: t.text, marginTop: 4 },
+  section: { padding: 16, borderRadius: 16, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border, marginHorizontal: 14, marginTop: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: t.text },
-  sectionMeta: { fontSize: 10, color: '#94a3b8' },
+  sectionTitle: { fontSize: s.body, fontWeight: '800', color: t.text },
+  sectionMeta: { fontSize: s.micro, color: '#94a3b8' },
   emptyCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', alignItems: 'center' },
-  emptyCardText: { fontSize: 12, color: t.muted, lineHeight: 17, textAlign: 'center' },
+  emptyCardText: { fontSize: s.caption, color: t.muted, lineHeight: s.lineBody, textAlign: 'center' },
   list: { gap: 8 },
-  trendCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
+  trendCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: t.border },
   trendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  trendSymptom: { fontSize: 14, fontWeight: '800', color: t.text },
-  trendSub: { fontSize: 11, color: t.muted, marginTop: 2 },
+  trendSymptom: { fontSize: s.body, fontWeight: '800', color: t.text },
+  trendSub: { fontSize: s.micro, color: t.muted, marginTop: 2 },
   trendBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  trendBadgeText: { fontSize: 11, fontWeight: '800' },
+  trendBadgeText: { fontSize: s.micro, fontWeight: '800' },
   trendNumbers: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  trendNumberBox: { flex: 1, padding: 8, borderRadius: 8, backgroundColor: '#ffffff' },
-  trendNumberLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '700' },
-  trendNumberValue: { fontSize: 14, fontWeight: '800', color: t.text, marginTop: 2 },
-  emptyText: { fontSize: 12, color: t.muted, textAlign: 'center', paddingVertical: 8 },
+  trendNumberBox: { flex: 1, padding: 8, borderRadius: 8, backgroundColor: t.panel },
+  trendNumberLabel: { fontSize: s.micro, color: '#94a3b8', fontWeight: '700' },
+  trendNumberValue: { fontSize: s.body, fontWeight: '800', color: t.text, marginTop: 2 },
+  emptyText: { fontSize: s.caption, color: t.muted, textAlign: 'center', paddingVertical: 8 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' },
-  chipText: { fontSize: 12, color: '#334155', fontWeight: '700' },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.subtle, borderWidth: 1, borderColor: t.border },
+  chipText: { fontSize: s.caption, color: '#334155', fontWeight: '700' },
   chipCount: { color: '#2563eb' },
   // 約可容納 2~3 張洞察卡，超過就在區塊內捲動
   insightScroll: { maxHeight: 260 },
-  insightCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
+  insightCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: t.border },
   insightTop: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   insightDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  insightTitle: { fontSize: 13, fontWeight: '800', color: t.text },
-  insightDesc: { fontSize: 12, color: '#64748b', marginTop: 4, lineHeight: 17 },
-  recommendationBox: { marginTop: 8, padding: 8, borderRadius: 6, backgroundColor: '#ffffff' },
+  insightTitle: { fontSize: s.body, fontWeight: '800', color: t.text },
+  insightDesc: { fontSize: s.caption, color: t.muted, marginTop: 4, lineHeight: s.lineBody },
+  recommendationBox: { marginTop: 8, padding: 8, borderRadius: 6, backgroundColor: t.panel },
   recommendationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
-  recommendationText: { fontSize: 11, color: '#475569', lineHeight: 16 },
+  recommendationText: { fontSize: s.micro, color: '#475569', lineHeight: s.lineBody },
   timeline: {},
   timelineItem: { flexDirection: 'row', gap: 10 },
   timelineRail: { alignItems: 'center', width: 14 },
   timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6', marginTop: 5 },
-  timelineLine: { width: 2, flex: 1, backgroundColor: '#e2e8f0', minHeight: 40 },
+  timelineLine: { width: 2, flex: 1, backgroundColor: t.border, minHeight: 40 },
   timelineContent: { flex: 1, paddingBottom: 16 },
-  timelineDate: { fontSize: 10, color: '#94a3b8', fontWeight: '700' },
-  timelineSymptom: { fontSize: 13, fontWeight: '800', color: t.text, marginTop: 4 },
+  timelineDate: { fontSize: s.micro, color: '#94a3b8', fontWeight: '700' },
+  timelineSymptom: { fontSize: s.body, fontWeight: '800', color: t.text, marginTop: 4 },
   timelineMeta: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  metaTag: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, backgroundColor: '#f1f5f9' },
-  metaTagText: { fontSize: 10, color: '#64748b', fontWeight: '700' },
+  metaTag: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, backgroundColor: t.subtle },
+  metaTagText: { fontSize: s.micro, color: t.muted, fontWeight: '700' },
   disclaimerContainer: { paddingHorizontal: 20, marginVertical: 14 },
-  disclaimer: { fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: 15 },
+  disclaimer: { fontSize: s.micro, color: '#94a3b8', textAlign: 'center', lineHeight: s.lineBody },
   loadingBox: { padding: 24, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 8, fontSize: 12, color: t.muted },
-  guestBox: { padding: 24, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', margin: 14 },
-  guestTitle: { fontSize: 16, fontWeight: 'bold', color: t.text, textAlign: 'center', marginTop: 8 },
-  guestSub: { fontSize: 12, color: t.muted, textAlign: 'center', marginTop: 6, lineHeight: 17 },
+  loadingText: { marginTop: 8, fontSize: s.caption, color: t.muted },
+  guestBox: { padding: 24, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: t.border, margin: 14 },
+  guestTitle: { fontSize: s.input, fontWeight: 'bold', color: t.text, textAlign: 'center', marginTop: 8 },
+  guestSub: { fontSize: s.caption, color: t.muted, textAlign: 'center', marginTop: 6, lineHeight: s.lineBody },
   errorBox: { padding: 16, borderRadius: 12, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', margin: 14, alignItems: 'center' },
-  errorTitle: { fontSize: 13, fontWeight: '800', color: '#9a3412', marginTop: 6 },
-  errorDesc: { fontSize: 11, color: '#9a3412', marginTop: 4, lineHeight: 16, textAlign: 'center' },
+  errorTitle: { fontSize: s.body, fontWeight: '800', color: '#9a3412', marginTop: 6 },
+  errorDesc: { fontSize: s.micro, color: '#9a3412', marginTop: 4, lineHeight: s.lineBody, textAlign: 'center' },
   actionButton: { marginTop: 10, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#2563eb' },
-  actionButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
+  actionButtonText: { color: t.panel, fontSize: s.micro, fontWeight: '800' },
   emptyBox: { padding: 18, borderRadius: 12, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', margin: 14 },
-  emptyText: { fontSize: 12, color: t.muted, textAlign: 'center' }
+  emptyText: { fontSize: s.caption, color: t.muted, textAlign: 'center' }
 });

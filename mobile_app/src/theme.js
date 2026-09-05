@@ -33,6 +33,7 @@ export const t = {
 export const scale = {
   normal: {
     // ---- 字級 ----
+    micro: 11,      // 密集資料的欄位標籤（統計卡、時間軸）——僅用於此
     caption: 12,    // 徽章、次要標註
     body: 14,       // 內文
     input: 16,      // 輸入框
@@ -58,9 +59,29 @@ export const scale = {
 
     // ---- 觸控目標（WCAG 2.5.5 建議至少 44）----
     touch: 44,
+
+    // ---- 對比 ----
+    // 高齡模式不只放大，也刻意加深文字與框線。
+    // 原本這是散在各處的硬編碼色碼，收進級距後才會一致。
+    textStrong: t.text,
+    borderStrong: t.border,
+    pageBg: t.page,
+
+    // ---- 版面 ----
+    drawerWidth: 270,
+
+    // ---- 區塊分隔 ----
+    // 一般模式不畫線，用很淡的陰影帶出層次；高齡模式改回實線，
+    // 因為長者需要明確的區塊邊界。
+    // 用 boxShadow 而非 shadowOffset/Opacity/Radius——後者只有 iOS 生效。
+    dividerWidth: 0,
+    dividerColor: 'transparent',
+    dividerShadow: '0px 2px 8px rgba(15, 23, 42, 0.07)',
+    dividerShadowUp: '0px -2px 8px rgba(15, 23, 42, 0.07)',
   },
 
   elder: {
+    micro: 14,
     caption: 15,
     body: 18,
     input: 20,
@@ -82,5 +103,17 @@ export const scale = {
     border: 2,
 
     touch: 56,
+
+    textStrong: '#0F172A',   // 比 t.text 更深，提高長者的閱讀對比
+    borderStrong: '#CBD5E1', // 比 t.border 更深，讓區塊邊界更明確
+    pageBg: '#F8FAFC',
+
+    // 選單文字放大後 270 會擠，但也不能寬到蓋滿小螢幕
+    drawerWidth: 320,
+
+    dividerWidth: 2,
+    dividerColor: '#CBD5E1',
+    dividerShadow: null,
+    dividerShadowUp: null,
   },
 };

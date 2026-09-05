@@ -31,7 +31,12 @@ export default function HistoryListScreen() {
 
   const renderHeader = () => (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
-      <TouchableOpacity onPress={() => navigation.navigate('Consult')} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Consult')}
+        style={styles.backButton}
+        accessibilityLabel="返回問診"
+        accessibilityRole="button"
+      >
         <Text style={styles.backIcon}>←</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>歷史問診紀錄</Text>
@@ -58,6 +63,11 @@ export default function HistoryListScreen() {
   const renderItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.card} 
+      // 卡片內有科別、日期、症狀三段文字，螢幕閱讀器預設會逐段唸；
+      // 合併成一句並標為按鈕，才聽得出這是可點的一筆紀錄
+      accessibilityLabel={`${item.suggested_department || '一般科'}，${item.title || item.symptom || '未命名問診'}`}
+      accessibilityHint="開啟這筆問診紀錄"
+      accessibilityRole="button"
       onPress={() => {
         // ponytail: 不再假等 600ms，直接跳；真正的載入提示由 ConsultScreen 顯示
         navigation.navigate('Main', { screen: 'Consult', params: { sessionId: item.id } });

@@ -1,5 +1,5 @@
 // src/screens/ConsultScreen.js
-import React, { useState, useContext, useRef, useEffect } from 'react';
+import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
   KeyboardAvoidingView, Platform, ScrollView, Alert, Linking, Image,
@@ -21,6 +21,8 @@ const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
 
 // 仿 Gemini 的起伏點點動畫元件
 const TypingIndicator = () => {
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
@@ -62,23 +64,26 @@ const TypingIndicator = () => {
 };
 
 // 摺疊/全螢幕包裝元件
-const CollapsibleBox = ({ title, icon, children, defaultExpanded = true, maxHeight = 350, isElder = false }) => {
+const CollapsibleBox = ({ title, icon, children, defaultExpanded = true, maxHeight = 350 }) => {
+  // 級距直接取自 context，不再由外部傳 isElder 進來
+  const { elderMode, s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [expanded, setExpanded] = useState(defaultExpanded);
   return (
-    <View style={[styles.modernCard, isElder && styles.modernCardElder]}>
+    <View style={styles.modernCard}>
       <TouchableOpacity activeOpacity={0.7} onPress={() => setExpanded(!expanded)} style={styles.cardHeaderRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={[styles.cardIcon, isElder && { fontSize: 24 }]}>{icon}</Text>
-          <Text style={[styles.resultTitle, isElder && styles.resultTitleElder]}>{title}</Text>
+          <Text style={styles.cardIcon}>{icon}</Text>
+          <Text style={styles.resultTitle}>{title}</Text>
         </View>
-        <View style={[styles.expandBox, isElder && { paddingVertical: 10, paddingHorizontal: 14 }]}>
-          <Text style={[styles.expandBoxText, isElder && { fontSize: 14 }]}>{expanded ? '收合' : '展開'}</Text>
+        <View style={styles.expandBox}>
+          <Text style={styles.expandBoxText}>{expanded ? '收合' : '展開'}</Text>
         </View>
       </TouchableOpacity>
       {expanded && (
         <>
           <View style={styles.divider} />
-          <View style={{ maxHeight: isElder ? maxHeight * 1.5 : maxHeight }}>
+          <View style={{ maxHeight: elderMode ? maxHeight * 1.5 : maxHeight }}>
             <ScrollView nestedScrollEnabled={true} contentContainerStyle={{ paddingRight: 4 }}>
               {children}
             </ScrollView>
@@ -112,6 +117,7 @@ export default function ConsultScreen() {
   // 🎯 亮點功能狀態：高齡友善、安全阻斷、就醫摘要Modal
   // 高齡友善模式已抽到 context，所有畫面共用同一個開關
   const { elderMode, s, toggleElderMode } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [safetyAlert, setSafetyAlert] = useState(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
 
@@ -346,14 +352,12 @@ export default function ConsultScreen() {
             style={[
               styles.bubble, 
               isUser ? styles.bubbleUser : styles.bubbleModel,
-              elderMode && styles.bubbleElder,
               isLatestModel && elderMode && styles.bubbleLatestModelElder // 高齡當前突顯
             ]}
           >
             <Text 
               style={[
                 isUser ? styles.bubbleTextUser : styles.bubbleTextModel,
-                elderMode && styles.bubbleTextElder,
                 isLatestModel && elderMode && styles.bubbleTextLatestModelElder
               ]}
             >
@@ -366,22 +370,27 @@ export default function ConsultScreen() {
   };
 
   return (
-    <View style={[styles.container, elderMode && styles.containerElder]}>
+    <View style={styles.container}>
       
       {!isDrawerOpen && (
         <View {...edgePanResponder.panHandlers} style={styles.edgeTouchZone} />
       )}
 
       {/* 頂部標題 */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }, elderMode && styles.headerElder]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
         <View style={styles.userSection}>
-          <TouchableOpacity onPress={() => toggleDrawer(true)} style={styles.menuButton}>
-            <Icon name="menu" size={elderMode ? 28 : 24} color={t.text} />
+          <TouchableOpacity
+            onPress={() => toggleDrawer(true)}
+            style={styles.menuButton}
+            accessibilityLabel="開啟選單"
+            accessibilityRole="button"
+          >
+            <Icon name="menu" size={s.title} color={t.text} />
           </TouchableOpacity>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{user && !user.is_guest ? user.username.charAt(0).toUpperCase() : '訪'}</Text>
           </View>
-          <Text style={[styles.headerUser, elderMode && { fontSize: 18 }]}>
+          <Text style={styles.headerUser}>
             {user && !user.is_guest ? user.username : '訪客模式'}
           </Text>
         </View>
@@ -391,6 +400,9 @@ export default function ConsultScreen() {
           <TouchableOpacity 
             onPress={toggleElderMode} 
             style={[styles.elderToggleBtn, elderMode && styles.elderToggleBtnActive]}
+            accessibilityLabel="高齡友善模式"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: elderMode }}
           >
             <Text style={[styles.elderToggleText, elderMode && styles.elderToggleTextActive]}>
               {elderMode ? '✓ 簡易大字' : '高齡友善'}
@@ -399,17 +411,17 @@ export default function ConsultScreen() {
 
           {(diagnosisResult || safetyAlert) && (
             <TouchableOpacity onPress={handleResetChat} style={styles.resetButton}>
-              <Text style={[styles.resetButtonText, elderMode && { fontSize: 14 }]}>新問診</Text>
+              <Text style={styles.resetButtonText}>新問診</Text>
             </TouchableOpacity>
           )}
 
           {user && !user.is_guest ? (
             <TouchableOpacity onPress={logout} style={styles.authButton}>
-              <Text style={[styles.authButtonText, elderMode && { fontSize: 14 }]}>登出</Text>
+              <Text style={styles.authButtonText}>登出</Text>
                 </TouchableOpacity>
           ) : (
             <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.authButtonPrimary}>
-              <Text style={[styles.authButtonTextPrimary, elderMode && { fontSize: 14 }]}>登入</Text>
+              <Text style={styles.authButtonTextPrimary}>登入</Text>
                   </TouchableOpacity>
           )}
               </View>
@@ -418,14 +430,14 @@ export default function ConsultScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <ScrollView 
           ref={scrollViewRef}
-          contentContainerStyle={[styles.scrollContent, elderMode && styles.scrollContentElder]}
+          contentContainerStyle={[styles.scrollContent]}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.length === 1 && !loading && !route.params?.sessionId && (
             <View style={styles.welcomeSection}>
               <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.mascotImage} resizeMode="contain" />
-              <Text style={[styles.mainTitle, elderMode && styles.mainTitleElder]}>今天哪裡不舒服？</Text>
-              <Text style={[styles.subTitle, elderMode && styles.subTitleElder]}>
+              <Text style={styles.mainTitle}>今天哪裡不舒服？</Text>
+              <Text style={styles.subTitle}>
                 用您自己的話說就好，我會幫您判斷看哪一科，再找附近的醫院診所。
               </Text>
             </View>
@@ -457,11 +469,21 @@ export default function ConsultScreen() {
               )}
 
               <View style={styles.safetyActionsRow}>
-                <TouchableOpacity onPress={handleNearbyEmergency} style={styles.safetyActionBtnPrimary}>
+                <TouchableOpacity
+                  onPress={handleNearbyEmergency}
+                  style={styles.safetyActionBtnPrimary}
+                  accessibilityLabel="搜尋最近急診"
+                  accessibilityRole="button"
+                >
                   <Icon name="map-marker-radius" size={16} color="#FFFFFF" />
                   <Text style={styles.safetyActionTextPrimary}>搜尋最近急診</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => Linking.openURL('tel:119')} style={styles.safetyActionBtnDanger}>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('tel:119')}
+                  style={styles.safetyActionBtnDanger}
+                  accessibilityLabel="撥打 119 求助"
+                  accessibilityRole="button"
+                >
                   <Icon name="phone" size={16} color="#FFFFFF" />
                   <Text style={styles.safetyActionTextPrimary}>撥打 119 求助</Text>
                 </TouchableOpacity>
@@ -475,62 +497,62 @@ export default function ConsultScreen() {
           {diagnosisResult ? (
             <View style={styles.resultSection}>
               {!elderMode && (
-                <CollapsibleBox title="對話紀錄" defaultExpanded={false} maxHeight={300} isElder={elderMode}>
+                <CollapsibleBox title="對話紀錄" defaultExpanded={false} maxHeight={300}>
                   {renderMessages()}
                 </CollapsibleBox>
               )}
 
-              <CollapsibleBox title="診斷結果與建議" defaultExpanded={true} isElder={elderMode}>
+              <CollapsibleBox title="診斷結果與建議" defaultExpanded={true}>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, elderMode && styles.infoLabelElder]}>推薦科別</Text>
-                  <View style={[styles.badge, elderMode && { paddingVertical: 8, paddingHorizontal: 16 }]}><Text style={[styles.badgeText, elderMode && { fontSize: 16 }]}>{diagnosisResult.suggested_department}</Text></View>
+                  <Text style={styles.infoLabel}>推薦科別</Text>
+                  <View style={styles.badge}><Text style={styles.badgeText}>{diagnosisResult.suggested_department}</Text></View>
                 </View>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, elderMode && styles.infoLabelElder]}>可能原因</Text>
-                  <Text style={[styles.infoValue, elderMode && styles.infoValueElder]}>{Array.isArray(diagnosisResult.possible_causes) ? diagnosisResult.possible_causes.join('、') : ''}</Text>
+                  <Text style={styles.infoLabel}>可能原因</Text>
+                  <Text style={styles.infoValue}>{Array.isArray(diagnosisResult.possible_causes) ? diagnosisResult.possible_causes.join('、') : ''}</Text>
                 </View>
 
                 {/* 🎯 AI 就醫摘要按鈕：不論有沒有資料庫 sessionId，只要問診完成即 100% 允許點擊！ */}
                 {(sessionId || tempSummaryData) && (
                   <TouchableOpacity
-                    style={[styles.summaryTriggerBtn, elderMode && styles.summaryTriggerBtnElder]}
+                    style={styles.summaryTriggerBtn}
                     onPress={() => setSummaryModalVisible(true)}
                   >
-                    <Text style={[styles.summaryTriggerText, elderMode && styles.summaryTriggerTextElder]}>
+                    <Text style={styles.summaryTriggerText}>
                       📄 開啟本次 AI 就醫摘要 (出示給醫師)
                     </Text>
                   </TouchableOpacity>
                 )}
               </CollapsibleBox>
 
-              <CollapsibleBox title="附近推薦醫療院所" defaultExpanded={true} maxHeight={600} isElder={elderMode}>
+              <CollapsibleBox title="附近推薦醫療院所" defaultExpanded={true} maxHeight={600}>
                 
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.length > 0 && (
                   (() => {
                     const topHospital = diagnosisResult.nearby_medical_resources[0];
                     return (
-                      <View style={[styles.topRecommendCard, elderMode && styles.topRecommendCardElder]}>
+                      <View style={styles.topRecommendCard}>
                         <View style={styles.topRecommendHeader}>
                           <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.topRecommendMascot} resizeMode="contain" />
                           <View style={{ flex: 1 }}>
                             <View style={styles.topRecommendBadgeRow}>
                               <View style={styles.topBadge}><Text style={styles.topBadgeText}>最推薦</Text></View>
-                              <Text style={[styles.topBadgeSub, elderMode && { fontSize: 13 }]}>專長最符合、距離最近</Text>
+                              <Text style={styles.topBadgeSub}>專長最符合、距離最近</Text>
                             </View>
-                            <Text style={[styles.topHospitalName, elderMode && { fontSize: 22, lineHeight: 28 }]}>{topHospital.name}</Text>
-                            <Text style={[styles.topHospitalInfo, elderMode && { fontSize: 15 }]}>
+                            <Text style={styles.topHospitalName}>{topHospital.name}</Text>
+                            <Text style={styles.topHospitalInfo}>
                               {topHospital.address} 
                               {topHospital.distance_meters != null ? ` · 約 ${(topHospital.distance_meters / 1000).toFixed(1)} 公里` : ''}
                             </Text>
                           </View>
                         </View>
                         <View style={styles.topRecommendActions}>
-                          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${topHospital.latitude},${topHospital.longitude}`)} style={[styles.topActionBtnPrimary, elderMode && { paddingVertical: 14 }]}>
-                            <Text style={[styles.topActionBtnTextPrimary, elderMode && { fontSize: 16 }]}>導航前往</Text>
+                          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${topHospital.latitude},${topHospital.longitude}`)} style={styles.topActionBtnPrimary}>
+                            <Text style={styles.topActionBtnTextPrimary}>導航前往</Text>
                           </TouchableOpacity>
                           {topHospital.phone && (
-                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${topHospital.phone}`)} style={[styles.topActionBtn, elderMode && { paddingVertical: 14 }]}>
-                              <Text style={[styles.topActionBtnText, elderMode && { fontSize: 16 }]}>撥打電話</Text>
+                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${topHospital.phone}`)} style={styles.topActionBtn}>
+                              <Text style={styles.topActionBtnText}>撥打電話</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -551,35 +573,35 @@ export default function ConsultScreen() {
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.map((hospital, idx) => {
                   const hasBookingUrl = hospital.booking_url?.trim() && /^https?:\/\//i.test(hospital.booking_url?.trim());
                   return (
-                    <View key={idx} style={[styles.modernCard, elderMode && styles.modernCardElder, { marginBottom: 12, shadowOpacity: 0.02, elevation: 1 }]}>
+                    <View key={idx} style={[styles.modernCard, { marginBottom: 12, shadowOpacity: 0.02, elevation: 1 }]}>
                       <View style={styles.hospitalHeaderRow}>
                         <View style={{ flex: 1, paddingRight: 10 }}>
-                          <Text style={[styles.hospitalName, elderMode && { fontSize: 20 }]}>{hospital.name}</Text>
-                          <Text style={[styles.hospitalInfo, elderMode && { fontSize: 14, lineHeight: 20 }]}>{hospital.address}</Text>
+                          <Text style={styles.hospitalName}>{hospital.name}</Text>
+                          <Text style={styles.hospitalInfo}>{hospital.address}</Text>
                         </View>
                         {hasBookingUrl && (
-                          <TouchableOpacity onPress={() => Linking.openURL(hospital.booking_url)} style={[styles.bookingBtn, elderMode && { paddingVertical: 12, paddingHorizontal: 16 }]}>
-                            <Text style={[styles.bookingBtnText, elderMode && { fontSize: 14 }]}>線上掛號</Text>
+                          <TouchableOpacity onPress={() => Linking.openURL(hospital.booking_url)} style={styles.bookingBtn}>
+                            <Text style={styles.bookingBtnText}>線上掛號</Text>
                           </TouchableOpacity>
                         )}
                       </View>
                       <View style={styles.hospitalActions}>
                         {hospital.phone && (
-                          <TouchableOpacity onPress={() => Linking.openURL(`tel:${hospital.phone}`)} style={[styles.actionBtn, elderMode && { paddingVertical: 14 }]}>
-                            <Text style={[styles.actionBtnText, elderMode && { fontSize: 15 }]}>撥打電話</Text>
+                          <TouchableOpacity onPress={() => Linking.openURL(`tel:${hospital.phone}`)} style={styles.actionBtn}>
+                            <Text style={styles.actionBtnText}>撥打電話</Text>
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}`)} style={[styles.actionBtn, styles.actionBtnPrimary, elderMode && { paddingVertical: 14 }]}>
-                          <Text style={[styles.actionBtnTextPrimary, elderMode && { fontSize: 15 }]}>開啟導航</Text>
+                        <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}`)} style={[styles.actionBtn, styles.actionBtnPrimary]}>
+                          <Text style={styles.actionBtnTextPrimary}>開啟導航</Text>
                         </TouchableOpacity>
                       </View>
                       {hospital.available_doctors && hospital.available_doctors.length > 0 && (
                         <View style={styles.doctorSection}>
-                          <Text style={[styles.doctorSectionTitle, elderMode && { fontSize: 14 }]}>推薦駐診醫師</Text>
+                          <Text style={styles.doctorSectionTitle}>推薦駐診醫師</Text>
                           {hospital.available_doctors.map((doc, dIdx) => (
-                            <View key={dIdx} style={[styles.doctorRow, elderMode && { padding: 16 }]}>
-                              <Text style={[styles.doctorName, elderMode && { fontSize: 17 }]}>{doc.name} 醫師</Text>
-                              <Text style={[styles.doctorSpecialty, elderMode && { fontSize: 14, lineHeight: 22 }]}>專長：{doc.specialty}</Text>
+                            <View key={dIdx} style={styles.doctorRow}>
+                              <Text style={styles.doctorName}>{doc.name} 醫師</Text>
+                              <Text style={styles.doctorSpecialty}>專長：{doc.specialty}</Text>
                             </View>
                           ))}
                         </View>
@@ -596,7 +618,7 @@ export default function ConsultScreen() {
               {loading && !loadingHistory && (
                 <View style={[styles.messageRow, styles.messageRowModel]}>
                   <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.avatarImage} resizeMode="contain" />
-                  <View style={[styles.bubble, styles.bubbleModel, { paddingVertical: 14 }]}>
+                  <View style={[styles.bubble, styles.bubbleModel]}>
                     <TypingIndicator />
                   </View>
                 </View>
@@ -606,20 +628,28 @@ export default function ConsultScreen() {
         </ScrollView>
 
         {!diagnosisResult && !safetyAlert && (
-          <View style={[styles.bottomSection, elderMode && styles.bottomSectionElder]}>
+          <View style={styles.bottomSection}>
+            {/* 單行橫向捲動：原本是置中換行，六個標籤會排成參差的 3+3 或 4+2，
+                高齡模式字級放大後更亂。改成一行可滑，字級變動也不會重排。 */}
             {!inputFocused && (
-              <View style={styles.quickTags}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.quickTagsScroll}
+                contentContainerStyle={styles.quickTags}
+                keyboardShouldPersistTaps="handled"
+              >
                 {quickSymptoms.map((sym, i) => (
-                  <TouchableOpacity key={i} style={[styles.tag, elderMode && styles.tagElder]} onPress={() => handleSendMessage(sym)}>
-                    <Text style={[styles.tagText, elderMode && styles.tagTextElder]}>{sym}</Text>
+                  <TouchableOpacity key={i} style={styles.tag} onPress={() => handleSendMessage(sym)}>
+                    <Text style={styles.tagText}>{sym}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             )}
 
-            <View style={[styles.inputBox, elderMode && styles.inputBoxElder]}>
+            <View style={styles.inputBox}>
               <TextInput
-                style={[styles.textInput, elderMode && styles.textInputElder]}
+                style={styles.textInput}
                 placeholder="傳訊息給助理..."
                 placeholderTextColor={t.muted}
                 value={inputText}
@@ -630,31 +660,33 @@ export default function ConsultScreen() {
               />
               <TouchableOpacity 
                 style={[
-                  styles.sendButton, 
-                  elderMode && styles.sendButtonElder,
+                  styles.sendButton,
                   (!inputText.trim() || loading) && { backgroundColor: t.subtle }
                 ]}
                 onPress={() => handleSendMessage(inputText)}
                 disabled={!inputText.trim() || loading}
+                accessibilityLabel="送出訊息"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !inputText.trim() || loading }}
               >
-                <Text style={[styles.sendIcon, elderMode && { fontSize: 22 }, (!inputText.trim() || loading) && { color: t.muted }]}>↑</Text>
+                <Text style={[styles.sendIcon, (!inputText.trim() || loading) && { color: t.muted }]}>↑</Text>
               </TouchableOpacity>
             </View>
             
             {!inputFocused && (
               <View style={styles.controlsRow}>
-                <View style={[styles.controlBadge, styles.controlBadgeRow, elderMode && styles.controlBadgeElder, locationStatus === 'success' && { borderColor: t.userBubble }]}>
+                <View style={[styles.controlBadge, styles.controlBadgeRow, locationStatus === 'success' && { borderColor: t.userBubble }]}>
                   <Icon
                     name={locationStatus === 'success' ? 'map-marker-check' : 'map-marker'}
-                    size={elderMode ? 16 : 13}
+                    size={s.caption + 1}
                     color={locationStatus === 'success' ? t.userBubble : t.muted}
                   />
-                  <Text style={[styles.controlBadgeText, elderMode && { fontSize: 15 }, locationStatus === 'success' && { color: t.userBubble }]}>
+                  <Text style={[styles.controlBadgeText, locationStatus === 'success' && { color: t.userBubble }]}>
                     {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setPainLevel(p => (p >= 5 ? 1 : p + 1))}>
-                  <Text style={[styles.controlBadge, elderMode && styles.controlBadgeElder, painLevel >= 4 && { color: t.danger, fontWeight: 'bold', borderColor: t.danger }]}>
+                  <Text style={[styles.controlBadge, painLevel >= 4 && { color: t.danger, fontWeight: 'bold', borderColor: t.danger }]}>
                     不適度 {painLevel} / 5
                   </Text>
                 </TouchableOpacity>
@@ -726,9 +758,9 @@ export default function ConsultScreen() {
       >
         <View style={{ flex: 1, backgroundColor: t.page, paddingTop: Platform.OS === 'ios' ? 44 : 20 }}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalHeaderTitle, elderMode && { fontSize: 20 }]}>AI 就醫摘要</Text>
+            <Text style={styles.modalHeaderTitle}>AI 就醫摘要</Text>
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSummaryModalVisible(false)}>
-              <Text style={[styles.modalCloseBtnText, elderMode && { fontSize: 16 }]}>關閉</Text>
+              <Text style={styles.modalCloseBtnText}>關閉</Text>
             </TouchableOpacity>
           </View>
           
@@ -743,176 +775,174 @@ export default function ConsultScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: t.page },
-  containerElder: { backgroundColor: '#F8FAFC' },
+// 樣式改為級距的函式：高齡模式切換時整組跟著變，
+// 原本 23 個 *Elder 變體與散落的 inline 條件式因此不再需要。
+const makeStyles = (s) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: s.pageBg },
   edgeTouchZone: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 25, zIndex: 99 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: t.border, zIndex: 100 },
-  headerElder: { paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: '#CBD5E1' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.dividerWidth, borderBottomColor: s.dividerColor, boxShadow: s.dividerShadow, zIndex: 100 },
   userSection: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  menuButton: { paddingRight: 4, paddingVertical: 4 },
-  menuIcon: { fontSize: 24, color: t.text, fontWeight: '900' },
-  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: t.userBubble, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  headerUser: { fontSize: 16, fontWeight: '700', color: t.text },
+  // 原本只有 4px padding，實際觸控區遠小於可靠點擊所需，長輩只能靠邊緣滑動。
+  // 補到 s.touch 並加淡底色，讓它是一個看得出來、按得到的目標。
+  menuButton: { width: s.touch, height: s.touch, marginLeft: -6, borderRadius: s.radius, backgroundColor: t.subtle, alignItems: 'center', justifyContent: 'center' },
+  menuIcon: { fontSize: s.title, color: t.text, fontWeight: '900' },
+  avatar: { width: s.touch - 14, height: s.touch - 14, borderRadius: (s.touch - 14) / 2, backgroundColor: t.userBubble, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: s.caption, fontWeight: 'bold' },
+  headerUser: { fontSize: s.input, fontWeight: '700', color: t.text },
   resetButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: t.border },
-  resetButtonText: { fontSize: 13, color: t.text, fontWeight: 'bold' },
+  resetButtonText: { fontSize: s.caption, color: t.text, fontWeight: 'bold' },
   
   // 🎯 恢復登入登出按鈕樣式
   authButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: t.subtle, borderWidth: 1, borderColor: t.border },
-  authButtonText: { fontSize: 13, color: t.text, fontWeight: 'bold' },
+  authButtonText: { fontSize: s.caption, color: t.text, fontWeight: 'bold' },
   authButtonPrimary: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: '#1A1A1A' },
-  authButtonTextPrimary: { fontSize: 13, color: '#ffffff', fontWeight: 'bold' },
+  authButtonTextPrimary: { fontSize: s.caption, color: '#ffffff', fontWeight: 'bold' },
 
   // 🎯 高齡友善按鈕樣式
   elderToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
   elderToggleBtnActive: { backgroundColor: '#1E293B', borderColor: '#1E293B' },
-  elderToggleText: { fontSize: 13, color: '#2563EB', fontWeight: 'bold' },
+  elderToggleText: { fontSize: s.caption, color: '#2563EB', fontWeight: 'bold' },
   elderToggleTextActive: { color: '#FFFFFF' },
 
   keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 30, paddingTop: 20 },
-  scrollContentElder: { paddingHorizontal: 20, paddingTop: 24 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: s.pad, paddingBottom: 30, paddingTop: s.padLg },
   welcomeSection: { alignItems: 'center', marginTop: 40 },
-  mascotImage: { width: 90, height: 90, marginBottom: 16 },
-  mainTitle: { fontSize: 24, fontWeight: '900', color: t.text, marginBottom: 8 },
-  mainTitleElder: { fontSize: 30, textAlign: 'center', color: '#0F172A', lineHeight: 38 },
-  subTitle: { fontSize: 14, color: t.muted, textAlign: 'center', lineHeight: 22, paddingHorizontal: 20 },
-  subTitleElder: { fontSize: 18, color: '#475569', lineHeight: 28, paddingHorizontal: 10, marginTop: 10 },
+  mascotImage: { width: s.touch * 2, height: s.touch * 2, marginBottom: s.pad },
+  mainTitle: { fontSize: s.title, fontWeight: '900', color: s.textStrong, marginBottom: 8, textAlign: 'center', lineHeight: s.lineTitle },
+  subTitle: { fontSize: s.body, color: t.muted, textAlign: 'center', lineHeight: s.lineBody, paddingHorizontal: s.padLg, marginTop: s.gap },
   
   messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-start' },
   messageRowUser: { justifyContent: 'flex-end' },
   messageRowModel: { justifyContent: 'flex-start' },
-  avatarImage: { width: 32, height: 32, marginRight: 8, borderRadius: 16, marginTop: 4 },
-  bubble: { maxWidth: '82%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
+  // 頭像原本是固定 32px、固定 marginTop: 4，不隨級距變動，
+  // 因此氣泡的 padding 與行高一放大，頭像就對不到第一行文字。
+  // 改為由級距推算：
+  //   頭像中心 = marginTop + 頭像高/2
+  //   文字中心 = 氣泡上緣 padding + 行高/2
+  // 兩者相等即對齊，一般與高齡模式都成立。
+  avatarImage: {
+    width: s.touch - 12,
+    height: s.touch - 12,
+    borderRadius: (s.touch - 12) / 2,
+    marginRight: s.gap,
+    marginTop: s.gapLg + s.lineSubtitle / 2 - (s.touch - 12) / 2,
+  },
+  bubble: { maxWidth: '82%', paddingHorizontal: s.pad, paddingVertical: s.gapLg, borderRadius: s.radiusLg },
   bubbleUser: { backgroundColor: '#1E293B', borderBottomRightRadius: 4 },
   bubbleModel: { backgroundColor: '#ffffff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: t.border },
-  bubbleTextUser: { color: '#ffffff', fontSize: 15, lineHeight: 24 },
-  bubbleTextModel: { color: t.text, fontSize: 15, lineHeight: 24 },
+  bubbleTextUser: { color: '#ffffff', fontSize: s.body, lineHeight: s.lineSubtitle },
+  bubbleTextModel: { color: t.text, fontSize: s.body, lineHeight: s.lineSubtitle },
   
   // 高齡模式大字樣式
-  bubbleElder: { paddingHorizontal: 20, paddingVertical: 16, borderRadius: 24 },
   bubbleLatestModelElder: { backgroundColor: '#EFF6FF', borderWidth: 2, borderColor: '#2563EB' },
-  bubbleTextElder: { fontSize: 18, lineHeight: 28 },
   bubbleTextLatestModelElder: { fontWeight: 'bold', color: '#1E293B' },
 
   // 打字動畫樣式
-  typingContainer: { flexDirection: 'row', alignItems: 'center', height: 18, paddingHorizontal: 4, gap: 6, marginTop: 2 },
+  // 高度對齊一行文字，讓「思考中」與「已回覆」的氣泡等高，頭像不會上下跳
+  typingContainer: { flexDirection: 'row', alignItems: 'center', height: s.lineSubtitle, paddingHorizontal: 4, gap: 6 },
   typingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#94A3B8' },
 
   resultSection: { gap: 12 },
-  modernCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },
-  modernCardElder: { borderRadius: 24, padding: 22, borderWidth: 2, borderColor: '#E2E8F0' },
+  modernCard: { backgroundColor: t.panel, borderRadius: s.radiusLg, padding: s.pad, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardIcon: { fontSize: 20, marginRight: 8 },
-  resultTitle: { fontSize: 17, fontWeight: '800', color: t.text },
-  resultTitleElder: { fontSize: 20 },
+  cardIcon: { fontSize: s.title, marginRight: 8 },
+  resultTitle: { fontSize: s.subtitle, fontWeight: '800', color: t.text },
   expandBox: { paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, backgroundColor: '#FAFAFA' },
-  expandBoxText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  expandBoxText: { fontSize: s.caption, fontWeight: '700', color: '#64748B' },
   divider: { height: 1, backgroundColor: t.border, marginVertical: 14 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
-  infoLabel: { fontSize: 14, fontWeight: 'bold', color: t.muted, width: 70, marginTop: 4 },
-  infoLabelElder: { fontSize: 18, width: 100, marginTop: 6 },
-  infoValue: { flex: 1, fontSize: 15, color: t.text, lineHeight: 24, fontWeight: '600' },
-  infoValueElder: { fontSize: 18, lineHeight: 28 },
+  infoLabel: { fontSize: s.body, fontWeight: 'bold', color: t.muted, width: s.touch + 26, marginTop: 4 },
+  infoValue: { flex: 1, fontSize: s.body, color: t.text, lineHeight: s.lineSubtitle, fontWeight: '600' },
   badge: { backgroundColor: '#1A1A1A', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  badgeText: { color: '#FFFFFF', fontSize: s.caption, fontWeight: '700' },
 
   // 🎯 AI 就醫摘要觸發按鈕
-  summaryTriggerBtn: { backgroundColor: '#2563EB', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, marginTop: 14, alignItems: 'center' },
-  summaryTriggerBtnElder: { paddingVertical: 16, borderRadius: 16 },
-  summaryTriggerText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
-  summaryTriggerTextElder: { fontSize: 18 },
+  summaryTriggerBtn: { backgroundColor: '#2563EB', borderRadius: s.radius, paddingVertical: s.gapLg, paddingHorizontal: s.pad, marginTop: 14, alignItems: 'center', minHeight: s.touch, justifyContent: 'center' },
+  summaryTriggerText: { color: '#FFFFFF', fontSize: s.body, fontWeight: 'bold' },
 
   topRecommendCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 2, borderColor: '#1E293B', padding: 16, marginBottom: 16 },
-  topRecommendCardElder: { borderWidth: 3, borderRadius: 20 },
   topRecommendHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
-  topRecommendMascot: { width: 44, height: 44, marginRight: 12 },
+  topRecommendMascot: { width: s.touch, height: s.touch, marginRight: s.gapLg },
   topRecommendBadgeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   topBadge: { backgroundColor: '#1E293B', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, marginRight: 6 },
-  topBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' },
-  topBadgeSub: { fontSize: 11, color: t.muted, fontWeight: '600' },
-  topHospitalName: { fontSize: 18, fontWeight: '900', color: t.text, marginBottom: 4 },
-  topHospitalInfo: { fontSize: 13, color: t.muted },
+  topBadgeText: { color: '#FFFFFF', fontSize: s.micro, fontWeight: 'bold' },
+  topBadgeSub: { fontSize: s.micro, color: t.muted, fontWeight: '600' },
+  topHospitalName: { fontSize: s.subtitle, fontWeight: '900', color: t.text, marginBottom: 4 },
+  topHospitalInfo: { fontSize: s.caption, color: t.muted },
   topRecommendActions: { flexDirection: 'row', gap: 12 },
   topActionBtnPrimary: { flex: 1, backgroundColor: '#1E293B', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  topActionBtnTextPrimary: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  topActionBtnTextPrimary: { color: '#FFFFFF', fontSize: s.body, fontWeight: 'bold' },
   topActionBtn: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: t.border, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  topActionBtnText: { color: t.text, fontSize: 14, fontWeight: 'bold' },
+  topActionBtnText: { color: t.text, fontSize: s.body, fontWeight: 'bold' },
 
   mapCard: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: t.border },
   map: { width: '100%', height: '100%' },
   hospitalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  hospitalName: { fontSize: 17, fontWeight: '900', color: t.text, marginBottom: 6 },
-  hospitalInfo: { fontSize: 14, color: t.muted, lineHeight: 20 },
+  hospitalName: { fontSize: s.subtitle, fontWeight: '900', color: t.text, marginBottom: 6 },
+  hospitalInfo: { fontSize: s.body, color: t.muted, lineHeight: 20 },
   bookingBtn: { backgroundColor: '#1A1A1A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  bookingBtnText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+  bookingBtnText: { color: '#ffffff', fontSize: s.caption, fontWeight: 'bold' },
   hospitalActions: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: t.border, alignItems: 'center', backgroundColor: '#FAFAFA' },
-  actionBtnText: { fontSize: 14, color: t.text, fontWeight: '700' },
+  actionBtnText: { fontSize: s.body, color: t.text, fontWeight: '700' },
   actionBtnPrimary: { backgroundColor: t.userBubble, borderColor: t.userBubble },
-  actionBtnTextPrimary: { fontSize: 14, color: '#fff', fontWeight: '700' },
+  actionBtnTextPrimary: { fontSize: s.body, color: '#fff', fontWeight: '700' },
   doctorSection: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.subtle },
-  doctorSectionTitle: { fontSize: 13, fontWeight: '800', color: t.muted, marginBottom: 10 },
+  doctorSectionTitle: { fontSize: s.caption, fontWeight: '800', color: t.muted, marginBottom: 10 },
   doctorRow: { backgroundColor: '#FAFAFA', padding: 12, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: t.border },
-  doctorName: { fontSize: 15, fontWeight: '800', color: t.text, marginBottom: 4 },
-  doctorSpecialty: { fontSize: 14, color: t.muted, lineHeight: 20 },
+  doctorName: { fontSize: s.body, fontWeight: '800', color: t.text, marginBottom: 4 },
+  doctorSpecialty: { fontSize: s.body, color: t.muted, lineHeight: 20 },
 
-  bottomSection: { padding: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: t.border },
-  bottomSectionElder: { paddingVertical: 24, borderTopWidth: 2, borderTopColor: '#E2E8F0' },
-  quickTags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 16 },
-  tag: { backgroundColor: '#FAFAFA', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: t.border },
-  tagElder: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: 28 },
-  tagText: { fontSize: 14, color: t.text, fontWeight: '600' },
-  tagTextElder: { fontSize: 18, fontWeight: 'bold' },
+  bottomSection: { padding: s.pad, backgroundColor: t.panel, borderTopWidth: s.dividerWidth, borderTopColor: s.dividerColor, boxShadow: s.dividerShadowUp },
+  // 讓標籤列滿版可滑：向外抵銷 bottomSection 的左右 padding，再由 contentContainer 補回
+  quickTagsScroll: { marginHorizontal: -s.pad, marginBottom: s.pad },
+  quickTags: { flexDirection: 'row', gap: s.gap, paddingHorizontal: s.pad },
+  tag: { backgroundColor: t.subtle, paddingHorizontal: s.pad, paddingVertical: s.gap, borderRadius: s.radiusLg, minHeight: s.touch, justifyContent: 'center' },
+  tagText: { fontSize: s.body, color: t.text, fontWeight: '600' },
   
-  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: t.border, marginBottom: 12 },
-  inputBoxElder: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 32, borderWidth: 2, borderColor: '#CBD5E1' },
-  textInput: { flex: 1, fontSize: 16, paddingVertical: 10, color: t.text },
-  textInputElder: { fontSize: 20 },
-  sendButton: { backgroundColor: '#1A1A1A', borderRadius: 18, width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  sendButtonElder: { width: 48, height: 48, borderRadius: 24 },
-  sendIcon: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
+  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: s.radiusLg + 4, paddingHorizontal: s.pad, paddingVertical: 6, borderWidth: s.border, borderColor: s.borderStrong, marginBottom: s.gapLg },
+  textInput: { flex: 1, fontSize: s.input, paddingVertical: 10, color: t.text },
+  sendButton: { backgroundColor: '#1A1A1A', borderRadius: s.touch / 2, width: s.touch - 8, height: s.touch - 8, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  sendIcon: { fontSize: s.subtitle, color: '#fff', fontWeight: 'bold' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
-  controlBadge: { fontSize: 12, color: t.muted, backgroundColor: '#FAFAFA', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: t.border },
+  controlBadge: { fontSize: s.caption, color: t.muted, backgroundColor: '#FAFAFA', paddingHorizontal: s.gapLg, paddingVertical: s.gap, borderRadius: s.radius, overflow: 'hidden', borderWidth: s.border, borderColor: t.border },
   // 定位徽章改為 icon + 文字，容器要橫向排列，字體樣式獨立出來
   controlBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  controlBadgeText: { fontSize: 12, color: t.muted },
-  controlBadgeElder: { fontSize: 15, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0' },
+  controlBadgeText: { fontSize: s.caption, color: t.muted },
 
   drawerOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.5)' },
   drawerBackdrop: { flex: 1 },
   navigatingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)' },
   navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', elevation: 5 },
-  navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
-  drawerContent: { width: 270, height: '100%', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 10, padding: 24 },
+  navigatingText: { color: '#FFFFFF', fontSize: s.input, fontWeight: 'bold', marginTop: 12 },
+  drawerContent: { width: s.drawerWidth, height: '100%', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 10, padding: 24 },
   drawerHeader: { marginTop: 40, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: t.border, marginBottom: 12 },
-  drawerTitle: { fontSize: 22, fontWeight: '900', color: t.text },
+  drawerTitle: { fontSize: s.title, fontWeight: '900', color: t.text },
   drawerItem: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.03)' },
-  drawerItemText: { fontSize: 16, fontWeight: '700', color: t.text },
+  drawerItemText: { fontSize: s.input, fontWeight: '700', color: t.text },
 
   // 🎯 AI 就醫摘要 Modal 樣式
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: t.border, backgroundColor: '#FFFFFF' },
-  modalHeaderTitle: { fontSize: 17, fontWeight: '900', color: t.text },
+  modalHeaderTitle: { fontSize: s.subtitle, fontWeight: '900', color: t.text },
   modalCloseBtn: { padding: 8 },
-  modalCloseBtnText: { fontSize: 14, color: '#2563EB', fontWeight: 'bold' },
+  modalCloseBtnText: { fontSize: s.body, color: '#2563EB', fontWeight: 'bold' },
 
   // 🎯 安全優先設計：警報看板樣式
   safetyAlertContainer: { backgroundColor: '#FEF2F2', borderStyle: 'solid', borderWidth: 2, borderColor: '#EF4444', borderRadius: 20, padding: 18, marginVertical: 12, shadowColor: '#991B1B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 3 },
   safetyHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  safetyAlertIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center' },
-  safetyAlertTitle: { fontSize: 18, fontWeight: '950', color: '#991B1B', flex: 1 },
+  safetyAlertIcon: { width: s.touch - 10, height: s.touch - 10, borderRadius: (s.touch - 10) / 2, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center' },
+  safetyAlertTitle: { fontSize: s.subtitle, fontWeight: '950', color: '#991B1B', flex: 1 },
   safetyBadge: { backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  safetyBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
-  safetyMessage: { fontSize: 14, color: '#7F1D1D', lineHeight: 22, fontWeight: '600', marginBottom: 14 },
-  redFlagHeader: { fontSize: 13, fontWeight: 'bold', color: '#991B1B', marginBottom: 6 },
+  safetyBadgeText: { color: '#FFFFFF', fontSize: s.micro, fontWeight: 'bold' },
+  safetyMessage: { fontSize: s.body, color: '#7F1D1D', lineHeight: 22, fontWeight: '600', marginBottom: 14 },
+  redFlagHeader: { fontSize: s.caption, fontWeight: 'bold', color: '#991B1B', marginBottom: 6 },
   redFlagItem: { backgroundColor: '#FFFFFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#FCA5A5', marginBottom: 8 },
-  redFlagTitle: { fontSize: 13, fontWeight: '800', color: '#B91C1C' },
-  redFlagDesc: { fontSize: 11, color: '#7F1D1D', marginTop: 2 },
+  redFlagTitle: { fontSize: s.caption, fontWeight: '800', color: '#B91C1C' },
+  redFlagDesc: { fontSize: s.micro, color: '#7F1D1D', marginTop: 2 },
   safetyActionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   safetyActionBtnPrimary: { flex: 1, backgroundColor: '#1E293B', paddingVertical: 12, borderRadius: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
   safetyActionBtnDanger: { flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  safetyActionTextPrimary: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
+  safetyActionTextPrimary: { color: '#FFFFFF', fontSize: s.caption, fontWeight: 'bold' },
   safetyResetBtn: { alignSelf: 'center', marginTop: 14, paddingVertical: 8, paddingHorizontal: 16 },
-  safetyResetBtnText: { color: '#475569', fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' },
+  safetyResetBtnText: { color: '#475569', fontSize: s.caption, fontWeight: 'bold', textDecorationLine: 'underline' },
 });
