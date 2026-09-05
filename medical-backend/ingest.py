@@ -1,16 +1,33 @@
 import os
 import re
 import time
+from pathlib import Path
+
 from dotenv import load_dotenv
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_postgres import PGVector
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-load_dotenv()
+# 用絕對路徑載入 .env，避免從專案根目錄執行時讀不到 medical-backend/.env
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
 
 api_key = os.getenv("GEMINI_API_KEY")
 db_url = os.getenv("DATABASE_URL")
+
+# 缺金鑰就直接中止，不要帶著 None 往下跑到 API 呼叫才爆
+if not api_key:
+    raise RuntimeError(
+        "找不到 GEMINI_API_KEY，"
+        "請先在 medical-backend/.env 設定（可參考 .env.example）"
+    )
+
+if not db_url:
+    raise RuntimeError(
+        "找不到 DATABASE_URL，"
+        "請先在 medical-backend/.env 設定（可參考 .env.example）"
+    )
 
 if db_url and db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)

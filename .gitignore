@@ -1,1 +1,24 @@
+# ===== 機密設定（絕不 commit）=====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ===== Node =====
+node_modules/
+dist/
+
+# ===== 根目錄 Markdown 文件不進版控（子目錄的 md 不受影響）=====
+/*.md
+
+# ===== 其他 =====
 杯麵icon.png
+.DS_Store

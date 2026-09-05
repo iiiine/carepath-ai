@@ -1,4 +1,9 @@
+# ===== 機密設定（絕不 commit）=====
 .env
-.venv/
-pycache/
+.env.*
+!.env.example
+
+# ===== Python =====
+__pycache__/
 *.pyc
+.venv/
