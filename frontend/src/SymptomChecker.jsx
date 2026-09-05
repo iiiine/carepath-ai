@@ -207,6 +207,14 @@ const ELDER_MODE_CSS = `
     display: none !important;
   }
 
+  /* 定位狀態與不適度是 div，吃不到上面針對 button 的規則，
+     不補這條的話高齡模式下會比旁邊的按鈕矮一截。 */
+  [data-elder-mode="true"] .elder-control-chip {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
   [data-elder-mode="true"] .elder-primary-controls {
     width: 100%;
     justify-content: center;
@@ -261,6 +269,37 @@ const ELDER_MODE_CSS = `
     }
   }
 `;
+
+
+// ==========================================
+// 上方控制項的共用尺寸
+//
+// 原本五個控制項各寫一組 padding（6px 12px / 5px 9px / 5px 12px）
+// 與兩種字級，排在同一列時高度不齊。這裡統一尺寸，
+// 各控制項只覆寫顏色與狀態差異。
+//
+// 框線用長寫（borderWidth / Style / Color）而非 border 簡寫，
+// 免得覆寫單一屬性時被簡寫蓋掉。
+// ==========================================
+
+const CONTROL_CHIP = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  boxSizing: 'border-box',
+  minHeight: '34px',
+  padding: '0 12px',
+  borderRadius: '8px',
+  borderWidth: '1px',
+  borderStyle: 'solid',
+  borderColor: t.border,
+  backgroundColor: t.panel,
+  color: t.text,
+  fontSize: '0.8rem',
+  fontWeight: 500,
+  lineHeight: 1,
+  whiteSpace: 'nowrap',
+};
 
 
 // 載入歷史對話時的假對話骨架。寬度寫死，每次長一樣，不要亂跳。
@@ -2131,44 +2170,21 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      elderFriendlyMode
-                        ? '#0f172a'
-                        : t.panel,
+                    ...CONTROL_CHIP,
 
-                    color:
-                      elderFriendlyMode
-                        ? '#ffffff'
-                        : t.text,
-
-                    border:
-                      elderFriendlyMode
-                        ? '2px solid #0f172a'
-                        : `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      elderFriendlyMode
-                        ? '8px 14px'
-                        : '6px 12px',
-
-                    fontSize:
-                      elderFriendlyMode
-                        ? '0.9rem'
-                        : '0.8rem',
-
-                    fontWeight:
-                      elderFriendlyMode
-                        ? 700
-                        : 500,
+                    // 開啟時只加深顏色與字重，尺寸不變，
+                    // 免得這一顆比隔壁高一截。
+                    ...(elderFriendlyMode
+                      ? {
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          borderColor: '#0f172a',
+                          fontWeight: 700,
+                        }
+                      : {}),
 
                     cursor:
-                      'pointer',
-
-                    whiteSpace:
-                      'nowrap'
+                      'pointer'
                   }}
                 >
                   {elderFriendlyMode && (
@@ -2190,28 +2206,12 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      t.panel,
+                    ...CONTROL_CHIP,
 
                     color:
                       user?.is_guest
                         ? t.muted
                         : t.text,
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      '6px 12px',
-
-                    fontSize:
-                      '0.8rem',
-
-                    fontWeight:
-                      500,
 
                     cursor:
                       'pointer'
@@ -2233,26 +2233,7 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      t.panel,
-
-                    color:
-                      t.text,
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      '6px 12px',
-
-                    fontSize:
-                      '0.8rem',
-
-                    fontWeight:
-                      500,
+                    ...CONTROL_CHIP,
 
                     cursor:
                       'pointer'
@@ -2265,7 +2246,7 @@ function SymptomChecker({
                 {/* 定位狀態 */}
 
                 <div
-                  className="elder-secondary-control"
+                  className="elder-secondary-control elder-control-chip"
 
                   title={
                     locationStatus ===
@@ -2278,35 +2259,13 @@ function SymptomChecker({
                   }
 
                   style={{
-                    display:
-                      'inline-flex',
-
-                    alignItems:
-                      'center',
-
-                    gap:
-                      '5px',
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    padding:
-                      '5px 9px',
-
-                    borderRadius:
-                      '8px',
-
-                    fontSize:
-                      '0.75rem',
+                    ...CONTROL_CHIP,
 
                     color:
                       locationStatus ===
                       'success'
                         ? t.text
-                        : t.muted,
-
-                    backgroundColor:
-                      t.panel
+                        : t.muted
                   }}
                 >
 
@@ -2332,27 +2291,13 @@ function SymptomChecker({
                 {/* 不適程度 */}
 
                 <div
-                  style={{
-                    display:
-                      'inline-flex',
+                  className="elder-control-chip"
 
-                    alignItems:
-                      'center',
+                  style={{
+                    ...CONTROL_CHIP,
 
                     gap:
                       '8px',
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    padding:
-                      '5px 12px',
-
-                    borderRadius:
-                      '8px',
-
-                    fontSize:
-                      '0.8rem',
 
                     color:
                       t.muted
