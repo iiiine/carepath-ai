@@ -726,8 +726,9 @@ export default function ConsultScreen() {
                   <TouchableOpacity
                     key={item.label}
                     style={[styles.tag, item.personalized && styles.tagPersonalized]}
-                    onPress={() => handleSendMessage(item.label)}
+                    onPress={() => setInputText(item.label)}
                     accessibilityRole="button"
+                    accessibilityHint="填入輸入框，可再補充描述後送出"
                     accessibilityLabel={item.personalized ? `${item.label}，您常問的症狀` : item.label}
                   >
                     <View style={styles.tagInner}>
