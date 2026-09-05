@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import api from './api/axios';
 import { t } from './theme';
+import Icon from './Icon';
+import { mdiClose } from '@mdi/js';
 
 function UserProfileModal({ isOpen, onClose, user }) {
   const [formData, setFormData] = useState({
@@ -110,7 +112,7 @@ function UserProfileModal({ isOpen, onClose, user }) {
           <h3 style={{ margin: 0, color: t.text, fontSize: '1rem', fontWeight: 600 }}>
             個人健康基本資料
           </h3>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.1rem', cursor: 'pointer', color: t.muted }}>✕</button>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '1.1rem', cursor: 'pointer', color: t.muted }} aria-label="關閉"><Icon path={mdiClose} size="1.1rem" /></button>
         </div>
 
         {loading ? (
@@ -196,7 +198,7 @@ function UserProfileModal({ isOpen, onClose, user }) {
 
             {/* 提示訊息 */}
             <div style={{ fontSize: '0.78rem', color: t.muted, backgroundColor: t.subtle, padding: '10px 12px', borderRadius: '8px', lineHeight: 1.6 }}>
-              填寫資料後，AI 助手在進行問診評估時會自動參考您的健康背景資訊。
+              填寫資料後，CarePath AI 在進行問診評估時會自動參考您的健康背景資訊。
             </div>
 
             {/* 按鈕組 */}

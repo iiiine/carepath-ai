@@ -86,15 +86,19 @@ export default function DashboardScreen() {
 
   const renderTabs = () => (
     <View style={styles.tabBar}>
-      {[['dashboard', '儀表板'], ['trend', '健康趨勢']].map(([key, label]) => (
-        <TouchableOpacity
-          key={key}
-          style={[styles.tabBtn, tab === key && styles.tabBtnActive]}
-          onPress={() => setTab(key)}
-        >
-          <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
-        </TouchableOpacity>
-      ))}
+      <View style={styles.tabTrack}>
+        {[['dashboard', '儀表板'], ['trend', '健康趨勢']].map(([key, label]) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.tabBtn, tab === key && styles.tabBtnActive]}
+            onPress={() => setTab(key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === key }}
+          >
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 
@@ -225,11 +229,15 @@ export default function DashboardScreen() {
 // 樣式改為級距的函式：高齡模式切換時整組跟著變
 const makeStyles = (s) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.page },
-  tabBar: { flexDirection: 'row', backgroundColor: t.panel, paddingHorizontal: 16, paddingBottom: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: t.border },
-  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: t.subtle, alignItems: 'center' },
-  tabBtnActive: { backgroundColor: t.userBubble },
+  // 原本是兩顆各自帶底色的按鈕，下方再加一條實線，三道邊界疊在一起太重。
+  // 改成分段控制項：整組只有一層淡底軌道，選中的那段用白色浮起來。
+  // 分隔線沿用級距的 divider（一般模式走淡陰影、高齡模式才畫實線）。
+  tabBar: { backgroundColor: t.panel, paddingHorizontal: s.pad, paddingBottom: s.gapLg, borderBottomWidth: s.dividerWidth, borderBottomColor: s.dividerColor, boxShadow: s.dividerShadow },
+  tabTrack: { flexDirection: 'row', backgroundColor: t.subtle, borderRadius: s.radius, padding: 3 },
+  tabBtn: { flex: 1, paddingVertical: s.gap, borderRadius: s.radius - 3, alignItems: 'center', justifyContent: 'center', minHeight: s.touch },
+  tabBtnActive: { backgroundColor: t.panel },
   tabText: { fontSize: s.body, fontWeight: '700', color: t.muted },
-  tabTextActive: { color: '#FFFFFF' },
+  tabTextActive: { color: t.text },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.border, borderBottomColor: t.border, zIndex: 100 },
   backButton: { paddingRight: s.pad, paddingVertical: 4, minHeight: s.touch, justifyContent: 'center' },
   backIcon: { fontSize: s.title, color: t.text, fontWeight: 'bold' },

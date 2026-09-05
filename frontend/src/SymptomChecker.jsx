@@ -18,6 +18,8 @@ import VisitSummaryPanel from './VisitSummaryPanel';
 
 import { t } from './theme';
 import { BaymaxAvatar } from './Baymax';
+import Icon from './Icon';
+import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } from '@mdi/js';
 
 
 // ==========================================
@@ -205,6 +207,14 @@ const ELDER_MODE_CSS = `
     display: none !important;
   }
 
+  /* 定位狀態與不適度是 div，吃不到上面針對 button 的規則，
+     不補這條的話高齡模式下會比旁邊的按鈕矮一截。 */
+  [data-elder-mode="true"] .elder-control-chip {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
   [data-elder-mode="true"] .elder-primary-controls {
     width: 100%;
     justify-content: center;
@@ -261,6 +271,37 @@ const ELDER_MODE_CSS = `
 `;
 
 
+// ==========================================
+// 上方控制項的共用尺寸
+//
+// 原本五個控制項各寫一組 padding（6px 12px / 5px 9px / 5px 12px）
+// 與兩種字級，排在同一列時高度不齊。這裡統一尺寸，
+// 各控制項只覆寫顏色與狀態差異。
+//
+// 框線用長寫（borderWidth / Style / Color）而非 border 簡寫，
+// 免得覆寫單一屬性時被簡寫蓋掉。
+// ==========================================
+
+const CONTROL_CHIP = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  boxSizing: 'border-box',
+  minHeight: '34px',
+  padding: '0 12px',
+  borderRadius: '8px',
+  borderWidth: '1px',
+  borderStyle: 'solid',
+  borderColor: t.border,
+  backgroundColor: t.panel,
+  color: t.text,
+  fontSize: '0.8rem',
+  fontWeight: 500,
+  lineHeight: 1,
+  whiteSpace: 'nowrap',
+};
+
+
 // 載入歷史對話時的假對話骨架。寬度寫死，每次長一樣，不要亂跳。
 // ponytail: 一個陣列就夠，不做隨機產生器。
 const SKELETON_ROWS = [
@@ -283,13 +324,12 @@ function SymptomChecker({
   // ==========================================
   // AI 對話
   // ==========================================
-  const [messages, setMessages] = useState([
-    {
-      role: 'model',
-      content:
-        '您好！我是您的 AI 健康助理。請先在右上角選擇不舒服的程度，並跟我描述您的症狀。'
-    }
-  ]);
+  // 開場不放招呼語：開場畫面本身就有「今天哪裡不舒服？」與使用說明，
+  // 再擺一則同義的 AI 訊息只是重複。而且開場狀態刻意不渲染訊息陣列，
+  // 招呼語會在使用者送出第一則之後才回頭冒出來，看起來像 bug。
+  //
+  // 這則訊息從未進過送給後端的 history（那是另一個 state），拿掉不影響問診上下文。
+  const [messages, setMessages] = useState([]);
 
 
   const [inputText, setInputText] =
@@ -336,7 +376,7 @@ function SymptomChecker({
   const [sessionLoading, setSessionLoading] =
     useState(selectedSessionId != null);
 
-  const isOpening = messages.length === 1 && !loading && !sessionLoading;
+  const isOpening = messages.length === 0 && !loading && !sessionLoading;
 
 
   // ==========================================
@@ -1936,13 +1976,7 @@ function SymptomChecker({
     );
 
 
-    setMessages([
-      {
-        role: 'model',
-        content:
-          '您好！我是您的 AI 健康助理。請問您今天哪裡不舒服呢？'
-      }
-    ]);
+    setMessages([]);
 
 
     setHistory(
@@ -2136,51 +2170,29 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      elderFriendlyMode
-                        ? '#0f172a'
-                        : t.panel,
+                    ...CONTROL_CHIP,
 
-                    color:
-                      elderFriendlyMode
-                        ? '#ffffff'
-                        : t.text,
-
-                    border:
-                      elderFriendlyMode
-                        ? '2px solid #0f172a'
-                        : `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      elderFriendlyMode
-                        ? '8px 14px'
-                        : '6px 12px',
-
-                    fontSize:
-                      elderFriendlyMode
-                        ? '0.9rem'
-                        : '0.8rem',
-
-                    fontWeight:
-                      elderFriendlyMode
-                        ? 700
-                        : 500,
+                    // 開啟時只加深顏色與字重，尺寸不變，
+                    // 免得這一顆比隔壁高一截。
+                    ...(elderFriendlyMode
+                      ? {
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          borderColor: '#0f172a',
+                          fontWeight: 700,
+                        }
+                      : {}),
 
                     cursor:
-                      'pointer',
-
-                    whiteSpace:
-                      'nowrap'
+                      'pointer'
                   }}
                 >
-                  {
-                    elderFriendlyMode
-                      ? '✓ 高齡友善'
-                      : '高齡友善'
-                  }
+                  {elderFriendlyMode && (
+                    <Icon path={mdiCheck} size="1em" />
+                  )}
+                  {elderFriendlyMode
+                    ? ' 高齡友善'
+                    : '高齡友善'}
                 </button>
 
 
@@ -2194,28 +2206,12 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      t.panel,
+                    ...CONTROL_CHIP,
 
                     color:
                       user?.is_guest
                         ? t.muted
                         : t.text,
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      '6px 12px',
-
-                    fontSize:
-                      '0.8rem',
-
-                    fontWeight:
-                      500,
 
                     cursor:
                       'pointer'
@@ -2237,26 +2233,7 @@ function SymptomChecker({
                   }
 
                   style={{
-                    backgroundColor:
-                      t.panel,
-
-                    color:
-                      t.text,
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    borderRadius:
-                      '8px',
-
-                    padding:
-                      '6px 12px',
-
-                    fontSize:
-                      '0.8rem',
-
-                    fontWeight:
-                      500,
+                    ...CONTROL_CHIP,
 
                     cursor:
                       'pointer'
@@ -2269,7 +2246,7 @@ function SymptomChecker({
                 {/* 定位狀態 */}
 
                 <div
-                  className="elder-secondary-control"
+                  className="elder-secondary-control elder-control-chip"
 
                   title={
                     locationStatus ===
@@ -2282,45 +2259,31 @@ function SymptomChecker({
                   }
 
                   style={{
-                    display:
-                      'inline-flex',
-
-                    alignItems:
-                      'center',
-
-                    gap:
-                      '5px',
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    padding:
-                      '5px 9px',
-
-                    borderRadius:
-                      '8px',
-
-                    fontSize:
-                      '0.75rem',
+                    ...CONTROL_CHIP,
 
                     color:
                       locationStatus ===
                       'success'
                         ? t.text
-                        : t.muted,
-
-                    backgroundColor:
-                      t.panel
+                        : t.muted
                   }}
                 >
 
+                  <Icon
+                    path={
+                      locationStatus === 'success'
+                        ? mdiMapMarkerCheck
+                        : mdiMapMarker
+                    }
+                    size="1em"
+                  />
                   {locationStatus ===
                   'success'
-                    ? '📍 已定位'
+                    ? ' 已定位'
                     : locationStatus ===
                       'loading'
-                      ? '📍 定位中'
-                      : '📍 備援位置'}
+                      ? ' 定位中'
+                      : ' 備援位置'}
 
                 </div>
 
@@ -2328,27 +2291,13 @@ function SymptomChecker({
                 {/* 不適程度 */}
 
                 <div
-                  style={{
-                    display:
-                      'inline-flex',
+                  className="elder-control-chip"
 
-                    alignItems:
-                      'center',
+                  style={{
+                    ...CONTROL_CHIP,
 
                     gap:
                       '8px',
-
-                    border:
-                      `1px solid ${t.border}`,
-
-                    padding:
-                      '5px 12px',
-
-                    borderRadius:
-                      '8px',
-
-                    fontSize:
-                      '0.8rem',
 
                     color:
                       t.muted
@@ -2623,7 +2572,7 @@ function SymptomChecker({
                         '-0.01em'
                     }}
                   >
-                    AI 問診助理
+                    CarePath AI
                   </h2>
 
 
@@ -2979,7 +2928,7 @@ function SymptomChecker({
                 </div>
               )}
 
-              {(isOpening ? [] : messages).map(
+              {messages.map(
                 (
                   msg,
                   index
@@ -3408,7 +3357,7 @@ function SymptomChecker({
                   )
                 }
 
-                placeholder="傳訊息給助理..."
+                placeholder="傳訊息給 CarePath AI..."
 
                 disabled={
                   loading
@@ -4581,7 +4530,10 @@ function SymptomChecker({
                         >
 
                           <span>
-                            📄
+                            <Icon
+                              path={mdiFileDocumentOutline}
+                              size="1em"
+                            />
                           </span>
 
 
