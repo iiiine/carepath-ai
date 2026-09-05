@@ -104,7 +104,7 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* 首選卡：杯麵直接推第一名，省掉使用者自己比對五間 */}
+      {/* 首選卡：直接推第一名，省掉使用者自己比對五間 */}
       {top && (
         <div style={{
           display: 'flex', gap: '10px', alignItems: 'flex-start', flexShrink: 0,

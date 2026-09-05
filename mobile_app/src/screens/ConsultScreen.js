@@ -452,7 +452,7 @@ export default function ConsultScreen() {
           ]}
         >
           {msg.role === 'model' && (
-            <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.avatarImage} resizeMode="contain" />
+            <Image source={require('../../assets/carepath-icon.png')} style={styles.avatarImage} resizeMode="contain" />
           )}
           <View 
             style={[
@@ -541,7 +541,7 @@ export default function ConsultScreen() {
         >
           {messages.length === 1 && !loading && !route.params?.sessionId && (
             <View style={styles.welcomeSection}>
-              <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.mascotImage} resizeMode="contain" />
+              <Image source={require('../../assets/carepath-wordmark.png')} style={styles.wordmarkImage} resizeMode="contain" />
               <Text style={styles.mainTitle}>今天哪裡不舒服？</Text>
               <Text style={styles.subTitle}>
                 用您自己的話說就好，我會幫您判斷看哪一科，再找附近的醫院診所。
@@ -639,7 +639,7 @@ export default function ConsultScreen() {
                     return (
                       <View style={styles.topRecommendCard}>
                         <View style={styles.topRecommendHeader}>
-                          <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.topRecommendMascot} resizeMode="contain" />
+                          <Image source={require('../../assets/carepath-icon.png')} style={styles.topRecommendMascot} resizeMode="contain" />
                           <View style={{ flex: 1 }}>
                             <View style={styles.topRecommendBadgeRow}>
                               <View style={styles.topBadge}><Text style={styles.topBadgeText}>最推薦</Text></View>
@@ -723,7 +723,7 @@ export default function ConsultScreen() {
               {/* 載入歷史紀錄時已有全螢幕浮層，這裡不再重複顯示打字氣泡 */}
               {loading && !loadingHistory && (
                 <View style={[styles.messageRow, styles.messageRowModel]}>
-                  <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.avatarImage} resizeMode="contain" />
+                  <Image source={require('../../assets/carepath-icon.png')} style={styles.avatarImage} resizeMode="contain" />
                   <View style={[styles.bubble, styles.bubbleModel]}>
                     <TypingIndicator />
                   </View>
@@ -946,7 +946,8 @@ const makeStyles = (s) => StyleSheet.create({
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: s.pad, paddingBottom: 30, paddingTop: s.padLg },
   welcomeSection: { alignItems: 'center', marginTop: 40 },
-  mascotImage: { width: s.touch * 2, height: s.touch * 2, marginBottom: s.pad },
+  // 首頁開場放圖示 + 產品名的直式組合，框比例對齊原圖 798x900，contain 才不會留多餘空白
+  wordmarkImage: { width: s.touch * 2.3, height: s.touch * 2.6, marginBottom: s.pad },
   mainTitle: { fontSize: s.title, fontWeight: '900', color: s.textStrong, marginBottom: 8, textAlign: 'center', lineHeight: s.lineTitle },
   subTitle: { fontSize: s.body, color: t.muted, textAlign: 'center', lineHeight: s.lineBody, paddingHorizontal: s.padLg, marginTop: s.gap },
   
