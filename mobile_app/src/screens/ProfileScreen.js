@@ -1,5 +1,5 @@
 // src/screens/ProfileScreen.js
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform 
@@ -9,12 +9,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, logout } = useContext(AuthContext);
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -103,7 +107,7 @@ export default function ProfileScreen() {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContainer}>
-          <Text style={styles.mascot}>🔒</Text>
+          <Icon name="lock-outline" size={52} color={t.muted} style={{ marginBottom: 12 }} />
           <Text style={styles.guestTitle}>訪客無法建立健康檔案</Text>
           <Text style={styles.guestSub}>請登入會員以管理您的專屬健康資料表。</Text>
         </View>
@@ -166,24 +170,25 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 樣式改為級距的函式：高齡模式切換時整組跟著變
+const makeStyles = (s) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.page },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: t.panel, borderBottomWidth: 1, borderBottomColor: t.border, zIndex: 100 },
-  backButton: { paddingRight: 16, paddingVertical: 4 },
-  backIcon: { fontSize: 24, color: t.text, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: t.text },
-  logoutText: { fontSize: 14, color: t.danger, fontWeight: '600' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  mascot: { fontSize: 60, marginBottom: 12 },
-  guestTitle: { fontSize: 18, fontWeight: 'bold', color: t.text, marginBottom: 6 },
-  guestSub: { fontSize: 14, color: t.muted, textAlign: 'center' },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-  section: { backgroundColor: t.panel, padding: 16, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: t.border },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: t.text, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: t.subtle, paddingBottom: 8 },
-  label: { fontSize: 13, color: t.muted, marginBottom: 6 },
-  input: { backgroundColor: t.page, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, fontSize: 15, color: t.text, marginBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.border, borderBottomColor: t.border, zIndex: 100 },
+  backButton: { paddingRight: s.pad, paddingVertical: 4, minHeight: s.touch, justifyContent: 'center' },
+  backIcon: { fontSize: s.title, color: t.text, fontWeight: 'bold' },
+  headerTitle: { fontSize: s.subtitle, fontWeight: '900', color: t.text },
+  logoutText: { fontSize: s.body, color: t.danger, fontWeight: '600' },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: s.padLg },
+  guestTitle: { fontSize: s.subtitle, fontWeight: 'bold', color: t.text, marginBottom: 6 },
+  guestSub: { fontSize: s.body, color: t.muted, textAlign: 'center', lineHeight: s.lineBody },
+  scrollContent: { padding: s.pad, paddingBottom: 40 },
+  section: { backgroundColor: t.panel, padding: s.pad, borderRadius: s.radius, marginBottom: s.pad, borderWidth: s.border, borderColor: t.border },
+  sectionTitle: { fontSize: s.input, fontWeight: 'bold', color: t.text, marginBottom: s.pad, borderBottomWidth: s.border, borderBottomColor: t.subtle, paddingBottom: s.gap },
+  label: { fontSize: s.body, color: t.muted, marginBottom: 6 },
+  // 輸入框最小高度用 touch，避免高齡模式下字大了框卻沒跟著長
+  input: { backgroundColor: t.page, borderWidth: s.border, borderColor: t.border, borderRadius: s.radius, padding: s.gapLg, fontSize: s.input, color: t.text, marginBottom: s.pad, minHeight: s.touch },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  saveBtn: { backgroundColor: t.userBubble, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+  textArea: { height: s.touch * 2, textAlignVertical: 'top' },
+  saveBtn: { backgroundColor: t.userBubble, padding: s.pad, borderRadius: s.radius, alignItems: 'center', marginTop: s.gap, minHeight: s.touch, justifyContent: 'center' },
+  saveBtnText: { color: '#fff', fontSize: s.input, fontWeight: 'bold' }
 });

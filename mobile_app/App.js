@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from './src/context/AuthContext';
+import { ElderModeProvider } from './src/context/ElderModeContext';
 import ConsultScreen from './src/screens/ConsultScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -45,7 +46,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <RootNavigator />
+        <ElderModeProvider>
+          <RootNavigator />
+        </ElderModeProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

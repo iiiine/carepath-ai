@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.js
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl 
 } from 'react-native';
@@ -7,6 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 
 import LongitudinalHealthPanel from './LongitudinalHealthPanel'; // 🎯 引入縱向健康趨勢分析面板
@@ -15,12 +17,13 @@ export default function DashboardScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useContext(AuthContext);
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [summary, setSummary] = useState(null);
   const [recentSessions, setRecentSessions] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'trend'
 
   const fetchDashboardData = async () => {
@@ -95,7 +98,7 @@ export default function DashboardScreen() {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContainer}>
-          <Text style={styles.mascot}>🔒</Text>
+          <Icon name="lock-outline" size={52} color={t.muted} style={{ marginBottom: 12 }} />
           <Text style={styles.guestTitle}>訪客模式無法檢視儀表板</Text>
           <Text style={styles.guestSub}>請先登入會員，解鎖您的個人健康趨勢與歷史問診紀錄。</Text>
           <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
@@ -210,66 +213,54 @@ export default function DashboardScreen() {
         </ScrollView>
       )}
 
-      {/* 🌟 改良版跳轉 Loading (透明背景，只留黑框) */}
-      {isNavigating && (
-        <View style={styles.navigatingOverlay}>
-          <View style={styles.navigatingBox}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.navigatingText}>載入紀錄中...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+// 樣式改為級距的函式：高齡模式切換時整組跟著變
+const makeStyles = (s) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.page },
   tabBar: { flexDirection: 'row', backgroundColor: t.panel, paddingHorizontal: 16, paddingBottom: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: t.border },
   tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: t.subtle, alignItems: 'center' },
   tabBtnActive: { backgroundColor: t.userBubble },
-  tabText: { fontSize: 14, fontWeight: '700', color: t.muted },
+  tabText: { fontSize: s.body, fontWeight: '700', color: t.muted },
   tabTextActive: { color: '#FFFFFF' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: t.panel, borderBottomWidth: 1, borderBottomColor: t.border, zIndex: 100 },
-  backButton: { paddingRight: 16, paddingVertical: 4 },
-  backIcon: { fontSize: 24, color: t.text, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: t.text },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: s.pad, paddingBottom: s.gapLg, backgroundColor: t.panel, borderBottomWidth: s.border, borderBottomColor: t.border, zIndex: 100 },
+  backButton: { paddingRight: s.pad, paddingVertical: 4, minHeight: s.touch, justifyContent: 'center' },
+  backIcon: { fontSize: s.title, color: t.text, fontWeight: 'bold' },
+  headerTitle: { fontSize: s.subtitle, fontWeight: '900', color: t.text },
   placeholder: { width: 32 },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  mascot: { fontSize: 60, marginBottom: 12 },
-  guestTitle: { fontSize: 18, fontWeight: 'bold', color: t.text, marginBottom: 6 },
-  guestSub: { fontSize: 14, color: t.muted, textAlign: 'center', marginBottom: 20 },
-  loginBtn: { backgroundColor: t.userBubble, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  loginBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-  heroCard: { backgroundColor: t.panel, borderRadius: 14, padding: 20, borderWidth: 1, borderColor: t.border, marginBottom: 16 },
-  heroEyebrow: { fontSize: 12, fontWeight: '700', color: t.muted, marginBottom: 6 },
-  heroTitle: { fontSize: 20, fontWeight: '700', color: t.text, marginBottom: 8 },
-  heroText: { fontSize: 14, color: t.muted, lineHeight: 20 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: s.padLg },
+  guestTitle: { fontSize: s.subtitle, fontWeight: 'bold', color: t.text, marginBottom: 6 },
+  guestSub: { fontSize: s.body, color: t.muted, textAlign: 'center', marginBottom: 20, lineHeight: s.lineBody },
+  loginBtn: { backgroundColor: t.userBubble, paddingHorizontal: s.padLg, paddingVertical: s.gapLg, borderRadius: s.radius, minHeight: s.touch, justifyContent: 'center' },
+  loginBtnText: { color: '#fff', fontWeight: 'bold', fontSize: s.input },
+  scrollContent: { padding: s.pad, paddingBottom: 40 },
+  heroCard: { backgroundColor: t.panel, borderRadius: s.radius, padding: s.padLg, borderWidth: s.border, borderColor: t.border, marginBottom: s.pad },
+  heroEyebrow: { fontSize: s.caption, fontWeight: '700', color: t.muted, marginBottom: 6 },
+  heroTitle: { fontSize: s.title, fontWeight: '700', color: t.text, marginBottom: 8 },
+  heroText: { fontSize: s.body, color: t.muted, lineHeight: s.lineBody },
   tileRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  tile: { flex: 1, backgroundColor: t.panel, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: t.border, justifyContent: 'space-between' },
-  tileLabel: { fontSize: 11, color: t.muted, marginBottom: 6 },
-  tileValue: { fontSize: 18, fontWeight: '700', color: t.text },
-  tileUnit: { fontSize: 12, fontWeight: '500', color: t.muted },
-  panel: { backgroundColor: t.panel, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: t.border, marginBottom: 16 },
-  panelTitle: { fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 14 },
-  emptyText: { fontSize: 13, color: t.muted, textAlign: 'center', paddingVertical: 10 },
+  tile: { flex: 1, backgroundColor: t.panel, borderRadius: s.radius, padding: s.gapLg, borderWidth: s.border, borderColor: t.border, justifyContent: 'space-between' },
+  tileLabel: { fontSize: s.caption, color: t.muted, marginBottom: 6 },
+  tileValue: { fontSize: s.subtitle, fontWeight: '700', color: t.text },
+  tileUnit: { fontSize: s.caption, fontWeight: '500', color: t.muted },
+  panel: { backgroundColor: t.panel, borderRadius: s.radius, padding: s.pad, borderWidth: s.border, borderColor: t.border, marginBottom: s.pad },
+  panelTitle: { fontSize: s.input, fontWeight: '700', color: t.text, marginBottom: 14 },
+  emptyText: { fontSize: s.body, color: t.muted, textAlign: 'center', paddingVertical: 10 },
   recentRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.subtle, gap: 12 },
-  recentDate: { fontSize: 12, color: t.muted, width: 36, paddingTop: 2 },
+  recentDate: { fontSize: s.caption, color: t.muted, width: 36, paddingTop: 2 },
   recentBody: { flex: 1 },
-  recentSymptom: { fontSize: 14, color: t.text, marginBottom: 4 },
+  recentSymptom: { fontSize: s.body, color: t.text, marginBottom: 4, lineHeight: s.lineBody },
   recentMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  deptChip: { fontSize: 11, color: t.text, backgroundColor: t.subtle, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  painText: { fontSize: 11, fontWeight: '600', color: t.muted },
+  deptChip: { fontSize: s.caption, color: t.text, backgroundColor: t.subtle, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  painText: { fontSize: s.caption, fontWeight: '600', color: t.muted },
   barItem: { marginBottom: 12 },
-  barHead: { flexDirection: 'row', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 },
+  barHead: { flexDirection: 'row', justifyContent: 'space-between', fontSize: s.body, marginBottom: 4 },
   barName: { color: t.text },
   barCount: { color: t.muted },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: t.subtle, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: t.userBubble, borderRadius: 3 },
   
   // 🌟 將 backgroundColor 改為 transparent
-  navigatingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
-  navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
 });
