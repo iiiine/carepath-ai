@@ -1408,11 +1408,11 @@ const DashboardPage = ({
 
 
         {/* ================================== */}
-        {/* 同症狀歷史分析 */}
-        //
-        // 直接使用已完成的 Longitudinal Health Intelligence。
-        // 症狀概念正規化、同症狀判斷、pain trend
-        // 都由既有後端邏輯處理，不在 Dashboard 重複實作。
+        {/* 同症狀歷史分析
+
+            直接使用已完成的 Longitudinal Health Intelligence。
+            症狀概念正規化、同症狀判斷、pain trend
+            都由既有後端邏輯處理，不在 Dashboard 重複實作。 */}
         {/* ================================== */}
 
         <section
