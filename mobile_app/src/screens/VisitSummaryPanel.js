@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import client from '../api/client';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
 import Icon from '@react-native-vector-icons/material-design-icons';
 
 function getRiskPresentation(riskLevel) {
@@ -73,6 +74,8 @@ function formatArrayText(values) {
 }
 
 export default function VisitSummaryPanel({ sessionId, refreshKey = 0, tempSummaryData = null }) {
+  const { s } = useElderMode();
+  const styles = useMemo(() => makeStyles(s), [s]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
@@ -217,7 +220,7 @@ export default function VisitSummaryPanel({ sessionId, refreshKey = 0, tempSumma
         </View>
         <View style={styles.statCard}>
           <Text style={styles.label}>問診時間</Text>
-          <Text style={[styles.statValue, { fontSize: 13, marginTop: 10 }]}>
+          <Text style={[styles.statValue, { fontSize: s.body, marginTop: 10 }]}>
             {formatDateTime(summary.session_created_at)}
           </Text>
         </View>
@@ -256,7 +259,7 @@ export default function VisitSummaryPanel({ sessionId, refreshKey = 0, tempSumma
           )}
 
           {safety?.assessment_available === false && (
-            <Text style={{ marginTop: 10, fontSize: 11, color: '#64748b', lineHeight: 16 }}>
+            <Text style={styles.safetyUnavailableNote}>
               此歷史問診當時沒有保存完整的 Safety Engine 評估資料，因此不能將其解讀為一般低風險。
             </Text>
           )}
@@ -364,60 +367,75 @@ export default function VisitSummaryPanel({ sessionId, refreshKey = 0, tempSumma
   );
 }
 
-const styles = StyleSheet.create({
+// 樣式改為級距的函式：高齡模式切換時整組跟著變
+const makeStyles = (s) => StyleSheet.create({
+  // 「沒有完成安全評估」不等於「沒有危險」——這句是 fail-safe 的關鍵說明，
+  // 原本用全 app 最小的 11px 呈現，提到內文級並加左側警示色條。
+  safetyUnavailableNote: {
+    marginTop: 10,
+    fontSize: s.body,
+    lineHeight: s.lineBody,
+    color: t.text,
+    backgroundColor: '#fff7ed',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+    paddingVertical: s.gap,
+    paddingHorizontal: s.gapLg,
+    borderRadius: 6,
+  },
   panel: { flex: 1, backgroundColor: t.page },
-  hero: { padding: 18, borderRadius: 16, backgroundColor: '#ffffff', borderHorizontalWidth: 1, borderVerticalWidth: 1, borderColor: '#e2e8f0', marginHorizontal: 14, marginTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  hero: { padding: 18, borderRadius: 16, backgroundColor: t.panel, borderHorizontalWidth: 1, borderVerticalWidth: 1, borderColor: t.border, marginHorizontal: 14, marginTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
   heroTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   heroIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 18, fontWeight: '800', color: t.text },
-  subtitle: { fontSize: 11, color: t.muted, marginTop: 3 },
+  title: { fontSize: s.subtitle, fontWeight: '800', color: t.text },
+  subtitle: { fontSize: s.micro, color: t.muted, marginTop: 3 },
   riskBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-  riskBadgeText: { fontSize: 11, fontWeight: '800' },
-  complaintBox: { marginTop: 14, padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
-  label: { fontSize: 10, fontWeight: '700', color: t.muted },
-  complaintText: { fontSize: 15, fontWeight: '750', color: t.text, marginTop: 4, lineHeight: 22 },
+  riskBadgeText: { fontSize: s.micro, fontWeight: '800' },
+  complaintBox: { marginTop: 14, padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: t.border },
+  label: { fontSize: s.micro, fontWeight: '700', color: t.muted },
+  complaintText: { fontSize: s.input, fontWeight: '750', color: t.text, marginTop: 4, lineHeight: s.lineBody },
   statsGrid: { flexDirection: 'row', paddingHorizontal: 14, gap: 8, marginTop: 12 },
-  statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', justifyContent: 'center' },
-  statValue: { fontSize: 15, fontWeight: '800', color: t.text, marginTop: 4 },
-  section: { padding: 16, borderRadius: 16, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', marginHorizontal: 14, marginTop: 12 },
+  statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border, justifyContent: 'center' },
+  statValue: { fontSize: s.input, fontWeight: '800', color: t.text, marginTop: 4 },
+  section: { padding: 16, borderRadius: 16, backgroundColor: t.panel, borderWidth: 1, borderColor: t.border, marginHorizontal: 14, marginTop: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: t.text },
-  sectionMeta: { fontSize: 10, color: '#94a3b8' },
+  sectionTitle: { fontSize: s.body, fontWeight: '800', color: t.text },
+  sectionMeta: { fontSize: s.micro, color: '#94a3b8' },
   safetyBox: { borderRadius: 12, padding: 12, borderStyle: 'solid' },
-  safetyTitle: { fontSize: 14, fontWeight: '800' },
-  safetyDescription: { fontSize: 12, lineHeight: 18, marginTop: 6 },
+  safetyTitle: { fontSize: s.body, fontWeight: '800' },
+  safetyDescription: { fontSize: s.caption, lineHeight: s.lineBody, marginTop: 6 },
   redFlagList: { marginTop: 12, gap: 8 },
-  redFlagCard: { padding: 10, borderRadius: 8, backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(220, 38, 38, 0.15)' },
-  redFlagTitle: { fontSize: 12, fontWeight: '800', color: '#991b1b' },
-  redFlagReason: { fontSize: 11, color: '#7f1d1d', marginTop: 3, lineHeight: 15 },
+  redFlagCard: { padding: 10, borderRadius: 8, backgroundColor: t.panel, borderWidth: 1, borderColor: 'rgba(220, 38, 38, 0.15)' },
+  redFlagTitle: { fontSize: s.caption, fontWeight: '800', color: '#991b1b' },
+  redFlagReason: { fontSize: s.micro, color: '#7f1d1d', marginTop: 3, lineHeight: s.lineBody },
   emptyCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', alignItems: 'center' },
-  emptyCardText: { fontSize: 12, color: t.muted },
+  emptyCardText: { fontSize: s.caption, color: t.muted },
   list: { gap: 8 },
   listItem: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', padding: 10, borderRadius: 10, backgroundColor: '#f8fafc' },
   listDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3b82f6', marginTop: 6 },
-  listText: { flex: 1, fontSize: 12, color: '#334155', lineHeight: 18 },
+  listText: { flex: 1, fontSize: s.caption, color: '#334155', lineHeight: s.lineBody },
   causeCard: { padding: 10, borderRadius: 10, backgroundColor: '#f8fafc' },
-  causeCardText: { fontSize: 12, color: '#334155', fontWeight: '600' },
-  disclaimerText: { marginTop: 8, fontSize: 10, color: '#94a3b8', lineHeight: 14 },
+  causeCardText: { fontSize: s.caption, color: '#334155', fontWeight: '600' },
+  disclaimerText: { marginTop: 8, fontSize: s.micro, color: '#94a3b8', lineHeight: 14 },
   profileGrid: { gap: 8 },
   profileCard: { padding: 10, borderRadius: 10, backgroundColor: '#f8fafc' },
-  profileLabel: { fontSize: 10, color: t.muted, fontWeight: '700' },
-  profileValue: { fontSize: 12, color: t.text, fontWeight: '700', marginTop: 3 },
-  handoffBox: { padding: 14, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
-  handoffText: { fontSize: 12, color: '#334155', lineHeight: 20 },
+  profileLabel: { fontSize: s.micro, color: t.muted, fontWeight: '700' },
+  profileValue: { fontSize: s.caption, color: t.text, fontWeight: '700', marginTop: 3 },
+  handoffBox: { padding: 14, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: t.border },
+  handoffText: { fontSize: s.caption, color: '#334155', lineHeight: s.lineBody },
   copyButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#2563eb' },
   copySuccessButton: { backgroundColor: '#15803d' },
-  copyButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
+  copyButtonText: { color: t.panel, fontSize: s.micro, fontWeight: '800' },
   disclaimerContainer: { paddingHorizontal: 20, marginVertical: 14 },
-  disclaimer: { fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: 15 },
+  disclaimer: { fontSize: s.micro, color: '#94a3b8', textAlign: 'center', lineHeight: s.lineBody },
   emptyBox: { padding: 18, borderRadius: 12, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', margin: 14 },
-  emptyText: { fontSize: 12, color: t.muted, textAlign: 'center' },
+  emptyText: { fontSize: s.caption, color: t.muted, textAlign: 'center' },
   loadingBox: { padding: 24, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 8, fontSize: 12, color: t.muted },
+  loadingText: { marginTop: 8, fontSize: s.caption, color: t.muted },
   errorBox: { padding: 16, borderRadius: 12, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', margin: 14 },
-  errorTitle: { fontSize: 13, fontWeight: '800', color: '#9a3412' },
-  errorDesc: { fontSize: 11, color: '#9a3412', marginTop: 4, lineHeight: 16 },
+  errorTitle: { fontSize: s.body, fontWeight: '800', color: '#9a3412' },
+  errorDesc: { fontSize: s.micro, color: '#9a3412', marginTop: 4, lineHeight: s.lineBody },
   retryButton: { marginTop: 10, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#2563eb', alignSelf: 'flex-start' },
-  retryButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '800' }
+  retryButtonText: { color: t.panel, fontSize: s.micro, fontWeight: '800' }
 });

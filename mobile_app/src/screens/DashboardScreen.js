@@ -71,7 +71,12 @@ export default function DashboardScreen() {
 
   const renderHeader = () => (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
-      <TouchableOpacity onPress={() => navigation.navigate('Consult')} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Consult')}
+        style={styles.backButton}
+        accessibilityLabel="返回問診"
+        accessibilityRole="button"
+      >
         <Text style={styles.backIcon}>←</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>健康儀表板</Text>

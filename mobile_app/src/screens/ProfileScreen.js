@@ -92,7 +92,12 @@ export default function ProfileScreen() {
   // 🌟 通用的 Header 渲染邏輯
   const renderHeader = () => (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
-      <TouchableOpacity onPress={() => navigation.navigate('Consult')} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Consult')}
+        style={styles.backButton}
+        accessibilityLabel="返回問診"
+        accessibilityRole="button"
+      >
         <Text style={styles.backIcon}>←</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>個人化健康資料表</Text>

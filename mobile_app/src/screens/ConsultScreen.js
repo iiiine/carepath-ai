@@ -375,7 +375,12 @@ export default function ConsultScreen() {
       {/* 頂部標題 */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }, elderMode && styles.headerElder]}>
         <View style={styles.userSection}>
-          <TouchableOpacity onPress={() => toggleDrawer(true)} style={styles.menuButton}>
+          <TouchableOpacity
+            onPress={() => toggleDrawer(true)}
+            style={styles.menuButton}
+            accessibilityLabel="開啟選單"
+            accessibilityRole="button"
+          >
             <Icon name="menu" size={elderMode ? 28 : 24} color={t.text} />
           </TouchableOpacity>
           <View style={styles.avatar}>
@@ -391,6 +396,9 @@ export default function ConsultScreen() {
           <TouchableOpacity 
             onPress={toggleElderMode} 
             style={[styles.elderToggleBtn, elderMode && styles.elderToggleBtnActive]}
+            accessibilityLabel="高齡友善模式"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: elderMode }}
           >
             <Text style={[styles.elderToggleText, elderMode && styles.elderToggleTextActive]}>
               {elderMode ? '✓ 簡易大字' : '高齡友善'}
@@ -457,11 +465,21 @@ export default function ConsultScreen() {
               )}
 
               <View style={styles.safetyActionsRow}>
-                <TouchableOpacity onPress={handleNearbyEmergency} style={styles.safetyActionBtnPrimary}>
+                <TouchableOpacity
+                  onPress={handleNearbyEmergency}
+                  style={styles.safetyActionBtnPrimary}
+                  accessibilityLabel="搜尋最近急診"
+                  accessibilityRole="button"
+                >
                   <Icon name="map-marker-radius" size={16} color="#FFFFFF" />
                   <Text style={styles.safetyActionTextPrimary}>搜尋最近急診</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => Linking.openURL('tel:119')} style={styles.safetyActionBtnDanger}>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('tel:119')}
+                  style={styles.safetyActionBtnDanger}
+                  accessibilityLabel="撥打 119 求助"
+                  accessibilityRole="button"
+                >
                   <Icon name="phone" size={16} color="#FFFFFF" />
                   <Text style={styles.safetyActionTextPrimary}>撥打 119 求助</Text>
                 </TouchableOpacity>
@@ -636,6 +654,9 @@ export default function ConsultScreen() {
                 ]}
                 onPress={() => handleSendMessage(inputText)}
                 disabled={!inputText.trim() || loading}
+                accessibilityLabel="送出訊息"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !inputText.trim() || loading }}
               >
                 <Text style={[styles.sendIcon, elderMode && { fontSize: 22 }, (!inputText.trim() || loading) && { color: t.muted }]}>↑</Text>
               </TouchableOpacity>

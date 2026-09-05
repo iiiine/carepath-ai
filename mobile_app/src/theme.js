@@ -33,6 +33,7 @@ export const t = {
 export const scale = {
   normal: {
     // ---- 字級 ----
+    micro: 11,      // 密集資料的欄位標籤（統計卡、時間軸）——僅用於此
     caption: 12,    // 徽章、次要標註
     body: 14,       // 內文
     input: 16,      // 輸入框
@@ -61,6 +62,7 @@ export const scale = {
   },
 
   elder: {
+    micro: 14,
     caption: 15,
     body: 18,
     input: 20,
