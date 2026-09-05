@@ -16,6 +16,9 @@ venv/
 node_modules/
 dist/
 
+# ===== Claude Code 個人本機設定（團隊共用的 .claude/skills/ 要進版控）=====
+.claude/settings.local.json
+
 # ===== 根目錄 Markdown 文件不進版控（子目錄的 md 不受影響）=====
 /*.md
 
