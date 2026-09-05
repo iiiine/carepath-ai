@@ -1,9 +1,57 @@
 // src/context/AuthContext.js
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import client from '../api/client';
 
 export const AuthContext = createContext();
+
+const TOKEN_KEY = 'access_token';
+
+// ------------------------------------------------------------
+// token 一律存放在 SecureStore（加密），不再用 AsyncStorage 明文儲存。
+//
+// 過去 AuthContext 寫 AsyncStorage、client.js 卻讀 SecureStore，
+// 兩邊不通：攔截器讀到的永遠是空的，認證全靠 client.defaults 撐著；
+// 而 SecureStore 若殘留舊 token，攔截器反而會用它蓋掉正確的那個。
+// 這裡統一到 SecureStore，並把殘留的 AsyncStorage token 搬過去後清掉。
+// ------------------------------------------------------------
+// expo-secure-store 沒有 web 實作（呼叫會丟
+// ExpoSecureStore.default.getValueWithKeyAsync is not a function），
+// 因此瀏覽器預覽退回 AsyncStorage（底層就是 localStorage）。
+// 手機端一律走 SecureStore。
+const useSecureStore = Platform.OS !== 'web';
+
+const getToken = async () => {
+  if (!useSecureStore) return AsyncStorage.getItem(TOKEN_KEY);
+
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (token) return token;
+
+  // 舊版本留下的明文 token：搬到 SecureStore 後刪除，只會發生一次
+  const legacy = await AsyncStorage.getItem(TOKEN_KEY);
+  if (legacy) {
+    await SecureStore.setItemAsync(TOKEN_KEY, legacy);
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    return legacy;
+  }
+  return null;
+};
+
+const saveToken = async (token) => {
+  if (!useSecureStore) return AsyncStorage.setItem(TOKEN_KEY, token);
+
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await AsyncStorage.removeItem(TOKEN_KEY);
+};
+
+const clearToken = async () => {
+  if (!useSecureStore) return AsyncStorage.removeItem(TOKEN_KEY);
+
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await AsyncStorage.removeItem(TOKEN_KEY);
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -23,7 +71,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('access_token');
+      const token = await getToken();
       if (token) {
         client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         const res = await client.get('/api/v1/auth/me');
@@ -46,7 +94,7 @@ export const AuthProvider = ({ children }) => {
       const guestToken = res.data.access_token; 
       
       if (guestToken) {
-        await AsyncStorage.setItem('access_token', guestToken);
+        await saveToken(guestToken);
         client.defaults.headers.common['Authorization'] = `Bearer ${guestToken}`;
         
         setUser(formatUser({ 
@@ -64,7 +112,7 @@ export const AuthProvider = ({ children }) => {
     const res = await client.post('/api/v1/auth/login', { identifier: email, password });
     const token = res.data.access_token;
     
-    await AsyncStorage.setItem('access_token', token);
+    await saveToken(token);
     client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     
     const meRes = await client.get('/api/v1/auth/me');
@@ -72,7 +120,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem('access_token');
+    await clearToken();
     delete client.defaults.headers.common['Authorization'];
     setUser(null);
     await silentGuestLogin();

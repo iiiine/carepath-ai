@@ -9,15 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import NearbyHospitalMap from '../components/NearbyHospitalMap';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
+import { useElderMode } from '../context/ElderModeContext';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 import VisitSummaryPanel from './VisitSummaryPanel';
 
 const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
-const ELDER_MODE_KEY = 'carepath_elder_friendly_mode_mobile';
 
 // 仿 Gemini 的起伏點點動畫元件
 const TypingIndicator = () => {
@@ -110,7 +110,8 @@ export default function ConsultScreen() {
   const [diagnosisResult, setDiagnosisResult] = useState(null);
 
   // 🎯 亮點功能狀態：高齡友善、安全阻斷、就醫摘要Modal
-  const [elderMode, setElderMode] = useState(false);
+  // 高齡友善模式已抽到 context，所有畫面共用同一個開關
+  const { elderMode, s, toggleElderMode } = useElderMode();
   const [safetyAlert, setSafetyAlert] = useState(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
 
@@ -121,49 +122,28 @@ export default function ConsultScreen() {
   const quickSymptoms = ['頭痛', '發燒', '喉嚨痛', '肚子痛', '皮膚起疹', '牙齒痛'];
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const slideAnim = useRef(new Animated.Value(-300)).current; 
 
-  // 初始化時加載高齡友善設定
-  useEffect(() => {
-    (async () => {
-      try {
-        const val = await AsyncStorage.getItem(ELDER_MODE_KEY);
-        if (val === 'true') setElderMode(true);
-      } catch (e) {
-        console.error('無法讀取高齡友善設定:', e);
-      }
-    })();
-  }, []);
-
-  // 切換高齡友善模式
-  const handleToggleElderMode = async () => {
-    const nextState = !elderMode;
-    setElderMode(nextState);
-    try {
-      await AsyncStorage.setItem(ELDER_MODE_KEY, nextState ? 'true' : 'false');
-    } catch (e) {
-      console.error('無法儲長高齡友善設定:', e);
-    }
-  };
-
-  const toggleDrawer = (open) => {
+  // onClosed 會在關閉動畫真的跑完、Modal 也卸載之後才呼叫
+  const toggleDrawer = (open, onClosed) => {
     if (open) {
       setIsDrawerOpen(true);
       Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
     } else {
-      Animated.timing(slideAnim, { toValue: -300, duration: 250, useNativeDriver: true }).start(() => setIsDrawerOpen(false));
+      Animated.timing(slideAnim, { toValue: -300, duration: 250, useNativeDriver: true }).start(() => {
+        setIsDrawerOpen(false);
+        if (onClosed) onClosed();
+      });
     }
   };
 
   const handleNavigate = (screenName) => {
-    toggleDrawer(false);
-    setIsNavigating(true);
-    setTimeout(() => {
-      setIsNavigating(false);
-      navigation.navigate(screenName);
-    }, 600);
+    // ponytail: 一定要等抽屜的 Modal 真的關掉再跳頁，不用 setTimeout 猜時間。
+    // 側邊欄放在 Modal 裡，若 Modal 尚未卸載就導覽，它會蓋在新畫面上方，
+    // 使用者看到的就是一片空白。之前的假等 600ms 只是碰巧蓋過這個競態。
+    // 也不再顯示「跳轉中」浮層——目的地畫面自己會顯示載入狀態。
+    toggleDrawer(false, () => navigation.navigate(screenName));
   };
 
   const edgePanResponder = useRef(
@@ -396,7 +376,7 @@ export default function ConsultScreen() {
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }, elderMode && styles.headerElder]}>
         <View style={styles.userSection}>
           <TouchableOpacity onPress={() => toggleDrawer(true)} style={styles.menuButton}>
-            <Text style={[styles.menuIcon, elderMode && { fontSize: 28 }]}>☰</Text>
+            <Icon name="menu" size={elderMode ? 28 : 24} color={t.text} />
           </TouchableOpacity>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{user && !user.is_guest ? user.username.charAt(0).toUpperCase() : '訪'}</Text>
@@ -409,7 +389,7 @@ export default function ConsultScreen() {
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {/* 高齡友善快速切換按鈕 */}
           <TouchableOpacity 
-            onPress={handleToggleElderMode} 
+            onPress={toggleElderMode} 
             style={[styles.elderToggleBtn, elderMode && styles.elderToggleBtnActive]}
           >
             <Text style={[styles.elderToggleText, elderMode && styles.elderToggleTextActive]}>
@@ -478,10 +458,12 @@ export default function ConsultScreen() {
 
               <View style={styles.safetyActionsRow}>
                 <TouchableOpacity onPress={handleNearbyEmergency} style={styles.safetyActionBtnPrimary}>
-                  <Text style={styles.safetyActionTextPrimary}>🗺️ 搜尋最近急診</Text>
+                  <Icon name="map-marker-radius" size={16} color="#FFFFFF" />
+                  <Text style={styles.safetyActionTextPrimary}>搜尋最近急診</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => Linking.openURL('tel:119')} style={styles.safetyActionBtnDanger}>
-                  <Text style={styles.safetyActionTextPrimary}>📞 撥打 119 求助</Text>
+                  <Icon name="phone" size={16} color="#FFFFFF" />
+                  <Text style={styles.safetyActionTextPrimary}>撥打 119 求助</Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity onPress={handleResetChat} style={styles.safetyResetBtn}>
@@ -610,7 +592,8 @@ export default function ConsultScreen() {
           ) : (
             <>
               {renderMessages()}
-              {loading && (
+              {/* 載入歷史紀錄時已有全螢幕浮層，這裡不再重複顯示打字氣泡 */}
+              {loading && !loadingHistory && (
                 <View style={[styles.messageRow, styles.messageRowModel]}>
                   <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.avatarImage} resizeMode="contain" />
                   <View style={[styles.bubble, styles.bubbleModel, { paddingVertical: 14 }]}>
@@ -660,9 +643,16 @@ export default function ConsultScreen() {
             
             {!inputFocused && (
               <View style={styles.controlsRow}>
-                <Text style={[styles.controlBadge, elderMode && styles.controlBadgeElder, locationStatus === 'success' && { color: t.userBubble, borderColor: t.userBubble }]}>
-                  {locationStatus === 'loading' ? '📍 定位中...' : locationStatus === 'success' ? '📍 已定位' : '📍 備援定位'}
-                </Text>
+                <View style={[styles.controlBadge, styles.controlBadgeRow, elderMode && styles.controlBadgeElder, locationStatus === 'success' && { borderColor: t.userBubble }]}>
+                  <Icon
+                    name={locationStatus === 'success' ? 'map-marker-check' : 'map-marker'}
+                    size={elderMode ? 16 : 13}
+                    color={locationStatus === 'success' ? t.userBubble : t.muted}
+                  />
+                  <Text style={[styles.controlBadgeText, elderMode && { fontSize: 15 }, locationStatus === 'success' && { color: t.userBubble }]}>
+                    {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
+                  </Text>
+                </View>
                 <TouchableOpacity onPress={() => setPainLevel(p => (p >= 5 ? 1 : p + 1))}>
                   <Text style={[styles.controlBadge, elderMode && styles.controlBadgeElder, painLevel >= 4 && { color: t.danger, fontWeight: 'bold', borderColor: t.danger }]}>
                     不適度 {painLevel} / 5
@@ -699,15 +689,33 @@ export default function ConsultScreen() {
         </View>
       </Modal>
 
-      {/* 跳轉／載入歷史紀錄提示 */}
-      {(isNavigating || loadingHistory) && (
-        <View style={styles.navigatingOverlay} pointerEvents="auto">
+      {/* 載入歷史紀錄提示
+          用 Modal 而非一般 View：載入由 route.params.sessionId 的 useEffect 觸發，
+          此時畫面轉場動畫還在跑，絕對定位的浮層會跟著整個畫面位移。
+
+          padding 用 safe area insets 補償：app.json 開了 edgeToEdgeEnabled，
+          Modal 容器會延伸到狀態列與底部導覽列後方，那塊高度看不見卻算進容器，
+          直接 justifyContent:'center' 會讓盒子的幾何中心低於視覺中心（偏下）。
+          扣掉兩端 inset 之後，置中才是使用者看到的正中央。 */}
+      <Modal
+        visible={loadingHistory}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}}
+      >
+        <View
+          style={[
+            styles.navigatingOverlay,
+            { paddingTop: insets.top, paddingBottom: insets.bottom },
+          ]}
+        >
           <View style={styles.navigatingBox}>
             <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.navigatingText}>{loadingHistory ? '載入紀錄中...' : '跳轉中...'}</Text>
+            <Text style={styles.navigatingText}>載入紀錄中...</Text>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* 🎯 AI 就醫摘要 Modal */}
       <Modal
@@ -867,11 +875,14 @@ const styles = StyleSheet.create({
   sendIcon: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   controlBadge: { fontSize: 12, color: t.muted, backgroundColor: '#FAFAFA', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: t.border },
+  // 定位徽章改為 icon + 文字，容器要橫向排列，字體樣式獨立出來
+  controlBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  controlBadgeText: { fontSize: 12, color: t.muted },
   controlBadgeElder: { fontSize: 15, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0' },
 
   drawerOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.5)' },
   drawerBackdrop: { flex: 1 },
-  navigatingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
+  navigatingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)' },
   navigatingBox: { backgroundColor: '#1A1A1A', paddingHorizontal: 30, paddingVertical: 20, borderRadius: 16, alignItems: 'center', elevation: 5 },
   navigatingText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
   drawerContent: { width: 270, height: '100%', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 10, padding: 24 },
@@ -899,8 +910,8 @@ const styles = StyleSheet.create({
   redFlagTitle: { fontSize: 13, fontWeight: '800', color: '#B91C1C' },
   redFlagDesc: { fontSize: 11, color: '#7F1D1D', marginTop: 2 },
   safetyActionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  safetyActionBtnPrimary: { flex: 1, backgroundColor: '#1E293B', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  safetyActionBtnDanger: { flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
+  safetyActionBtnPrimary: { flex: 1, backgroundColor: '#1E293B', paddingVertical: 12, borderRadius: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  safetyActionBtnDanger: { flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
   safetyActionTextPrimary: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
   safetyResetBtn: { alignSelf: 'center', marginTop: 14, paddingVertical: 8, paddingHorizontal: 16 },
   safetyResetBtnText: { color: '#475569', fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' },

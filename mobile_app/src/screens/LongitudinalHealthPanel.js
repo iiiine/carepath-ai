@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import client from '../api/client';
 import { t } from '../theme';
+import Icon from '@react-native-vector-icons/material-design-icons';
 
 function formatDate(value) {
   if (!value) return '日期未記錄';
@@ -139,7 +140,7 @@ export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 
   if (guestBlocked) {
     return (
       <View style={styles.guestBox}>
-        <Text style={{ fontSize: 24, textAlign: 'center' }}>👤</Text>
+        <Icon name="account-circle-outline" size={30} color={t.muted} style={{ alignSelf: 'center' }} />
         <Text style={styles.guestTitle}>登入會員即可查看健康趨勢</Text>
         <Text style={styles.guestSub}>
           縱向健康分析需要比較多次歷史問診。訪客資料不會作為長期會員健康紀錄使用。
@@ -180,7 +181,7 @@ export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.heroTitleRow}>
-            <View style={styles.heroIcon}><Text style={{ fontSize: 18 }}>📈</Text></View>
+            <View style={styles.heroIcon}><Icon name="chart-line" size={18} color={t.text} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>我的健康趨勢</Text>
               <Text style={styles.subtitle}>比較歷史 AI 問診，協助理解症狀變化與規律。</Text>
@@ -296,13 +297,23 @@ export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>歷史健康洞察</Text>
-          <Text style={styles.sectionMeta}>AI Analysis</Text>
+          <Text style={styles.sectionMeta}>
+            {insights.length > 0 ? `AI Analysis · ${insights.length} 則` : 'AI Analysis'}
+          </Text>
         </View>
 
         {insights.length === 0 ? (
           <Text style={styles.emptyText}>目前尚未發現顯著歷史規律以產生個人洞察。</Text>
         ) : (
-          <View style={styles.list}>
+          // 洞察筆數會隨問診次數累積而變長，撐開整個面板。
+          // 改為固定高度內自行捲動，讓下方的「健康時間軸」不會被推到很遠。
+          // nestedScrollEnabled 是 Android 巢狀捲動的必要設定。
+          <ScrollView
+            style={styles.insightScroll}
+            contentContainerStyle={styles.list}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
             {insights.map((insight, index) => (
               <View key={index} style={styles.insightCard}>
                 <View style={styles.insightTop}>
@@ -312,14 +323,17 @@ export default function LongitudinalHealthPanel({ windowDays = 90, refreshKey = 
                     <Text style={styles.insightDesc}>{insight.description}</Text>
                     {insight.recommendation && (
                       <View style={styles.recommendationBox}>
-                        <Text style={styles.recommendationText}>💡 建議：{insight.recommendation}</Text>
+                        <View style={styles.recommendationRow}>
+                          <Icon name="lightbulb-on-outline" size={13} color="#475569" />
+                          <Text style={styles.recommendationText}>建議：{insight.recommendation}</Text>
+                        </View>
                       </View>
                     )}
                   </View>
                 </View>
               </View>
             ))}
-          </View>
+          </ScrollView>
         )}
       </View>
 
@@ -408,12 +422,15 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' },
   chipText: { fontSize: 12, color: '#334155', fontWeight: '700' },
   chipCount: { color: '#2563eb' },
+  // 約可容納 2~3 張洞察卡，超過就在區塊內捲動
+  insightScroll: { maxHeight: 260 },
   insightCard: { padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
   insightTop: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   insightDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   insightTitle: { fontSize: 13, fontWeight: '800', color: t.text },
   insightDesc: { fontSize: 12, color: '#64748b', marginTop: 4, lineHeight: 17 },
   recommendationBox: { marginTop: 8, padding: 8, borderRadius: 6, backgroundColor: '#ffffff' },
+  recommendationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
   recommendationText: { fontSize: 11, color: '#475569', lineHeight: 16 },
   timeline: {},
   timelineItem: { flexDirection: 'row', gap: 10 },
