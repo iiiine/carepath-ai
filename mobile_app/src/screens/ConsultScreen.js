@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import NearbyHospitalMap from '../components/NearbyHospitalMap';
+import Slider from '@react-native-community/slider';
 
 import { AuthContext } from '../context/AuthContext';
 import { t } from '../theme';
@@ -793,23 +794,42 @@ export default function ConsultScreen() {
             </View>
             
             {!inputFocused && (
-              <View style={styles.controlsRow}>
-                <View style={[styles.controlBadge, styles.controlBadgeRow, locationStatus === 'success' && { borderColor: t.userBubble }]}>
-                  <Icon
-                    name={locationStatus === 'success' ? 'map-marker-check' : 'map-marker'}
-                    size={s.caption + 1}
-                    color={locationStatus === 'success' ? t.userBubble : t.muted}
+              <>
+                {/* 不適度改用 slider：原本是點一下加一、到 5 再繞回 1，
+                    要選 2 得從 3 一路點四次。滑動可直接抵達目標值。 */}
+                <View style={styles.painRow}>
+                  <Text style={styles.painLabel}>不適度</Text>
+                  <Slider
+                    style={styles.painSlider}
+                    minimumValue={1}
+                    maximumValue={5}
+                    step={1}
+                    value={painLevel}
+                    onValueChange={setPainLevel}
+                    minimumTrackTintColor={painLevel >= 4 ? t.danger : t.userBubble}
+                    maximumTrackTintColor={t.border}
+                    thumbTintColor={painLevel >= 4 ? t.danger : t.userBubble}
+                    accessibilityLabel="自評不適度"
+                    accessibilityValue={{ min: 1, max: 5, now: painLevel }}
                   />
-                  <Text style={[styles.controlBadgeText, locationStatus === 'success' && { color: t.userBubble }]}>
-                    {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
+                  <Text style={[styles.painValue, painLevel >= 4 && { color: t.danger }]}>
+                    {painLevel} / 5
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setPainLevel(p => (p >= 5 ? 1 : p + 1))}>
-                  <Text style={[styles.controlBadge, painLevel >= 4 && { color: t.danger, fontWeight: 'bold', borderColor: t.danger }]}>
-                    不適度 {painLevel} / 5
-                  </Text>
-                </TouchableOpacity>
-              </View>
+
+                <View style={styles.controlsRow}>
+                  <View style={[styles.controlBadge, styles.controlBadgeRow, locationStatus === 'success' && { borderColor: t.userBubble }]}>
+                    <Icon
+                      name={locationStatus === 'success' ? 'map-marker-check' : 'map-marker'}
+                      size={s.caption + 1}
+                      color={locationStatus === 'success' ? t.userBubble : t.muted}
+                    />
+                    <Text style={[styles.controlBadgeText, locationStatus === 'success' && { color: t.userBubble }]}>
+                      {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
+                    </Text>
+                  </View>
+                </View>
+              </>
             )}
           </View>
         )}
@@ -1029,6 +1049,12 @@ const makeStyles = (s) => StyleSheet.create({
   sendButton: { backgroundColor: '#1A1A1A', borderRadius: s.touch / 2, width: s.touch - 8, height: s.touch - 8, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   sendIcon: { fontSize: s.subtitle, color: '#fff', fontWeight: 'bold' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  // 不適度 slider：標籤與數值固定寬度，滑軌吃掉剩下的空間，
+  // 這樣數值從 1 變到 5 時滑軌不會左右跳動。
+  painRow: { flexDirection: 'row', alignItems: 'center', gap: s.gap, paddingHorizontal: s.gap, marginBottom: s.gap },
+  painLabel: { fontSize: s.caption, color: t.muted, fontWeight: '600' },
+  painSlider: { flex: 1, height: s.touch },
+  painValue: { fontSize: s.caption, color: t.text, fontWeight: '700', minWidth: s.caption * 3, textAlign: 'right' },
   controlBadge: { fontSize: s.caption, color: t.muted, backgroundColor: '#FAFAFA', paddingHorizontal: s.gapLg, paddingVertical: s.gap, borderRadius: s.radius, overflow: 'hidden', borderWidth: s.border, borderColor: t.border },
   // 定位徽章改為 icon + 文字，容器要橫向排列，字體樣式獨立出來
   controlBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
