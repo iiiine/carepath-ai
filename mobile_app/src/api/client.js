@@ -6,10 +6,10 @@ import { Platform } from 'react-native';
 
 // 後端位址。EXPO_PUBLIC_ 開頭的變數會在打包時直接內嵌進 bundle，
 // 因此換後端一定要重新打包，不是改完 .env 就會生效。
-// 未設定時退回目前的 ngrok 固定網域，跟網頁端 src/api/axios.js 的處理一致。
+// 未設定時退回 Render 上的正式後端，跟網頁端 src/api/axios.js 的處理一致。
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'https://baked-gender-unseen.ngrok-free.dev';
+  'https://carepath-ai-backend.onrender.com';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
