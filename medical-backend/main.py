@@ -1,7 +1,28 @@
+# ============================================================
+# 啟動耗時量測
+# ============================================================
+# Render 免費方案閒置會休眠，冷啟動時間直接等於使用者的等待時間。
+# uvicorn 必須等這個模組 import 完才綁 port，所以底下每一段耗時
+# 都會實實在在加在第一個請求上。計時器要放在所有 import 之前。
+
+import time
+
+_startup_t0 = time.perf_counter()
+
+
+def _elapsed(label: str) -> None:
+    print(
+        f"⏱️ 啟動耗時 [{label}] "
+        f"累計 {time.perf_counter() - _startup_t0:.2f}s"
+    )
+
+
 import uvicorn
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+_elapsed("載入 fastapi")
 
 
 # ============================================================
@@ -9,6 +30,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # ============================================================
 
 from services import run_health_check
+
+_elapsed("載入 services：含 PGVector 建構與資料庫連線")
 
 
 # ============================================================
@@ -57,6 +80,9 @@ from routes.visit_summary import (
 # ============================================================
 # FastAPI Application
 # ============================================================
+
+_elapsed("載入 routes")
+
 
 app = FastAPI(
     title="CarePath AI 醫療健康決策輔助後端",
@@ -192,6 +218,8 @@ app.include_router(
 # ============================================================
 
 run_health_check()
+
+_elapsed("Gemini 健康檢查完成，即將交還 uvicorn 綁 port")
 
 
 # ============================================================
