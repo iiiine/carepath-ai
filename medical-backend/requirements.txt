@@ -1,0 +1,45 @@
+# 後端部署用的相依套件（UTF-8，pip 讀得懂）
+#
+# 為什麼不用根目錄那份 requirements.txt：
+#   1. 它是 UTF-16 編碼，pip 會直接解析失敗。
+#   2. 它是整個開發環境的 freeze，混進了爬蟲與 RAG 匯入才需要的
+#      chromadb / onnxruntime / playwright / openai，光這幾包就好幾百 MB，
+#      Render 免費方案的記憶體與建置時間撐不住，而 API 執行路徑根本沒 import。
+#
+# 這份只列「後端真的 import 到的直接相依」，間接相依交給 pip 自己解。
+# 版本沿用根目錄 freeze 的值，避免跟本機跑出不同行為。
+#
+# ⚠️ RAG 匯入腳本 ingest.py 另外需要 langchain-community，
+#    那是離線工具、不在 API 路徑上，刻意不放進來。
+
+# --- Web 框架 ---
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+python-dotenv==1.2.2
+
+# --- 資料驗證（models.py 的 EmailStr 需要 email-validator）---
+pydantic==2.13.4
+email-validator==2.3.0
+
+# --- Gemini ---
+google-genai==2.12.1
+
+# --- 身分驗證（auth.py 用 PasswordHash.recommended()，backend 是 argon2）---
+PyJWT==2.13.0
+pwdlib[argon2]==0.3.0
+
+# --- 資料庫：psycopg2 給既有原生 SQL，psycopg3 給 langchain-postgres ---
+psycopg2-binary==2.9.12
+psycopg[binary,pool]==3.3.4
+SQLAlchemy==2.0.51
+pgvector==0.3.6
+
+# --- RAG 檢索 ---
+langchain-core==1.5.0
+langchain-google-genai==4.3.1
+langchain-postgres==0.0.17
+langchain-text-splitters==1.1.2
+
+# --- 門診表同步（schedule_providers 抓網頁）---
+requests==2.34.2
+beautifulsoup4==4.15.0

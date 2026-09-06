@@ -1,0 +1,36 @@
+# Render Blueprint：CarePath AI 後端
+#
+# 用法：在 Render 上建 Blueprint 並指向這個 repo，它會讀這個檔建服務。
+# 標了 sync: false 的環境變數不會進版控，第一次建立時 Render 會逐一問你填。
+
+services:
+  - type: web
+    name: carepath-ai-backend
+    runtime: python
+    plan: free
+
+    # 後端程式在子目錄，requirements.txt 也放在那裡（根目錄那份是 UTF-16，pip 讀不了）
+    rootDir: medical-backend
+
+    buildCommand: pip install -r requirements.txt
+
+    # Render 會指定 PORT，寫死 8000 會被判定沒綁到 port 而部署失敗
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    # 後端沒有 / 路由，健康檢查要指向實際存在的端點
+    healthCheckPath: /api/test
+
+    envVars:
+      # 本機跑的是 3.14，這裡對齊避免版本差異
+      - key: PYTHON_VERSION
+        value: 3.14.3
+
+      # 以下四個是機密，一律手動填，不寫進版控
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL_NAME
+        sync: false
+      - key: AUTH_SECRET_KEY
+        sync: false
