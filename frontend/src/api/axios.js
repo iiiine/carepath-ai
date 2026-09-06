@@ -3,7 +3,7 @@ import axios from 'axios';
 const api = axios.create({
   baseURL:
     import.meta.env.VITE_API_BASE_URL ||
-    'https://baked-gender-unseen.ngrok-free.dev',
+    'https://carepath-ai-backend.onrender.com',
 
   headers: {
     'ngrok-skip-browser-warning': 'true',

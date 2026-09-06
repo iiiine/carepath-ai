@@ -20,10 +20,26 @@ services:
     # 後端沒有 / 路由，健康檢查要指向實際存在的端點
     healthCheckPath: /api/test
 
+    # 只有後端相關檔案變動才自動部署。paths 是相對「repo 根目錄」，
+    # 不是相對上面的 rootDir —— 寫錯的話後端會從此不再自動部署，且不會報錯。
+    # render.yaml 自己也要列進來，否則改了部署設定不會生效。
+    buildFilter:
+      paths:
+        - "medical-backend/**"
+        - "render.yaml"
+      # ignoredPaths 優先於 paths：純文件變動不值得重跑一次建置
+      ignoredPaths:
+        - "medical-backend/**/*.md"
+
     envVars:
       # 本機跑的是 3.14，這裡對齊避免版本差異
       - key: PYTHON_VERSION
         value: 3.14.3
+
+      # 不設的話 print() 會被區塊緩衝，訊息延遲、亂序，行程被殺時整批遺失。
+      # uvicorn 走 logging 每次都 flush，兩者混在一起會讓 log 順序失真。
+      - key: PYTHONUNBUFFERED
+        value: "1"
 
       # 以下四個是機密，一律手動填，不寫進版控
       - key: DATABASE_URL
