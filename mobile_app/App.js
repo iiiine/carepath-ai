@@ -1,17 +1,18 @@
 // App.js
-import React from 'react';
+import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import { ElderModeProvider } from './src/context/ElderModeContext';
 import ConsultScreen from './src/screens/ConsultScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryListScreen from './src/screens/HistoryListScreen';
+import StartupScreen from './src/screens/StartupScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -42,12 +43,22 @@ function RootNavigator() {
   );
 }
 
+// 訪客登入完成前先擋住整個介面。冷啟動時後端要數十秒才醒，
+// 這段期間放行會讓使用者在還沒拿到 token 時就送出請求，後端回 401。
+function AuthGate({ children }) {
+  const { loading } = useContext(AuthContext);
+  return loading ? <StartupScreen /> : children;
+}
+
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <ElderModeProvider>
-          <RootNavigator />
+          <AuthGate>
+            <RootNavigator />
+          </AuthGate>
         </ElderModeProvider>
       </AuthProvider>
     </SafeAreaProvider>
