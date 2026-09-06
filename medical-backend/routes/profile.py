@@ -18,7 +18,11 @@ class ProfileSchema(BaseModel):
 
 # 1. 取得使用者健康資料
 @router.get("")
-async def get_user_profile(current_user=Depends(get_current_user)):
+# 註：這裡刻意用一般 def 而非 async def。函式內部呼叫的 Gemini、
+# 資料庫、RAG 全是同步阻塞的，寫成 async def 會直接卡住 event loop，
+# 連健康檢查都無法回應（Render 會因此判定服務死亡並重啟）。
+# 用一般 def，FastAPI 會把它丟到 threadpool 執行，event loop 保持空閒。
+def get_user_profile(current_user=Depends(get_current_user)):
     if current_user.get("is_guest"):
         raise HTTPException(status_code=403, detail="訪客無法使用此功能")
 
@@ -52,7 +56,7 @@ async def get_user_profile(current_user=Depends(get_current_user)):
 
 # 2. 新增 / 更新健康資料 (Upsert)
 @router.post("")
-async def update_user_profile(payload: ProfileSchema, current_user=Depends(get_current_user)):
+def update_user_profile(payload: ProfileSchema, current_user=Depends(get_current_user)):
     if current_user.get("is_guest"):
         raise HTTPException(status_code=403, detail="訪客無法儲存健康資料")
 

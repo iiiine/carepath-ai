@@ -51,7 +51,11 @@ def parse_json_list(value):
     "",
     response_model=List[ChatSessionResponse]
 )
-async def get_user_history(
+# 註：這裡刻意用一般 def 而非 async def。函式內部呼叫的 Gemini、
+# 資料庫、RAG 全是同步阻塞的，寫成 async def 會直接卡住 event loop，
+# 連健康檢查都無法回應（Render 會因此判定服務死亡並重啟）。
+# 用一般 def，FastAPI 會把它丟到 threadpool 執行，event loop 保持空閒。
+def get_user_history(
     current_user=Depends(get_current_user)
 ):
     if current_user.get("is_guest"):
@@ -202,7 +206,7 @@ async def get_user_history(
 
 # 2. 修改歷史問診標題
 @router.patch("/{session_id}")
-async def update_session_title(
+def update_session_title(
     session_id: int,
     payload: UpdateTitleRequest,
     current_user=Depends(get_current_user)
@@ -283,7 +287,7 @@ async def update_session_title(
 
 # 3. 刪除單筆歷史紀錄
 @router.delete("/{session_id}")
-async def delete_history_session(
+def delete_history_session(
     session_id: int,
     current_user=Depends(get_current_user)
 ):

@@ -353,7 +353,11 @@ def build_safety_alert_message(
         SafetyAlertResponse,
     ],
 )
-async def diagnose_symptom(
+# 註：這裡刻意用一般 def 而非 async def。函式內部呼叫的 Gemini、
+# 資料庫、RAG 全是同步阻塞的，寫成 async def 會直接卡住 event loop，
+# 連健康檢查都無法回應（Render 會因此判定服務死亡並重啟）。
+# 用一般 def，FastAPI 會把它丟到 threadpool 執行，event loop 保持空閒。
+def diagnose_symptom(
     payload: SymptomRequest,
     current_user=Depends(
         get_current_user
