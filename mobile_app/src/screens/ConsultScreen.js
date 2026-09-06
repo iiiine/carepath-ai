@@ -73,12 +73,25 @@ const mergeQuickSymptoms = (recurringSymptoms) => {
 };
 
 // 仿 Gemini 的起伏點點動畫元件
+// 等多久才顯示「伺服器喚醒中」。設 6 秒是因為後端暖機時整輪問診約 3~5 秒，
+// 太短會在正常回應時誤跳提示，反而讓人以為系統很慢。
+const WAKE_HINT_DELAY = 6000;
+
 const TypingIndicator = () => {
   const { s } = useElderMode();
   const styles = useMemo(() => makeStyles(s), [s]);
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
+
+  // 後端在免費方案上閒置會休眠，冷啟動要等數十秒。單純轉圈會讓人以為當掉，
+  // 等超過 WAKE_HINT_DELAY 就補一行說明，讓使用者知道是在等而不是壞了。
+  const [showWakeHint, setShowWakeHint] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowWakeHint(true), WAKE_HINT_DELAY);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const animate = () => {
@@ -108,10 +121,17 @@ const TypingIndicator = () => {
   });
 
   return (
-    <View style={styles.typingContainer}>
-      <Animated.View style={[styles.typingDot, getStyle(dot1)]} />
-      <Animated.View style={[styles.typingDot, getStyle(dot2)]} />
-      <Animated.View style={[styles.typingDot, getStyle(dot3)]} />
+    <View>
+      <View style={styles.typingContainer}>
+        <Animated.View style={[styles.typingDot, getStyle(dot1)]} />
+        <Animated.View style={[styles.typingDot, getStyle(dot2)]} />
+        <Animated.View style={[styles.typingDot, getStyle(dot3)]} />
+      </View>
+      {showWakeHint && (
+        <Text style={styles.wakeHintText}>
+          伺服器喚醒中，首次連線約需一分鐘，請稍候…
+        </Text>
+      )}
     </View>
   );
 };
@@ -981,6 +1001,7 @@ const makeStyles = (s) => StyleSheet.create({
   // 高度對齊一行文字，讓「思考中」與「已回覆」的氣泡等高，頭像不會上下跳
   typingContainer: { flexDirection: 'row', alignItems: 'center', height: s.lineSubtitle, paddingHorizontal: 4, gap: 6 },
   typingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#94A3B8' },
+  wakeHintText: { fontSize: s.caption, color: t.muted, lineHeight: s.lineBody, marginTop: s.gap, paddingHorizontal: 4 },
 
   resultSection: { gap: 12 },
   modernCard: { backgroundColor: t.panel, borderRadius: s.radiusLg, padding: s.pad, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },

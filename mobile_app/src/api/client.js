@@ -14,7 +14,10 @@ const API_BASE_URL =
 const client = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'ngrok-skip-browser-warning': 'true' },
-  timeout: 45000,
+  // Render 免費方案閒置 15 分鐘會休眠，冷啟動實測約 62 秒
+  // （容器啟動約 23s + 後端 import 約 40s）。原本 45 秒會在喚醒完成前
+  // 就逾時，讓使用者看到錯誤而不是等待，因此放寬到 90 秒。
+  timeout: 90000,
 });
 
 // 與 AuthContext 一致：web 沒有 SecureStore 實作，退回 AsyncStorage

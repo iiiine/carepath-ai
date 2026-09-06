@@ -5,6 +5,7 @@
 # uvicorn 必須等這個模組 import 完才綁 port，所以底下每一段耗時
 # 都會實實在在加在第一個請求上。計時器要放在所有 import 之前。
 
+import threading
 import time
 
 _startup_t0 = time.perf_counter()
@@ -216,10 +217,22 @@ app.include_router(
 # ============================================================
 # Startup Health Check
 # ============================================================
+#
+# 丟到背景執行緒跑，不擋 uvicorn 綁 port。
+#
+# 這個檢查本身很輕（實測 0.62 秒），但它呼叫的 call_gemini_with_retry 在
+# Gemini 回 503／429 時會退避重試 2→4→8→16 秒，最壞情況多花 30 秒。放在
+# import 階段的話，這 30 秒會整個加在冷啟動上，把使用者端的等待推過逾時。
+#
+# 檢查結果本來就只有 print 出來給人看、不影響任何流程，因此搬到背景不會
+# 改變行為：console 訊息照樣會出現，只是晚個一兩秒。
+threading.Thread(
+    target=run_health_check,
+    name="gemini-health-check",
+    daemon=True,
+).start()
 
-run_health_check()
-
-_elapsed("Gemini 健康檢查完成，即將交還 uvicorn 綁 port")
+_elapsed("啟動完成，交還 uvicorn 綁 port（健康檢查在背景進行）")
 
 
 # ============================================================

@@ -53,6 +53,17 @@ const clearToken = async () => {
   await AsyncStorage.removeItem(TOKEN_KEY);
 };
 
+// 訪客登入的嘗試次數。
+//
+// 為什麼是重試而不是把 timeout 調更大：冷啟動時間本來就會浮動，單次量到
+// 62 秒不代表上限——Gemini 若在啟動時回 503，call_gemini_with_retry 的退避
+// 會再加最多 30 秒。把 timeout 一路往上加只是換一個猜出來的數字，而且失敗
+// 時使用者已經枯等了那麼久。
+//
+// 重試的好處是第一次請求其實已經把後端叫醒了，第二次通常幾秒內就回來。
+const GUEST_LOGIN_ATTEMPTS = 3;
+
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -89,22 +100,32 @@ export const AuthProvider = ({ children }) => {
   };
 
   const silentGuestLogin = async () => {
-    try {
-      const res = await client.post('/api/v1/auth/guest-login'); 
-      const guestToken = res.data.access_token; 
-      
-      if (guestToken) {
-        await saveToken(guestToken);
-        client.defaults.headers.common['Authorization'] = `Bearer ${guestToken}`;
-        
-        setUser(formatUser({ 
-          id: res.data.user.id,
-          username: res.data.user.username,
-          is_guest: res.data.user.is_guest 
-        }));
+    for (let attempt = 1; attempt <= GUEST_LOGIN_ATTEMPTS; attempt += 1) {
+      try {
+        const res = await client.post('/api/v1/auth/guest-login');
+        const guestToken = res.data.access_token;
+
+        if (guestToken) {
+          await saveToken(guestToken);
+          client.defaults.headers.common['Authorization'] = `Bearer ${guestToken}`;
+
+          setUser(formatUser({
+            id: res.data.user.id,
+            username: res.data.user.username,
+            is_guest: res.data.user.is_guest
+          }));
+        }
+        return;
+      } catch (error) {
+        if (attempt < GUEST_LOGIN_ATTEMPTS) {
+          console.log(`訪客登入第 ${attempt} 次失敗，重試中`, error?.message);
+          continue;
+        }
+        // 重試都用盡才退回本地訪客狀態。注意這個狀態沒有 token，
+        // 後續每一支 API 都會 401 —— 屬於後端真的連不上的情境，
+        // 不該用來掩蓋單次逾時。
+        setUser({ is_guest: true, username: '目前是訪客狀態' });
       }
-    } catch (error) {
-      setUser({ is_guest: true, username: '目前是訪客狀態' }); 
     }
   };
 
