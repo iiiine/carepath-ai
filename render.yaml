@@ -36,6 +36,11 @@ services:
       - key: PYTHON_VERSION
         value: 3.14.3
 
+      # 不設的話 print() 會被區塊緩衝，訊息延遲、亂序，行程被殺時整批遺失。
+      # uvicorn 走 logging 每次都 flush，兩者混在一起會讓 log 順序失真。
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
       # 以下四個是機密，一律手動填，不寫進版控
       - key: DATABASE_URL
         sync: false
