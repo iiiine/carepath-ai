@@ -114,7 +114,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.headerRow}>
-            <Image source={require('../../assets/baymaxicon-nobg.png')} style={styles.mascot} resizeMode="contain" />
+            <Image source={require('../../assets/carepath-icon.png')} style={styles.mascot} resizeMode="contain" />
             <View style={{ flex: 1 }}>
               <Text style={styles.mainTitle}>CarePath AI</Text>
               <Text style={styles.subTitle}>登入帳號後可使用個人化健康資訊功能</Text>

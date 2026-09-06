@@ -17,7 +17,7 @@ import LongitudinalHealthPanel from './LongitudinalHealthPanel';
 import VisitSummaryPanel from './VisitSummaryPanel';
 
 import { t } from './theme';
-import { BaymaxAvatar } from './Baymax';
+import { BaymaxAvatar, CarePathWordmark } from './Baymax';
 import Icon from './Icon';
 import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } from '@mdi/js';
 
@@ -370,7 +370,7 @@ function SymptomChecker({
   });
 
   // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
-  // 改成置中的杯麵 + 一句大標，讓使用者知道要打什麼。
+  // 改成置中的品牌圖 + 一句大標，讓使用者知道要打什麼。
   // 從 Dashboard 點進歷史對話時，要先去撈 /api/v1/history，這段時間畫面不能空著。
   // selectedSessionId 一開始就有值的話直接從 true 起跳，不然會先閃一下開場畫面。
   const [sessionLoading, setSessionLoading] =
@@ -2900,7 +2900,7 @@ function SymptomChecker({
                     paddingBottom: '8px',
                   }}
                 >
-                  <BaymaxAvatar size={108} />
+                  <CarePathWordmark size={180} />
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div
