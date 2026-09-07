@@ -20,7 +20,7 @@ def _elapsed(label: str) -> None:
 
 import uvicorn
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 _elapsed("載入 fastapi")
@@ -30,7 +30,7 @@ _elapsed("載入 fastapi")
 # 共用服務
 # ============================================================
 
-from services import run_health_check
+from services import get_db_connection, run_health_check
 
 _elapsed("載入 services：含 PGVector 建構與資料庫連線")
 
@@ -122,6 +122,60 @@ def read_test():
         "status": "success",
         "message": "CarePath AI 後端成功連線",
     }
+
+
+# ============================================================
+# 資料庫探活（給外部監控定時呼叫）
+# ============================================================
+#
+# 為什麼需要這支：Neon 免費方案的運算閒置約 5 分鐘就會自動暫停，
+# 之後第一個真實查詢要等它喚醒 —— 實測可達 60 秒以上，正好落在
+# 使用者的第一次問診上。
+#
+# 原本的保暖只 ping /api/test，但那支完全不碰資料庫，所以
+# Render 一直醒著、Neon 照樣睡。外部監控改指向這支才能連 Neon 一起保暖。
+#
+# 刻意只跑 SELECT 1：不查任何業務資料表，成本趨近於零。
+#
+# ⚠️ 這支不可以拿來當 Render 的 healthCheckPath。資料庫短暫不可用時
+#    重啟應用程式毫無幫助，只會讓服務反覆重啟；Render 的存活檢查
+#    維持指向 /api/test。
+
+@app.get(
+    "/api/health/db",
+    tags=["System"],
+)
+def read_db_health(
+    response: Response,
+):
+
+    conn = get_db_connection()
+
+    if conn is None:
+
+        # 回 503 讓監控服務能真的發出告警，
+        # 而不是靜靜收到一個 200 卻夾帶錯誤訊息
+        response.status_code = 503
+
+        return {
+            "status": "error",
+            "database": "unreachable",
+        }
+
+    try:
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
+            cur.fetchone()
+
+        return {
+            "status": "success",
+            "database": "awake",
+        }
+
+    finally:
+
+        conn.close()
 
 
 # ============================================================
