@@ -704,6 +704,12 @@ export default function ConsultScreen() {
                         <View style={{ flex: 1, paddingRight: 10 }}>
                           <Text style={styles.hospitalName}>{hospital.name}</Text>
                           <Text style={styles.hospitalInfo}>{hospital.address}</Text>
+                          {/* 健保署公告的一般門診時段，不代表當日必定開診 */}
+                          {hospital.opening_hours?.summary ? (
+                            <Text style={styles.hospitalHours}>
+                              院方公告門診時段：{hospital.opening_hours.summary}
+                            </Text>
+                          ) : null}
                         </View>
                         {hasBookingUrl && (
                           <TouchableOpacity onPress={() => Linking.openURL(hospital.booking_url)} style={styles.bookingBtn}>
@@ -1048,6 +1054,7 @@ const makeStyles = (s) => StyleSheet.create({
   hospitalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   hospitalName: { fontSize: s.subtitle, fontWeight: '900', color: t.text, marginBottom: 6 },
   hospitalInfo: { fontSize: s.body, color: t.muted, lineHeight: 20 },
+  hospitalHours: { fontSize: s.body, color: t.muted, lineHeight: 20, marginTop: 4 },
   bookingBtn: { backgroundColor: '#1A1A1A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   bookingBtnText: { color: '#ffffff', fontSize: s.caption, fontWeight: 'bold' },
   hospitalActions: { flexDirection: 'row', gap: 12 },
