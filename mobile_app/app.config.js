@@ -36,7 +36,7 @@ module.exports = {
 
     android: {
       package: 'com.carepathai.app',
-      versionCode: 3,
+      versionCode: 5,
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff',
