@@ -721,17 +721,24 @@ export default function ConsultScreen() {
                           <Text style={styles.actionBtnTextPrimary}>開啟導航</Text>
                         </TouchableOpacity>
                       </View>
-                      {hospital.available_doctors && hospital.available_doctors.length > 0 && (
-                        <View style={styles.doctorSection}>
-                          <Text style={styles.doctorSectionTitle}>推薦駐診醫師</Text>
-                          {hospital.available_doctors.map((doc, dIdx) => (
+                      {/* 沒有醫師名單時仍要說明，不能整個區塊消失。
+                          後端只在「該院有此科醫師」或「健保署公告該院設有此科」
+                          兩種情況才會推薦，因此空清單一定屬於後者。 */}
+                      <View style={styles.doctorSection}>
+                        <Text style={styles.doctorSectionTitle}>推薦駐診醫師</Text>
+                        {hospital.available_doctors && hospital.available_doctors.length > 0 ? (
+                          hospital.available_doctors.map((doc, dIdx) => (
                             <View key={dIdx} style={styles.doctorRow}>
                               <Text style={styles.doctorName}>{doc.name} 醫師</Text>
                               <Text style={styles.doctorSpecialty}>專長：{doc.specialty}</Text>
                             </View>
-                          ))}
-                        </View>
-                      )}
+                          ))
+                        ) : (
+                          <Text style={styles.doctorEmptyNote}>
+                            本院設有{diagnosisResult.suggested_department || '該科別'}，但尚未取得醫師名單，實際門診請洽院方。
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   );
                 })}
@@ -1053,6 +1060,7 @@ const makeStyles = (s) => StyleSheet.create({
   doctorRow: { backgroundColor: '#FAFAFA', padding: 12, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: t.border },
   doctorName: { fontSize: s.body, fontWeight: '800', color: t.text, marginBottom: 4 },
   doctorSpecialty: { fontSize: s.body, color: t.muted, lineHeight: 20 },
+  doctorEmptyNote: { fontSize: s.body, color: t.muted, lineHeight: 20 },
 
   bottomSection: { padding: s.pad, backgroundColor: t.panel, borderTopWidth: s.dividerWidth, borderTopColor: s.dividerColor, boxShadow: s.dividerShadowUp },
   // 讓標籤列滿版可滑：向外抵銷 bottomSection 的左右 padding，再由 contentContainer 補回
