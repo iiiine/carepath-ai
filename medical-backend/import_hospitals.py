@@ -747,6 +747,84 @@ def address_key(
 
 
 # ============================================================
+# 掛號網址人工補登
+#
+# 健保署開放資料沒有掛號網址，
+# 只能逐家從院方官網查證後填入。
+#
+# 目前收錄五都 23 家醫學中心。
+# 每一筆都以瀏覽器 User-Agent 實際請求驗證過回應 200
+# （部分院方會擋非瀏覽器的 User-Agent，
+#   用預設 curl 會拿到 403，那不代表網址失效）。
+#
+# 沒有列在這裡的醫院一律留 NULL，
+# 代表「我們沒有這家醫院的掛號資訊」，
+# 不可顯示成「僅提供現場掛號」——
+# 那是我們不知道的事。
+#
+# 同體系共用一套掛號系統的（馬偕、台大、長庚、中國醫）
+# 沿用同一個網址。
+# ============================================================
+
+MANUAL_BOOKING_URLS = {
+
+    # --- 臺北市 ---
+    "TP001": "https://www2.ndmctsgh.edu.tw/newwebreg/",
+    "TP002": "https://www.mmh.org.tw/register_info.php",
+    "TP003": "https://www.mmh.org.tw/register_info.php",
+    "TP004": "https://reg.cgh.org.tw/tw/reg/main.jsp",
+    "TP005": "https://reg.ntuh.gov.tw/webadministration/nav.html",
+    "TP006": "https://reg.ntuh.gov.tw/webadministration/nav.html",
+    "TP007": "https://www.skh.org.tw/skh_regis/",
+    "TP008": (
+        "https://wwww.wanfang.gov.tw"
+        "/reg/register_ec_cload.aspx"
+    ),
+    "TP009": "https://www6.vghtpe.gov.tw/reg/home.do",
+    "TP010": "https://register.cgmh.org.tw/Register/1",
+
+    # --- 新北市 ---
+    "NT001": "https://taipei.tzuchi.com.tw/",
+    "NT002": "https://www.mmh.org.tw/register_info.php",
+    "NT003": (
+        "https://shh.tmu.edu.tw"
+        "/page/Shhreg.aspx?deptCode=12"
+    ),
+    "NT004": "https://www.femh.org.tw/webregs/start.aspx",
+
+    # --- 桃園市 ---
+    "TY001": "https://register.cgmh.org.tw/Register/3",
+
+    # --- 臺中市 ---
+    "TC001": (
+        "https://www.cmuh.cmu.edu.tw"
+        "/Service/OnlineAppointment"
+    ),
+    "TC002": (
+        "https://www.cmuh.cmu.edu.tw"
+        "/Service/OnlineAppointment"
+    ),
+    "TC003": (
+        "https://sysint.csh.org.tw"
+        "/Register/DoctorClinic.aspx"
+    ),
+    "TC004": (
+        "https://register.vghtc.gov.tw"
+        "/register/listSection.jsp"
+    ),
+
+    # --- 高雄市 ---
+    "KH001": "https://webreg.edah.org.tw/",
+    "KH002": (
+        "https://www.kmuh.org.tw"
+        "/KMUHWeb/Pages/P02Register/NetReg/NetRegFirst.aspx"
+    ),
+    "KH003": "https://register.cgmh.org.tw/Register/8",
+    "KH004": "https://webreg.vghks.gov.tw/",
+}
+
+
+# ============================================================
 # 座標人工補登
 #
 # NLSC 醫院圖層更新頻率不定，
@@ -1220,6 +1298,15 @@ def build_hospitals() -> list:
             counters[city],
         )
 
+        # 掛號網址沒有開放資料，只有人工查證過的才填。
+        # 其餘留 None，代表「我們不知道」，
+        # 不是「這家醫院沒有線上掛號」。
+        hospital[
+            "booking_url"
+        ] = MANUAL_BOOKING_URLS.get(
+            hospital["hospital_code"]
+        )
+
     # --------------------------------------------------------
     # 補官方座標
     # --------------------------------------------------------
@@ -1466,6 +1553,16 @@ def print_summary(
         )
 
     print(
+        "\n有掛號網址：",
+        sum(
+            1
+            for item in hospitals
+            if item["booking_url"]
+        ),
+        "家",
+    )
+
+    print(
         "\n完全沒有收錄科別的醫院：",
         sum(
             1
@@ -1547,11 +1644,12 @@ def write_db(
                         latitude,
                         longitude,
                         departments,
-                        opening_sessions
+                        opening_sessions,
+                        booking_url
                     )
                     VALUES (
                         %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s
+                        %s, %s, %s, %s, %s
                     )
                     ON CONFLICT (hospital_code)
                     DO UPDATE SET
@@ -1563,7 +1661,9 @@ def write_db(
                         longitude = EXCLUDED.longitude,
                         departments = EXCLUDED.departments,
                         opening_sessions =
-                            EXCLUDED.opening_sessions
+                            EXCLUDED.opening_sessions,
+                        booking_url =
+                            EXCLUDED.booking_url
                     RETURNING (xmax = 0) AS is_insert;
                     """,
                     (
@@ -1578,6 +1678,7 @@ def write_db(
                             hospital["departments"]
                         ),
                         hospital["opening_sessions"],
+                        hospital["booking_url"],
                     ),
                 )
 

@@ -711,10 +711,17 @@ export default function ConsultScreen() {
                             </Text>
                           ) : null}
                         </View>
-                        {hasBookingUrl && (
+                        {/* booking_url 是三態：網址 → 按鈕；說明文字 → 原文照顯示；
+                            null → 我們沒有這家醫院的掛號資訊，只能請使用者洽院方。
+                            不可把 null 講成「僅提供現場掛號」，那是我們不知道的事。 */}
+                        {hasBookingUrl ? (
                           <TouchableOpacity onPress={() => Linking.openURL(hospital.booking_url)} style={styles.bookingBtn}>
                             <Text style={styles.bookingBtnText}>線上掛號</Text>
                           </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.bookingNote}>
+                            {hospital.booking_url?.trim() || '掛號方式請洽院方'}
+                          </Text>
                         )}
                       </View>
                       <View style={styles.hospitalActions}>
@@ -1057,6 +1064,7 @@ const makeStyles = (s) => StyleSheet.create({
   hospitalHours: { fontSize: s.body, color: t.muted, lineHeight: 20, marginTop: 4 },
   bookingBtn: { backgroundColor: '#1A1A1A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   bookingBtnText: { color: '#ffffff', fontSize: s.caption, fontWeight: 'bold' },
+  bookingNote: { color: t.muted, fontSize: s.caption, maxWidth: 96, textAlign: 'right' },
   hospitalActions: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: t.border, alignItems: 'center', backgroundColor: '#FAFAFA' },
   actionBtnText: { fontSize: s.body, color: t.text, fontWeight: '700' },

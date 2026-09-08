@@ -181,8 +181,49 @@ try:
             ("家醫科",),
         )
         family_codes = {r["hospital_code"] for r in cur.fetchall()}
+
+        # ----------------------------------------------------
+        # booking_url 是三態，不可壓成布林：
+        #   網址   → 線上掛號按鈕
+        #   說明文字 → 院方公告的掛號方式，原文顯示
+        #   NULL   → 我們沒有這家醫院的掛號資訊
+        #
+        # 健保署開放資料沒有掛號網址，
+        # 五都目前只有人工查證過的 23 家醫學中心有值。
+        # ----------------------------------------------------
+
+        cur.execute(
+            """
+            SELECT hospital_code, booking_url
+            FROM hospitals
+            WHERE hospital_code NOT LIKE 'TN%';
+            """
+        )
+        booking = {r["hospital_code"]: r["booking_url"] for r in cur.fetchall()}
 finally:
     conn.close()
+
+urls = [v for v in booking.values() if v and v.startswith("http")]
+assert len(urls) == 23, len(urls)
+
+# 五都不該出現說明文字型的值，只會是網址或 NULL
+notes = [v for v in booking.values() if v and not v.startswith("http")]
+assert notes == [], notes
+
+# 23 家醫學中心全部都要有掛號網址
+med_centers = [
+    code for code in booking
+    if code in {
+        "TP001", "TP002", "TP003", "TP004", "TP005",
+        "TP006", "TP007", "TP008", "TP009", "TP010",
+        "NT001", "NT002", "NT003", "NT004", "TY001",
+        "TC001", "TC002", "TC003", "TC004",
+        "KH001", "KH002", "KH003", "KH004",
+    }
+]
+assert len(med_centers) == 23, len(med_centers)
+missing_url = [c for c in med_centers if not booking[c]]
+assert missing_url == [], missing_url
 
 # 把 departments 併進 list_hospitals 的結果
 _original = list_hospitals
