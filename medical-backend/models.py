@@ -64,7 +64,46 @@ class DoctorInfo(BaseModel):
 
 
 # ============================================================
-# 5. 醫院資料結構
+# 5. 醫院固定看診時段
+#
+# 來源為健保署開放資料的「固定看診時段」，
+# 由 hospital_hours.py 解析。
+#
+# 注意：
+# 這是院方公告的一般門診時段，
+# 不是即時看診狀態，
+# 也不是醫師個人的門診時間
+# （後者是 doctor_schedules）。
+# ============================================================
+
+class OpeningSession(BaseModel):
+    # 1=星期一 … 7=星期日
+    weekday: int
+
+    label: str
+
+    morning: bool
+    afternoon: bool
+    night: bool
+
+
+class HospitalOpeningHours(BaseModel):
+    # 一行摘要，例：
+    # 週一至週五 上午、下午；週六 上午；週日休診
+    summary: str
+
+    weekly: List[OpeningSession] = Field(
+        default_factory=list
+    )
+
+    # 提醒使用者這不是當日看診保證
+    notice: str
+
+    version: Optional[str] = None
+
+
+# ============================================================
+# 6. 醫院資料結構
 # ============================================================
 
 class HospitalResponse(BaseModel):
@@ -85,9 +124,15 @@ class HospitalResponse(BaseModel):
         default_factory=list
     )
 
+    # 官方未提供或解析失敗時為 None，
+    # 呼叫端不顯示即可。
+    opening_hours: Optional[
+        HospitalOpeningHours
+    ] = None
+
 
 # ============================================================
-# 6. Medical Safety Response Models
+# 7. Medical Safety Response Models
 #
 # 注意：
 # SafetyAssessmentResponse 必須放在
@@ -180,7 +225,7 @@ class SafetyAssessmentResponse(BaseModel):
 
 
 # ============================================================
-# 7. 最終完成問診時的 Response
+# 8. 最終完成問診時的 Response
 # ============================================================
 
 class DiagnosisResponse(BaseModel):
@@ -217,7 +262,7 @@ class DiagnosisResponse(BaseModel):
 
 
 # ============================================================
-# 8. AI 繼續追問時的 Response
+# 9. AI 繼續追問時的 Response
 # ============================================================
 
 class FollowUpResponse(BaseModel):
@@ -237,7 +282,7 @@ class FollowUpResponse(BaseModel):
 
 
 # ============================================================
-# 9. Safety Layer 中止一般問診流程時的 Response
+# 10. Safety Layer 中止一般問診流程時的 Response
 # ============================================================
 
 class SafetyAlertResponse(BaseModel):
@@ -275,7 +320,7 @@ class SafetyAlertResponse(BaseModel):
 
 
 # ============================================================
-# 10. 使用者註冊
+# 11. 使用者註冊
 # ============================================================
 
 class UserRegister(BaseModel):
@@ -297,7 +342,7 @@ class UserRegister(BaseModel):
 
 
 # ============================================================
-# 11. 使用者登入
+# 12. 使用者登入
 # ============================================================
 
 class UserLogin(BaseModel):
@@ -317,7 +362,7 @@ class UserLogin(BaseModel):
 
 
 # ============================================================
-# 12. 對外 User Model
+# 13. 對外 User Model
 # ============================================================
 
 class UserPublic(BaseModel):
@@ -334,7 +379,7 @@ class UserPublic(BaseModel):
 
 
 # ============================================================
-# 13. JWT Token Response
+# 14. JWT Token Response
 # ============================================================
 
 class TokenResponse(BaseModel):
@@ -346,7 +391,7 @@ class TokenResponse(BaseModel):
 
 
 # ============================================================
-# 14. 歷史問診 Session Response
+# 15. 歷史問診 Session Response
 # ============================================================
 
 class ChatSessionResponse(BaseModel):
@@ -378,7 +423,7 @@ class ChatSessionResponse(BaseModel):
 
 
 # ============================================================
-# 15. 個人健康資料 Profile
+# 16. 個人健康資料 Profile
 # ============================================================
 
 class ProfileSchema(BaseModel):
