@@ -66,6 +66,13 @@ from safety_pipeline import run_safety_pipeline
 
 
 # ============================================================
+# 醫院固定看診時段
+# ============================================================
+
+from hospital_hours import build_opening_hours
+
+
+# ============================================================
 # Router
 # ============================================================
 
@@ -1065,7 +1072,8 @@ def diagnose_symptom(
                         latitude,
                         longitude,
                         booking_url,
-                        departments
+                        departments,
+                        opening_sessions
                     FROM hospitals;
                     """
                 )
@@ -1279,6 +1287,13 @@ def diagnose_symptom(
                                 ),
                                 available_doctors=(
                                     hospital_docs
+                                ),
+                                opening_hours=(
+                                    build_opening_hours(
+                                        hospital.get(
+                                            "opening_sessions"
+                                        )
+                                    )
                                 ),
                             ),
                         )

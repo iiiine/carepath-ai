@@ -7,6 +7,7 @@
 
 from routes.hospitals import haversine_meters, list_hospitals
 from routes.diagnose import hospital_covers_department
+from hospital_hours import build_opening_hours
 
 
 # ============================================================
@@ -64,7 +65,39 @@ assert res[-1]["distance_meters"] == 9999999
 
 
 # ============================================================
-# 4. 醫院層級科別 fallback
+# 4. 官方固定看診時段
+#
+# 來源為健保署開放資料，五都 253 家全部都有；
+# 台南既有資料匯入時沒有這個欄位，因此為 None。
+# ============================================================
+
+with_hours = [h for h in hospitals if h.get("opening_hours")]
+assert len(with_hours) == 253, len(with_hours)
+
+# 台南既有資料沒有官方時段
+tn_hours = [
+    h for h in hospitals
+    if h["hospital_code"].startswith("TN") and h.get("opening_hours")
+]
+assert tn_hours == [], [h["hospital_code"] for h in tn_hours]
+
+# 原始欄位不可外洩到 API
+assert "opening_sessions" not in hospitals[0], hospitals[0].keys()
+
+# 摘要要是可讀的一行字
+sample = with_hours[0]["opening_hours"]
+assert sample["summary"], sample
+assert len(sample["weekly"]) == 7, sample["weekly"]
+assert sample["notice"], "必須帶上不代表當日開診的提醒"
+
+# 解析器對壞資料一律回 None，不做半套解析
+assert build_opening_hours("不定時") is None
+assert build_opening_hours("星期一上午看診、每週三公休") is None
+assert build_opening_hours(None) is None
+
+
+# ============================================================
+# 5. 醫院層級科別 fallback
 #
 # 健保署的診療科別只寫到「內科」，
 # 因此心臟內科與腸胃科額外接受「內科」。
@@ -93,7 +126,7 @@ for departments, dept, expected, note in CASES:
 
 
 # ============================================================
-# 5. 端到端：確認新增的醫院真的進得了推薦
+# 6. 端到端：確認新增的醫院真的進得了推薦
 #
 # 這是這次改動的重點——
 # 改動前台北使用者只會拿到三百公里外的台南醫院。
@@ -186,6 +219,7 @@ assert all(h["hospital_code"] in family_codes for h in tainan), (
 print(
     "✅ 全部通過："
     f"醫院 {len(hospitals)} 家（台南 34 + 五都 253），"
+    f"官方門診時段 {len(with_hours)} 家，"
     f"科別 fallback {len(CASES)} 個案例，"
     f"台北最近 {taipei[0]['name']} {taipei[0]['distance_meters']}m"
 )

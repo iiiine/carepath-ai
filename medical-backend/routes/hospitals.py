@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from psycopg2.extras import RealDictCursor
 from routes.auth import get_current_user
 # 🎯 1. 引入你們共用的 PostgreSQL 資料庫連線函式
-from services import get_db_connection 
+from services import get_db_connection
+from hospital_hours import build_opening_hours
 
 router = APIRouter(prefix="/api/v1", tags=["Hospitals"])
 
@@ -33,16 +34,24 @@ def list_hospitals(lat: Optional[float] = None, lng: Optional[float] = None,curr
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 🎯 2. 使用 SELECT 撈取 DB，並將 latitude/longitude 轉為 lat/lng 以符合前端地圖的格式
             cur.execute("""
-                SELECT 
-                    hospital_code, 
-                    name, 
-                    phone, 
-                    address, 
-                    latitude AS lat, 
-                    longitude AS lng 
+                SELECT
+                    hospital_code,
+                    name,
+                    phone,
+                    address,
+                    latitude AS lat,
+                    longitude AS lng,
+                    opening_sessions
                 FROM hospitals;
             """)
             hospitals_data = cur.fetchall()
+
+            # 🎯 官方固定看診時段解析成前端可直接顯示的結構，
+            #    解析不出來就是 None，前端不顯示即可
+            for h in hospitals_data:
+                h["opening_hours"] = build_opening_hours(
+                    h.pop("opening_sessions", None)
+                )
 
             # 若前端沒傳使用者當前座標，直接回傳所有醫院
             if lat is None or lng is None:
