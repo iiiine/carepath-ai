@@ -188,6 +188,86 @@ def get_departments() -> tuple:
 
 
 # ============================================================
+# 醫院層級科別 fallback
+#
+# 醫師名單只能從各醫院官網逐家取得，
+# 五都兩百多家醫院不可能全部都有醫師資料。
+#
+# 因此某醫院沒有該科別醫師時，
+# 退回比對該院官方公告的診療科別
+# （hospitals.departments，來源為健保署開放資料）。
+#
+# 健保署的診療科別只寫到「內科」，
+# 沒有心臟內科、腸胃科這類次專科，
+# 所以這兩科額外接受官方的「內科」。
+#
+# 注意：
+# 「該院設有這一科」不等於「今天有診」，
+# 也不等於「有適合的醫師」。
+# 因此這個判斷只用來決定醫院是否進入推薦清單，
+# 回傳的 available_doctors 仍然是空的，
+# 不會對使用者宣稱可看診。
+# ============================================================
+
+HOSPITAL_DEPARTMENT_FALLBACK = {
+
+    "心臟內科": (
+        "心臟內科",
+        "內科",
+    ),
+
+    "腸胃科": (
+        "腸胃科",
+        "內科",
+    ),
+}
+
+
+def hospital_covers_department(
+    hospital_departments,
+    suggested_dept: str,
+) -> bool:
+    """
+    醫院官方公告的科別是否涵蓋建議科別。
+
+    hospitals.departments 存健保署公告的診療科別清單。
+
+    取不到清單時一律回 False —— 空陣列、NULL、
+    型別不是 list 都算取不到。
+    此時退回原本「必須有該科醫師」的條件，
+    不會因為缺少科別資料就把醫院推薦出去。
+
+    型別檢查不能省：
+    departments 若因為 schema 沒同步而變成字串，
+    `in` 會退化成子字串比對，
+    「內科」會誤中「婦產科,神經內科」這種值。
+    """
+
+    if not isinstance(
+        hospital_departments,
+        list,
+    ):
+        return False
+
+    if not hospital_departments:
+        return False
+
+    accepted = (
+        HOSPITAL_DEPARTMENT_FALLBACK.get(
+            suggested_dept,
+            (
+                suggested_dept,
+            ),
+        )
+    )
+
+    return any(
+        dept in hospital_departments
+        for dept in accepted
+    )
+
+
+# ============================================================
 # 醫師專長粗略相關度
 # ============================================================
 
@@ -984,7 +1064,8 @@ def diagnose_symptom(
                         phone,
                         latitude,
                         longitude,
-                        booking_url
+                        booking_url,
+                        departments
                     FROM hospitals;
                     """
                 )
@@ -1047,9 +1128,18 @@ def diagnose_symptom(
                     ]
 
 
+                    # ----------------------------------------
+                    # 排除條件
+                    #
+                    # 沒有座標就算不出距離，一律排除。
+                    #
+                    # 沒有該科別醫師時，
+                    # 退回比對醫院官方公告的科別，
+                    # 兩者都沒有才排除。
+                    # ----------------------------------------
+
                     if (
-                        not hospital_docs
-                        or hospital[
+                        hospital[
                             "latitude"
                         ]
                         is None
@@ -1057,6 +1147,19 @@ def diagnose_symptom(
                             "longitude"
                         ]
                         is None
+                    ):
+
+                        continue
+
+
+                    if (
+                        not hospital_docs
+                        and not hospital_covers_department(
+                            hospital.get(
+                                "departments"
+                            ),
+                            suggested_dept,
+                        )
                     ):
 
                         continue
@@ -1075,6 +1178,12 @@ def diagnose_symptom(
                     )
 
 
+                    # ----------------------------------------
+                    # 只靠官方科別進榜的醫院沒有醫師資料，
+                    # 相關度給 0，
+                    # 讓有醫師的醫院排在前面。
+                    # ----------------------------------------
+
                     best_match = (
                         specialty_score(
                             hospital_docs[
@@ -1082,6 +1191,8 @@ def diagnose_symptom(
                             ].specialty,
                             causes_text,
                         )
+                        if hospital_docs
+                        else 0
                     )
 
 
