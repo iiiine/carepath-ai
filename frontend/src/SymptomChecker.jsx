@@ -3639,7 +3639,7 @@ function SymptomChecker({
                 {
                   elderFriendlyMode
                     ? '切回一般模式'
-                    : '切換簡易大字'
+                    : '切換高齡模式'
                 }
               </button>
 
@@ -3665,7 +3665,9 @@ function SymptomChecker({
                     : 0,
 
                 order:
-                  0
+                  elderFriendlyMode
+                    ? 2
+                    : 0
               }}
             >
 
@@ -3801,7 +3803,9 @@ function SymptomChecker({
                   0,
 
                 order:
-                  0
+                  elderFriendlyMode
+                    ? 1
+                    : 0
               }}
             >
 
