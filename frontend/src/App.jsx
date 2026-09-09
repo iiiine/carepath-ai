@@ -47,6 +47,14 @@ function App() {
     useState(true)
 
 
+  // 載入畫面的文字。同一個畫面服務三種情境（啟動驗證、登出、憑證失效），
+  // 都寫「驗證登入狀態中」的話，登出時等於在描述一件沒發生的事。
+  // 預設用中性的說法：首次進來根本沒有登入狀態可驗證，
+  // 有 token 要驗證時才在下面改成「驗證登入狀態中」。
+  const [authStatus, setAuthStatus] =
+    useState('準備中…')
+
+
   // ==========================================
   // 是否顯示登入/註冊畫面
   //
@@ -177,7 +185,11 @@ function App() {
   // 直接 setUser(null) 的話畫面會先掉到登入頁，等訪客身分拿到才跳回來，
   // 使用者看到的是「登出後閃一下登入畫面」。
   // ==========================================
-  const fallbackToGuest = useCallback(() => {
+  const fallbackToGuest = useCallback((
+    statusText = '切換為訪客…'
+  ) => {
+    setAuthStatus(statusText)
+
     setAuthLoading(true)
 
     setUser(null)
@@ -226,6 +238,8 @@ function App() {
     }
 
 
+    setAuthStatus('驗證登入狀態中…')
+
     api
       .get('/api/v1/auth/me')
       .then((response) => {
@@ -264,7 +278,7 @@ function App() {
 
       // 原本只清掉使用者就結束，人會被留在登入頁。既然訪客是預設身分，
       // 憑證失效應該退回訪客，而不是把還在問診的人擋在門外。
-      fallbackToGuest()
+      fallbackToGuest('登入已失效，切換為訪客…')
     }
 
 
@@ -324,7 +338,7 @@ function App() {
     )
 
     // 登出不是把人踢出 App，而是回到訪客身分 —— 問診本來就開放訪客使用
-    fallbackToGuest()
+    fallbackToGuest('登出中…')
   }
 
 
@@ -517,7 +531,7 @@ function App() {
             'bold',
         }}
       >
-        驗證登入狀態中...
+        {authStatus}
       </div>
     )
   }
