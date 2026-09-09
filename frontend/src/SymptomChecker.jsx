@@ -213,7 +213,8 @@ function SymptomChecker({
   selectedSessionId,
   onSessionLoaded,
   openHistorySidebar = false,
-  onOpenHistory
+  onOpenHistory,
+  onCloseHistory
 }) {
 
   // ==========================================
@@ -1576,6 +1577,10 @@ function SymptomChecker({
     session
   ) => {
 
+    // 問診區在清單模式下是隱藏的；選了紀錄就是要看那一次的結果，
+    // 不收掉清單的話內容雖然載入了，畫面卻停在原地，看起來像沒反應。
+    onCloseHistory?.();
+
     const savedHistory =
       Array.isArray(
         session.history
@@ -2090,8 +2095,8 @@ function SymptomChecker({
 
                   title={
                     elderFriendlyMode
-                      ? '關閉高齡友善模式'
-                      : '開啟高齡友善模式'
+                      ? '關閉高齡模式'
+                      : '開啟高齡模式'
                   }
 
                   style={{
@@ -2116,8 +2121,8 @@ function SymptomChecker({
                     <Icon path={mdiCheck} size="1em" />
                   )}
                   {elderFriendlyMode
-                    ? ' 高齡友善'
-                    : '高齡友善'}
+                    ? ' 高齡模式'
+                    : '高齡模式'}
                 </button>
 
 
@@ -3495,9 +3500,12 @@ function SymptomChecker({
               display:
                 'grid',
 
+              // 高齡模式一律單欄。原本兩欄的最小寬度合計超過 880px，
+              // 字級放大後更容易擠爆，問診對話歷程會被右欄蓋掉。
+              // 直線閱讀對長輩本來也比左右對照容易。
               gridTemplateColumns:
                 elderFriendlyMode
-                  ? 'minmax(360px, 0.9fr) minmax(520px, 1.1fr)'
+                  ? '1fr'
                   : '1fr 1fr',
 
               gap:
@@ -3505,8 +3513,12 @@ function SymptomChecker({
                   ? '16px'
                   : '20px',
 
+              // 單欄堆疊後總高度會超過一個畫面，鎖死 100% 會讓後面的內容
+              // 溢出容器、視覺上疊在一起
               height:
-                '100%',
+                elderFriendlyMode
+                  ? 'auto'
+                  : '100%',
 
               overflowY:
                 'visible',

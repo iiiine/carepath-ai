@@ -526,12 +526,12 @@ export default function ConsultScreen() {
           <TouchableOpacity 
             onPress={toggleElderMode} 
             style={[styles.elderToggleBtn, elderMode && styles.elderToggleBtnActive]}
-            accessibilityLabel="高齡友善模式"
+            accessibilityLabel="高齡模式"
             accessibilityRole="switch"
             accessibilityState={{ checked: elderMode }}
           >
             <Text style={[styles.elderToggleText, elderMode && styles.elderToggleTextActive]}>
-              {elderMode ? '✓ 簡易大字' : '高齡友善'}
+              {elderMode ? '✓ 高齡模式' : '高齡模式'}
             </Text>
           </TouchableOpacity>
 

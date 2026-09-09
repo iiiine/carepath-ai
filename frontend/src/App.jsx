@@ -793,6 +793,13 @@ function App() {
             goToHistory
           }
 
+          onCloseHistory={
+            () =>
+              setOpenHistorySidebar(
+                false
+              )
+          }
+
         />
 
       )}
