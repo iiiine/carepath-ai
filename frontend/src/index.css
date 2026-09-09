@@ -30,3 +30,120 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+
+
+/* ============================================================
+   高齡友善模式
+   ============================================================
+   由 ElderModeContext 在 <html> 上掛 data-elder-mode="true" 啟動。
+
+   主要的放大靠根字級（16px → 20px）：全站 fontSize 都是 rem，
+   改根元素就會等比縮放每一段文字，不會漏掉任何元件。
+
+   下面這些規則補根字級做不到的部分：觸控目標最小高度、行高、
+   關鍵警示的強調，以及在小畫面隱藏次要控制項。
+
+   字級一律用 rem 而非 px —— 寫成 px 會蓋掉根字級縮放，
+   兩套機制打架。在根字級 20px 下，這些值與改版前的像素值相同。
+   ============================================================ */
+
+[data-elder-mode="true"] {
+  letter-spacing: 0.01em;
+}
+
+/* 為所有可點擊元素設下限：元件自己可能寫了 0.7rem 的小字 */
+[data-elder-mode="true"] button,
+[data-elder-mode="true"] a {
+  min-height: 48px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+[data-elder-mode="true"] input:not([type="range"]),
+[data-elder-mode="true"] textarea,
+[data-elder-mode="true"] select {
+  min-height: 48px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+[data-elder-mode="true"] textarea {
+  min-height: 88px;
+}
+
+[data-elder-mode="true"] input[type="range"] {
+  min-height: 34px;
+  height: 34px;
+}
+
+[data-elder-mode="true"] .elder-readable-text {
+  font-size: 0.85rem;
+  line-height: 1.85;
+}
+
+[data-elder-mode="true"] .elder-secondary-control {
+  display: none;
+}
+
+/* 定位狀態與不適度是 div，吃不到上面針對 button 的規則，
+   不補這條的話高齡模式下會比旁邊的按鈕矮一截。 */
+[data-elder-mode="true"] .elder-control-chip {
+  min-height: 48px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+[data-elder-mode="true"] .elder-primary-controls {
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+[data-elder-mode="true"] .elder-focus-question {
+  padding: 16px 18px;
+  border: 2px solid #2563eb;
+  border-radius: 14px;
+  background: #eff6ff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+[data-elder-mode="true"] .elder-previous-model-message {
+  opacity: 0.68;
+}
+
+/* 安全警示要比其他內容更醒目 —— 這是整個系統最不能被忽略的訊息 */
+[data-elder-mode="true"] [role="alert"] {
+  padding: 24px;
+  border-width: 3px;
+  border-radius: 16px;
+}
+
+[data-elder-mode="true"] [role="alert"] strong {
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+[data-elder-mode="true"] [role="alert"] button,
+[data-elder-mode="true"] [role="alert"] a {
+  min-height: 56px;
+  padding: 14px 18px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+[data-elder-mode="true"] * {
+  scroll-behavior: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-elder-mode="true"] *,
+  [data-elder-mode="true"] *::before,
+  [data-elder-mode="true"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

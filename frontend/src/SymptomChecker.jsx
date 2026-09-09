@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import api from './api/axios';
+import { useElderMode } from './useElderMode';
 
 import HospitalMap from './HospitalMap';
 import HistorySidebar from './HistorySidebar';
@@ -165,112 +166,6 @@ const mergeQuickSymptoms = (
 // Step 4A-1：高齡友善模式
 // ==========================================
 
-const ELDER_MODE_STORAGE_KEY =
-  'carepath_elder_friendly_mode';
-
-
-const ELDER_MODE_CSS = `
-  [data-elder-mode="true"] {
-    letter-spacing: 0.01em;
-  }
-
-  [data-elder-mode="true"] button,
-  [data-elder-mode="true"] a {
-    min-height: 48px !important;
-    font-size: 16px !important;
-    line-height: 1.35 !important;
-  }
-
-  [data-elder-mode="true"] input:not([type="range"]),
-  [data-elder-mode="true"] textarea,
-  [data-elder-mode="true"] select {
-    min-height: 48px !important;
-    font-size: 17px !important;
-    line-height: 1.55 !important;
-  }
-
-  [data-elder-mode="true"] textarea {
-    min-height: 88px !important;
-  }
-
-  [data-elder-mode="true"] input[type="range"] {
-    min-height: 34px !important;
-    height: 34px !important;
-  }
-
-  [data-elder-mode="true"] .elder-readable-text {
-    font-size: 17px !important;
-    line-height: 1.85 !important;
-  }
-
-  [data-elder-mode="true"] .elder-secondary-control {
-    display: none !important;
-  }
-
-  /* 定位狀態與不適度是 div，吃不到上面針對 button 的規則，
-     不補這條的話高齡模式下會比旁邊的按鈕矮一截。 */
-  [data-elder-mode="true"] .elder-control-chip {
-    min-height: 48px !important;
-    font-size: 16px !important;
-    line-height: 1.35 !important;
-  }
-
-  [data-elder-mode="true"] .elder-primary-controls {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    row-gap: 10px;
-  }
-
-  [data-elder-mode="true"] .elder-focus-question {
-    padding: 16px 18px !important;
-    border: 2px solid #2563eb !important;
-    border-radius: 14px !important;
-    background: #eff6ff !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    line-height: 1.8 !important;
-  }
-
-  [data-elder-mode="true"] .elder-previous-model-message {
-    opacity: 0.68;
-  }
-
-  [data-elder-mode="true"] [role="alert"] {
-    padding: 24px !important;
-    border-width: 3px !important;
-    border-radius: 16px !important;
-  }
-
-  [data-elder-mode="true"] [role="alert"] strong {
-    font-size: 22px !important;
-    line-height: 1.4 !important;
-  }
-
-  [data-elder-mode="true"] [role="alert"] button,
-  [data-elder-mode="true"] [role="alert"] a {
-    min-height: 56px !important;
-    padding: 14px 18px !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-  }
-
-  [data-elder-mode="true"] * {
-    scroll-behavior: auto !important;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    [data-elder-mode="true"] *,
-    [data-elder-mode="true"] *::before,
-    [data-elder-mode="true"] *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-`;
-
-
 // ==========================================
 // 上方控制項的共用尺寸
 //
@@ -358,10 +253,7 @@ function SymptomChecker({
 
   useEffect(() => {
 
-    if (!loading) {
-      setWaitStage(0);
-      return;
-    }
+    if (!loading) return;
 
     const timers = [
       setTimeout(
@@ -400,24 +292,13 @@ function SymptomChecker({
   // 使用 localStorage 記住使用者選擇，
   // 下次回到 CarePath AI 時維持同一模式。
   // ==========================================
-  const [
-    elderFriendlyMode,
-    setElderFriendlyMode
-  ] = useState(() => {
+  // 狀態改由 ElderModeContext 持有 —— 放在這裡的話，切到 Dashboard
+  // 或縱向趨勢時元件卸載，使用者開的大字模式就沒了。
+  const {
+    elderMode: elderFriendlyMode,
+    toggleElderMode: handleToggleElderFriendlyMode
+  } = useElderMode();
 
-    try {
-
-      return (
-        window.localStorage.getItem(
-          ELDER_MODE_STORAGE_KEY
-        ) === 'true'
-      );
-
-    } catch {
-
-      return false;
-    }
-  });
 
   // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
   // 改成置中的品牌圖 + 一句大標，讓使用者知道要打什麼。
@@ -853,28 +734,6 @@ function SymptomChecker({
   }, [isMember, user?.id]);
 
 
-  // ==========================================
-  // Step 4A-1：保存高齡友善模式設定
-  // ==========================================
-  useEffect(() => {
-
-    try {
-
-      window.localStorage.setItem(
-        ELDER_MODE_STORAGE_KEY,
-        elderFriendlyMode
-          ? 'true'
-          : 'false'
-      );
-
-    } catch {
-
-      // localStorage 不可用時，
-      // 不影響主要問診功能。
-    }
-
-  }, [elderFriendlyMode]);
-
 
   // ==========================================
   // 第 20 步：
@@ -979,14 +838,6 @@ function SymptomChecker({
   // ==========================================
   // Step 4A-1：切換高齡友善模式
   // ==========================================
-  const handleToggleElderFriendlyMode = () => {
-
-    setElderFriendlyMode(
-      (current) =>
-        !current
-    );
-  };
-
 
   // ==========================================
   // 個人健康資料
@@ -1346,6 +1197,10 @@ function SymptomChecker({
     setLoading(
       true
     );
+
+    // 階段是「這次送出」的狀態，在這裡歸零而不是在 effect 裡，
+    // 才不會變成 effect 內的同步 setState。
+    setWaitStage(0);
 
 
     try {
@@ -2444,12 +2299,6 @@ function SymptomChecker({
   return (
 
     <div
-      data-elder-mode={
-        elderFriendlyMode
-          ? 'true'
-          : 'false'
-      }
-
       style={{
         display:
           'flex',
@@ -2474,11 +2323,6 @@ function SymptomChecker({
           'relative'
       }}
     >
-
-      <style>
-        {ELDER_MODE_CSS}
-      </style>
-
 
       {/* ==================================== */}
       {/* 左側歷史紀錄 */}
