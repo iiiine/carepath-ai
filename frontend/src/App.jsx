@@ -48,6 +48,16 @@ function App() {
 
 
   // ==========================================
+  // 是否顯示登入/註冊畫面
+  //
+  // 預設是訪客身分，所以登入畫面不再是進入 App 的門檻，
+  // 而是訪客想升級成正式帳號時才主動打開。
+  // ==========================================
+  const [showAuth, setShowAuth] =
+    useState(false)
+
+
+  // ==========================================
   // 頁面
   //
   // consultation = AI 問診
@@ -117,6 +127,48 @@ function App() {
 
 
   // ==========================================
+  // 靜默訪客登入
+  //
+  // 與行動端 AuthContext.silentGuestLogin 對齊：沒有 token 就自動取得
+  // 訪客身分，使用者不需要先按「訪客登入」才能開始問診。
+  //
+  // 失敗時不捏造使用者 —— 沒有 token 的假訪客會讓後續每一支 API 都 401，
+  // 畫面看起來正常卻按什麼都失敗。這裡讓 user 維持 null，
+  // 由下方的邏輯顯示登入畫面，使用者至少知道發生了什麼事。
+  // ==========================================
+  const silentGuestLogin = async () => {
+    try {
+      const res = await api.post(
+        '/api/v1/auth/guest-login'
+      )
+
+      const token =
+        res.data.access_token
+
+      if (!token) return false
+
+      localStorage.setItem(
+        'access_token',
+        token
+      )
+
+      setUser(
+        res.data.user
+      )
+
+      return true
+
+    } catch (error) {
+      console.error(
+        '訪客登入失敗:',
+        error
+      )
+      return false
+    }
+  }
+
+
+  // ==========================================
   // 恢復登入
   // ==========================================
   useEffect(() => {
@@ -127,7 +179,16 @@ function App() {
 
 
     if (!token) {
-      setAuthLoading(false)
+      // 第一次進來（或剛登出）：直接以訪客身分開始
+      //
+      // eslint 的 set-state-in-effect 在這裡是誤報：silentGuestLogin 的
+      // 第一個動作就是 await api.post()，setUser 不可能在 effect 執行期間
+      // 同步發生，只是 linter 看不穿 async 函式。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      silentGuestLogin()
+        .finally(() => {
+          setAuthLoading(false)
+        })
       return
     }
 
@@ -148,6 +209,9 @@ function App() {
         localStorage.removeItem(
           'access_token'
         )
+
+        // token 過期或無效時退回訪客身分，不要把人擋在登入畫面外
+        silentGuestLogin()
 
         setUser(null)
 
@@ -216,6 +280,8 @@ function App() {
     userData,
     token
   ) => {
+    setShowAuth(false)
+
     localStorage.setItem(
       'access_token',
       token
@@ -256,6 +322,9 @@ function App() {
     setCurrentPage(
       'consultation'
     )
+
+    // 登出不是把人踢出 App，而是回到訪客身分 —— 問診本來就開放訪客使用
+    silentGuestLogin()
   }
 
 
@@ -455,11 +524,20 @@ function App() {
 
 
   // ==========================================
-  // 未登入
+  // 登入 / 註冊畫面
+  //
+  // 兩種情況會走到這裡：
+  //   1. 連訪客身分都取不到（後端連不上）—— 此時 user 為 null
+  //   2. 訪客主動按「登入 / 註冊」想升級成正式帳號
   // ==========================================
-  if (!user) {
+  if (!user || showAuth) {
     return (
       <AuthPage
+        onCancel={
+          user
+            ? () => setShowAuth(false)
+            : null
+        }
         onAuthSuccess={
           handleAuthSuccess
         }
@@ -589,27 +667,54 @@ function App() {
               flexShrink: 0,
             }}
           >
-            {user.username.charAt(0)}
+            {user.is_guest ? '訪' : user.username.charAt(0)}
           </span>
 
           <span style={{ fontSize: '0.8rem', color: t.text }}>
-            {user.is_guest ? `訪客 (${user.username})` : user.username}
+            {user.is_guest ? '訪客' : user.username}
           </span>
 
+          {/*
+            訪客沒有「登出」的概念 —— 預設身分就是訪客，登出只會再拿一個訪客身分。
+            所以訪客看到的是升級成正式帳號的入口，正式帳號才看得到登出。
+          */}
           <button
             type="button"
-            onClick={handleLogout}
-            style={{
-              border: 'none',
-              background: 'none',
-              color: t.muted,
-              cursor: 'pointer',
-              fontSize: '0.76rem',
-              fontFamily: 'inherit',
-              padding: '4px 6px',
-            }}
+            onClick={
+              user.is_guest
+                ? () => setShowAuth(true)
+                : handleLogout
+            }
+            style={
+              user.is_guest
+                ? {
+                    // 訪客：要被看見的入口，用實心膠囊
+                    border: 'none',
+                    borderRadius: '999px',
+                    backgroundColor: t.userBubble,
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    padding: '6px 16px',
+                    whiteSpace: 'nowrap',
+                  }
+                : {
+                    // 正式帳號：登出不需要搶注意力，維持低調的外框膠囊
+                    border: `1px solid ${t.border}`,
+                    borderRadius: '999px',
+                    backgroundColor: 'transparent',
+                    color: t.muted,
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontFamily: 'inherit',
+                    padding: '6px 14px',
+                    whiteSpace: 'nowrap',
+                  }
+            }
           >
-            登出
+            {user.is_guest ? '登入 / 註冊' : '登出'}
           </button>
         </div>
       </div>

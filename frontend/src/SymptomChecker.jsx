@@ -345,6 +345,56 @@ function SymptomChecker({
 
 
   // ==========================================
+  // 等待階段提示
+  //
+  // 文字依「經過時間」切換，不是後端回報的真實進度；
+  // 但描述順序與後端實際流程一致（安全篩檢 → 衛教檢索 → 科別建議），
+  // 秒數取自實測：安全抽取約 3.5s、RAG 約 2~3s、主問診約 1.2s，
+  // 加上資料庫往返，暖機狀態總計 12~24 秒。
+  // ==========================================
+  const [waitStage, setWaitStage] =
+    useState(0);
+
+
+  useEffect(() => {
+
+    if (!loading) {
+      setWaitStage(0);
+      return;
+    }
+
+    const timers = [
+      setTimeout(
+        () => setWaitStage(1),
+        5000
+      ),
+      setTimeout(
+        () => setWaitStage(2),
+        10000
+      ),
+      setTimeout(
+        () => setWaitStage(3),
+        20000
+      )
+    ];
+
+    return () =>
+      timers.forEach(
+        clearTimeout
+      );
+
+  }, [loading]);
+
+
+  const WAIT_MESSAGES = [
+    '正在評估安全風險…',
+    '正在查詢衛教資料…',
+    '正在整理科別建議…',
+    '伺服器回應較慢，請再稍候…'
+  ];
+
+
+  // ==========================================
   // Step 4A-1：高齡友善模式
   //
   // 使用 localStorage 記住使用者選擇，
@@ -1625,13 +1675,41 @@ function SymptomChecker({
       );
 
 
+      // 分辨錯誤類型再給訊息。統一講「連線有問題」會讓人往錯的方向查。
+      const status =
+        error.response?.status;
+
+      let hint;
+
+      if (!error.response) {
+        // 完全沒收到回應：網路中斷、請求被瀏覽器擋下，或伺服器中途斷線
+        hint =
+          '⚠️ 連線中斷，沒有收到伺服器回應。請檢查網路後再送出一次。';
+
+      } else if (status === 401) {
+        hint =
+          '⚠️ 登入狀態已失效，請重新整理頁面後再試一次。';
+
+      } else if (status === 403) {
+        hint =
+          '⚠️ 這項功能需要正式帳號，請先登入或註冊。';
+
+      } else if (status >= 500) {
+        hint =
+          '⚠️ 伺服器處理時發生錯誤，請稍候再送出一次。';
+
+      } else {
+        hint =
+          `⚠️ 問診請求失敗（${status}），請稍候再試一次。`;
+      }
+
+
       setMessages([
         ...newMessages,
 
         {
           role: 'model',
-          content:
-            '⚠️ 抱歉，目前系統連線有些問題，請確認後端服務是否正常啟動。'
+          content: hint
         }
       ]);
 
@@ -3120,6 +3198,25 @@ function SymptomChecker({
                     )}
 
                   </div>
+
+
+                  <span
+                    style={{
+                      fontSize:
+                        elderFriendlyMode
+                          ? '1rem'
+                          : '0.82rem',
+
+                      color:
+                        t.muted
+                    }}
+                  >
+                    {
+                      WAIT_MESSAGES[
+                        waitStage
+                      ]
+                    }
+                  </span>
 
                 </div>
 
