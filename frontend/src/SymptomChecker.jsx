@@ -317,8 +317,9 @@ function SymptomChecker({
   // 只有 App.jsx 明確要求時，
   // 才在開場狀態強制顯示完整 HistorySidebar。
   // ==========================================
+  // 只在使用者點頂部「最近問診」時顯示。原本問診中也常駐一欄，
+  // 等於同一份歷史有兩個入口，而頂部分頁本來就隨時都在。
   const shouldShowHistorySidebar =
-    !isOpening ||
     openHistorySidebar;
 
 
@@ -365,15 +366,6 @@ function SymptomChecker({
     viewMode,
     setViewMode
   ] = useState('chat-only');
-
-
-  // ==========================================
-  // 側邊欄
-  // ==========================================
-  const [
-    isSidebarCollapsed,
-    setIsSidebarCollapsed
-  ] = useState(false);
 
 
   // ==========================================
@@ -2331,23 +2323,17 @@ function SymptomChecker({
       {shouldShowHistorySidebar && (
       <div
         style={{
-          width:
-            isSidebarCollapsed
-              ? '60px'
-              : '260px',
-
-          transition:
-            'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-
-          flexShrink:
-            0,
-
-          height:
-            '100%'
+          flex: 1,
+          maxWidth: '860px',
+          margin: '0 auto',
+          height: '100%',
+          minWidth: 0
         }}
       >
 
         <HistorySidebar
+          asPage
+
           user={
             user
           }
@@ -2371,6 +2357,12 @@ function SymptomChecker({
 
       <div
         style={{
+          // 顯示歷史清單時整個問診區收起來 —— 一次只呈現一件事
+          display:
+            shouldShowHistorySidebar
+              ? 'none'
+              : undefined,
+
           flex:
             1,
 

@@ -5,10 +5,13 @@ import { t } from './theme';
 import Icon from './Icon';
 import { mdiMenu, mdiCheck, mdiClose, mdiPencilOutline } from '@mdi/js';
 
-function HistorySidebar({ user, onSelectSession, onNewChat }) {
+function HistorySidebar({ user, onSelectSession, onNewChat, asPage = false }) {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // 整頁形態沒有「讓位給主內容」這件事，所以永遠展開、也不顯示收合鈕
+  const collapsed = asPage ? false : isCollapsed;
 
   // 💡 正在編輯標題的狀態
   const [editingId, setEditingId] = useState(null);
@@ -80,13 +83,13 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
       backgroundColor: t.panel,
       borderRadius: '12px',
       border: `1px solid ${t.border}`,
-      padding: isCollapsed ? '12px 6px' : '16px',
+      padding: collapsed ? '12px 6px' : '16px',
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
       boxSizing: 'border-box',
-      width: isCollapsed ? '60px' : '260px',
-      transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      width: asPage ? '100%' : (isCollapsed ? '60px' : '260px'),
+      transition: asPage ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       flexShrink: 0
     }}>
       
@@ -94,12 +97,13 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: isCollapsed ? 'center' : 'space-between',
+        justifyContent: collapsed ? 'center' : 'space-between',
         marginBottom: '14px',
         paddingBottom: '10px',
         borderBottom: `1px solid ${t.border}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {!asPage && (
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             title={isCollapsed ? "展開側邊欄" : "收起側邊欄"}
@@ -112,15 +116,16 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
           >
             <Icon path={mdiMenu} size="1.1rem" />
           </button>
+          )}
 
-          {!isCollapsed && (
+          {!collapsed && (
             <h3 style={{ margin: 0, color: t.text, fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>
-              歷史紀錄
+              最近問診
             </h3>
           )}
         </div>
 
-        {!isCollapsed && (
+        {!collapsed && (
           <button
             onClick={onNewChat}
             style={{
@@ -135,7 +140,7 @@ function HistorySidebar({ user, onSelectSession, onNewChat }) {
       </div>
 
       {/* 列表區塊 */}
-      {isCollapsed ? (
+      {collapsed ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginTop: '10px' }}>
           <button
             onClick={onNewChat}
