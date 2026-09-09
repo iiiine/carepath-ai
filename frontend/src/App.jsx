@@ -1,6 +1,6 @@
 // src/App.jsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 import SymptomChecker from './SymptomChecker'
@@ -136,7 +136,7 @@ function App() {
   // 畫面看起來正常卻按什麼都失敗。這裡讓 user 維持 null，
   // 由下方的邏輯顯示登入畫面，使用者至少知道發生了什麼事。
   // ==========================================
-  const silentGuestLogin = async () => {
+  const silentGuestLogin = useCallback(async () => {
     try {
       const res = await api.post(
         '/api/v1/auth/guest-login'
@@ -165,7 +165,40 @@ function App() {
       )
       return false
     }
-  }
+  }, [])
+
+
+  // ==========================================
+  // 退回訪客
+  //
+  // 登出、token 過期、恢復登入失敗三條路徑共用。
+  //
+  // 一定要先開 authLoading 再清 user —— 渲染順序是 authLoading 先判斷，
+  // 直接 setUser(null) 的話畫面會先掉到登入頁，等訪客身分拿到才跳回來，
+  // 使用者看到的是「登出後閃一下登入畫面」。
+  // ==========================================
+  const fallbackToGuest = useCallback(() => {
+    setAuthLoading(true)
+
+    setUser(null)
+
+    setSelectedSessionId(
+      null
+    )
+
+    setOpenHistorySidebar(
+      false
+    )
+
+    setCurrentPage(
+      'consultation'
+    )
+
+    return silentGuestLogin()
+      .finally(() => {
+        setAuthLoading(false)
+      })
+  }, [silentGuestLogin])
 
 
   // ==========================================
@@ -199,6 +232,8 @@ function App() {
         setUser(
           response.data
         )
+
+        setAuthLoading(false)
       })
       .catch((error) => {
         console.error(
@@ -210,27 +245,12 @@ function App() {
           'access_token'
         )
 
-        // token 過期或無效時退回訪客身分，不要把人擋在登入畫面外
-        silentGuestLogin()
-
-        setUser(null)
-
-        setSelectedSessionId(
-          null
-        )
-
-        setOpenHistorySidebar(
-          false
-        )
-
-        setCurrentPage(
-          'consultation'
-        )
+        // authLoading 由 fallbackToGuest 自己管到訪客身分拿到為止。
+        // 這裡不能共用一個 .finally —— 它會在 catch 後立刻執行，
+        // 訪客還沒登入就關掉載入狀態，畫面一樣會閃登入頁。
+        fallbackToGuest()
       })
-      .finally(() => {
-        setAuthLoading(false)
-      })
-  }, [])
+  }, [silentGuestLogin, fallbackToGuest])
 
 
   // ==========================================
@@ -242,19 +262,9 @@ function App() {
         'access_token'
       )
 
-      setUser(null)
-
-      setSelectedSessionId(
-        null
-      )
-
-      setOpenHistorySidebar(
-        false
-      )
-
-      setCurrentPage(
-        'consultation'
-      )
+      // 原本只清掉使用者就結束，人會被留在登入頁。既然訪客是預設身分，
+      // 憑證失效應該退回訪客，而不是把還在問診的人擋在門外。
+      fallbackToGuest()
     }
 
 
@@ -270,7 +280,7 @@ function App() {
         handleExpired
       )
     }
-  }, [])
+  }, [fallbackToGuest])
 
 
   // ==========================================
@@ -313,18 +323,8 @@ function App() {
       'access_token'
     )
 
-    setUser(null)
-
-    setSelectedSessionId(
-      null
-    )
-
-    setCurrentPage(
-      'consultation'
-    )
-
     // 登出不是把人踢出 App，而是回到訪客身分 —— 問診本來就開放訪客使用
-    silentGuestLogin()
+    fallbackToGuest()
   }
 
 
