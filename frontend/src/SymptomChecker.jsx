@@ -2055,8 +2055,93 @@ function SymptomChecker({
   // ==========================================
   // UI
   // ==========================================
-  // 個人健康資料 / 健康趨勢 / 定位 / 不適度。開場版面要把它們塞進輸入框裡，
+  // 個人健康資料 / 定位。開場版面要把它們塞進輸入框裡，
   // 一般版面則留在標題列右邊，所以抽成變數只寫一次。
+  // ==========================================
+  // 不適度
+  //
+  // 獨立成一列放在輸入框上方，不放在控制列裡 —— 控制列的其他項目
+  // 都是開關或跳轉，這個是「要跟症狀一起送出的內容」，性質不同。
+  // 五顆數字按鍵各佔一等份：1~5 只有五個值，點一下就到位，
+  // 觸控目標也比滑鈕大得多 —— 長輩用滑桿要精準拖曳並不容易。
+  // ==========================================
+  const painRow = (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '2px 6px 8px',
+        color: t.muted,
+        fontSize: '0.8rem'
+      }}
+    >
+      <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+        不適度
+      </span>
+
+      <span style={{ fontSize: '0.72rem' }}>輕</span>
+
+      <div
+        role="radiogroup"
+        aria-label="自評不適度"
+        style={{
+          display: 'flex',
+          flex: 1,
+          minWidth: 0,
+          gap: '6px'
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((level) => {
+
+          const selected = Number(painLevel) === level;
+
+          return (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={`不適程度 ${level} 分`}
+              onClick={() => setPainLevel(String(level))}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: '7px 0',
+                border: selected
+                  ? 'none'
+                  : `1px solid ${t.border}`,
+                borderRadius: '8px',
+                backgroundColor: selected
+                  ? (level >= 4 ? t.danger : t.userBubble)
+                  : t.panel,
+                color: selected ? '#ffffff' : t.muted,
+                fontFamily: 'inherit',
+                fontSize: '0.85rem',
+                fontWeight: selected ? 700 : 500,
+                lineHeight: 1.2,
+                cursor: 'pointer'
+              }}
+            >
+              {level}
+            </button>
+          );
+        })}
+      </div>
+
+      <span
+        style={{
+          fontSize: '0.72rem',
+          fontWeight: painLevel >= 4 ? 700 : 400,
+          color: painLevel >= 4 ? t.danger : t.muted
+        }}
+      >
+        重
+      </span>
+    </div>
+  );
+
+
   const controlsRow = (
               <div
                 className="elder-primary-controls"
@@ -2196,77 +2281,6 @@ function SymptomChecker({
                 </div>
 
 
-                {/* 不適程度 */}
-
-                <div
-                  className="elder-control-chip"
-
-                  style={{
-                    ...CONTROL_CHIP,
-
-                    gap:
-                      '8px',
-
-                    color:
-                      t.muted
-                  }}
-                >
-
-                  <span>
-                    不適度{' '}
-
-                    <strong
-                      style={{
-                        color:
-                          painLevel >= 4
-                            ? t.danger
-                            : t.text,
-
-                        fontWeight:
-                          600
-                      }}
-                    >
-                      {painLevel}
-                    </strong>
-                  </span>
-
-
-                  <input
-                    type="range"
-
-                    min="1"
-
-                    max="5"
-
-                    step="1"
-
-                    value={
-                      painLevel
-                    }
-
-                    onChange={(
-                      e
-                    ) =>
-                      setPainLevel(
-                        e.target.value
-                      )
-                    }
-
-                    style={{
-                      width:
-                        '72px',
-
-                      accentColor:
-                        painLevel >= 4
-                          ? t.danger
-                          : t.userBubble,
-
-                      cursor:
-                        'pointer'
-                    }}
-                  />
-
-                </div>
 
               </div>
   );
@@ -3226,6 +3240,8 @@ function SymptomChecker({
               )
             }
 
+
+            {painRow}
 
             <form
               onSubmit={
