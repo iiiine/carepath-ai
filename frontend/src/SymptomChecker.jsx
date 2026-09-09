@@ -3809,6 +3809,10 @@ function SymptomChecker({
               {/* 問診歷程 */}
               {/* ============================ */}
 
+              {/* 高齡模式原本把這塊整個藏起來（display:none），
+                  推測是想減少長輩看到的資訊量。但使用者要的是「字變大」，
+                  不是「東西變少」—— 看不到自己講過什麼反而更難確認結果是
+                  依據什麼給的。改為一律顯示，靠單欄堆疊維持易讀。 */}
               <div
                 style={{
                   ...getSectionStyle(
@@ -3819,9 +3823,7 @@ function SymptomChecker({
                     1,
 
                   display:
-                    elderFriendlyMode
-                      ? 'none'
-                      : 'flex'
+                    'flex'
                 }}
               >
 
