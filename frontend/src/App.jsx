@@ -740,6 +740,10 @@ function App() {
       !user.is_guest ? (
 
         <DashboardPage
+          user={
+            user
+          }
+
 
           onStartConsultation={
             handleStartConsultation

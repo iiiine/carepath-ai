@@ -12,7 +12,7 @@ import UserProfileModal from './UserProfileModal';
 import DoctorScheduleInfo from './DoctorScheduleInfo';
 
 // ★ Step 2B-2：縱向健康趨勢儀表板
-import LongitudinalHealthPanel from './LongitudinalHealthPanel';
+import DashboardPage from './pages/DashboardPage';
 
 // ★ Step 3B-2：AI 就醫摘要
 import VisitSummaryPanel from './VisitSummaryPanel';
@@ -2151,7 +2151,7 @@ function SymptomChecker({
                 </button>
 
 
-                {/* Step 2B-2：健康趨勢 */}
+                {/* Step 2B-2：健康 Dashboard（含儀表板與趨勢兩個分頁） */}
 
                 <button
                   className="elder-secondary-control"
@@ -2169,7 +2169,7 @@ function SymptomChecker({
                       'pointer'
                   }}
                 >
-                  健康趨勢
+                  健康 Dashboard
                 </button>
 
 
@@ -5422,7 +5422,7 @@ function SymptomChecker({
                         700
                     }}
                   >
-                    我的健康趨勢
+                    健康 Dashboard
                   </div>
 
 
@@ -5451,7 +5451,7 @@ function SymptomChecker({
                     handleCloseLongitudinal
                   }
 
-                  aria-label="關閉健康趨勢"
+                  aria-label="關閉健康 Dashboard"
 
                   style={{
                     width:
@@ -5509,10 +5509,34 @@ function SymptomChecker({
                 }}
               >
 
-                <LongitudinalHealthPanel
-                  windowDays={90}
-                  refreshKey={
+                <DashboardPage
+                  user={
+                    user
+                  }
+
+                  key={
                     longitudinalRefreshKey
+                  }
+
+                  onStartConsultation={
+                    () => {
+                      handleCloseLongitudinal();
+                      handleNewChat();
+                    }
+                  }
+
+                  onViewHistory={
+                    () => {
+                      handleCloseLongitudinal();
+                      onOpenHistory?.();
+                    }
+                  }
+
+                  onSelectSession={
+                    (session) => {
+                      handleCloseLongitudinal();
+                      handleSelectSession(session);
+                    }
                   }
                 />
 
