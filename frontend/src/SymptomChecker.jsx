@@ -2151,28 +2151,6 @@ function SymptomChecker({
                 </button>
 
 
-                {/* Step 2B-2：健康 Dashboard（含儀表板與趨勢兩個分頁） */}
-
-                <button
-                  className="elder-secondary-control"
-
-                  type="button"
-
-                  onClick={
-                    handleOpenLongitudinal
-                  }
-
-                  style={{
-                    ...CONTROL_CHIP,
-
-                    cursor:
-                      'pointer'
-                  }}
-                >
-                  健康 Dashboard
-                </button>
-
-
                 {/* 定位狀態 */}
 
                 <div
@@ -3951,7 +3929,7 @@ function SymptomChecker({
                           'pointer'
                       }}
                     >
-                      健康趨勢
+                      健康 Dashboard
                     </button>
 
 
