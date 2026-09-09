@@ -3,7 +3,7 @@ import api from './api/axios';
 import { t } from './theme';
 import { BaymaxAvatar } from './Baymax';
 
-function AuthPage({ onAuthSuccess, isConnected, statusText }) {
+function AuthPage({ onAuthSuccess, isConnected, statusText, onCancel }) {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -11,7 +11,6 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isRegister = mode === 'register';
@@ -65,25 +64,6 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
       setError(typeof detail === 'string' ? detail : '系統發生錯誤，請稍後再試');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 2. 💡 訪客登入 處理
-  const handleGuestLogin = async () => {
-    setError('');
-    setGuestLoading(true);
-
-    try {
-      const response = await api.post('/api/v1/auth/guest-login');
-      const { access_token, user } = response.data;
-
-      onAuthSuccess(user, access_token);
-    } catch (err) {
-      console.error('訪客登入失敗:', err);
-      const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : '訪客登入失敗，請確認後端服務是否正常');
-    } finally {
-      setGuestLoading(false);
     }
   };
 
@@ -158,7 +138,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               智慧 AI 醫療問診系統
             </h1>
             <p style={{ color: t.muted, margin: '6px 0 0', fontSize: '0.85rem', lineHeight: 1.5 }}>
-              {isRegister ? '建立帳號後即可使用問診與醫院地圖功能' : '請登入，或以訪客身份直接體驗'}
+              {isRegister ? '建立帳號後可保存問診紀錄與健康趨勢' : '登入後可保存問診紀錄與健康趨勢'}
             </p>
           </div>
         </div>
@@ -250,7 +230,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
 
           <button
             type="submit"
-            disabled={loading || guestLoading}
+            disabled={loading}
             style={{
               width: '100%',
               marginTop: '22px',
@@ -259,7 +239,7 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               fontSize: '0.92rem',
               fontWeight: 500,
             }}
@@ -268,35 +248,26 @@ function AuthPage({ onAuthSuccess, isConnected, statusText }) {
           </button>
         </form>
 
-        {/* 💡 分隔線與訪客按鈕 */}
-        <div style={{ margin: '20px 0', borderTop: `1px solid ${t.border}`, position: 'relative', textAlign: 'center' }}>
-          <span style={{ position: 'absolute', top: '-10px', backgroundColor: t.panel, padding: '0 10px', color: t.muted, fontSize: '0.8rem' }}>
-            或
-          </span>
-        </div>
 
-        <button
-          type="button"
-          onClick={handleGuestLogin}
-          disabled={loading || guestLoading}
-          style={{
-            width: '100%',
-            padding: '11px',
-            backgroundColor: t.panel,
-            color: t.text,
-            border: `1px solid ${t.border}`,
-            borderRadius: '8px',
-            cursor: loading || guestLoading ? 'not-allowed' : 'pointer',
-            fontSize: '0.92rem',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}
-        >
-          {guestLoading ? '建立訪客身份中...' : '以訪客身份直接體驗'}
-        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              width: '100%',
+              marginTop: '10px',
+              border: 'none',
+              background: 'transparent',
+              color: t.muted,
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontFamily: 'inherit',
+              padding: '8px'
+            }}
+          >
+            ← 先不登入，繼續以訪客使用
+          </button>
+        )}
 
         <div style={{ textAlign: 'center', marginTop: '18px', color: t.muted, fontSize: '0.85rem' }}>
           {isRegister ? '已經有帳號？' : '還沒有帳號？'}

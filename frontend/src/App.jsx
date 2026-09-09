@@ -1,6 +1,6 @@
 // src/App.jsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 import SymptomChecker from './SymptomChecker'
@@ -45,6 +45,24 @@ function App() {
 
   const [authLoading, setAuthLoading] =
     useState(true)
+
+
+  // 載入畫面的文字。同一個畫面服務三種情境（啟動驗證、登出、憑證失效），
+  // 都寫「驗證登入狀態中」的話，登出時等於在描述一件沒發生的事。
+  // 預設用中性的說法：首次進來根本沒有登入狀態可驗證，
+  // 有 token 要驗證時才在下面改成「驗證登入狀態中」。
+  const [authStatus, setAuthStatus] =
+    useState('準備中…')
+
+
+  // ==========================================
+  // 是否顯示登入/註冊畫面
+  //
+  // 預設是訪客身分，所以登入畫面不再是進入 App 的門檻，
+  // 而是訪客想升級成正式帳號時才主動打開。
+  // ==========================================
+  const [showAuth, setShowAuth] =
+    useState(false)
 
 
   // ==========================================
@@ -117,6 +135,85 @@ function App() {
 
 
   // ==========================================
+  // 靜默訪客登入
+  //
+  // 與行動端 AuthContext.silentGuestLogin 對齊：沒有 token 就自動取得
+  // 訪客身分，使用者不需要先按「訪客登入」才能開始問診。
+  //
+  // 失敗時不捏造使用者 —— 沒有 token 的假訪客會讓後續每一支 API 都 401，
+  // 畫面看起來正常卻按什麼都失敗。這裡讓 user 維持 null，
+  // 由下方的邏輯顯示登入畫面，使用者至少知道發生了什麼事。
+  // ==========================================
+  const silentGuestLogin = useCallback(async () => {
+    try {
+      const res = await api.post(
+        '/api/v1/auth/guest-login'
+      )
+
+      const token =
+        res.data.access_token
+
+      if (!token) return false
+
+      localStorage.setItem(
+        'access_token',
+        token
+      )
+
+      setUser(
+        res.data.user
+      )
+
+      return true
+
+    } catch (error) {
+      console.error(
+        '訪客登入失敗:',
+        error
+      )
+      return false
+    }
+  }, [])
+
+
+  // ==========================================
+  // 退回訪客
+  //
+  // 登出、token 過期、恢復登入失敗三條路徑共用。
+  //
+  // 一定要先開 authLoading 再清 user —— 渲染順序是 authLoading 先判斷，
+  // 直接 setUser(null) 的話畫面會先掉到登入頁，等訪客身分拿到才跳回來，
+  // 使用者看到的是「登出後閃一下登入畫面」。
+  // ==========================================
+  const fallbackToGuest = useCallback((
+    statusText = '切換為訪客…'
+  ) => {
+    setAuthStatus(statusText)
+
+    setAuthLoading(true)
+
+    setUser(null)
+
+    setSelectedSessionId(
+      null
+    )
+
+    setOpenHistorySidebar(
+      false
+    )
+
+    setCurrentPage(
+      'consultation'
+    )
+
+    return silentGuestLogin()
+      .finally(() => {
+        setAuthLoading(false)
+      })
+  }, [silentGuestLogin])
+
+
+  // ==========================================
   // 恢復登入
   // ==========================================
   useEffect(() => {
@@ -127,10 +224,21 @@ function App() {
 
 
     if (!token) {
-      setAuthLoading(false)
+      // 第一次進來（或剛登出）：直接以訪客身分開始
+      //
+      // eslint 的 set-state-in-effect 在這裡是誤報：silentGuestLogin 的
+      // 第一個動作就是 await api.post()，setUser 不可能在 effect 執行期間
+      // 同步發生，只是 linter 看不穿 async 函式。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      silentGuestLogin()
+        .finally(() => {
+          setAuthLoading(false)
+        })
       return
     }
 
+
+    setAuthStatus('驗證登入狀態中…')
 
     api
       .get('/api/v1/auth/me')
@@ -138,6 +246,8 @@ function App() {
         setUser(
           response.data
         )
+
+        setAuthLoading(false)
       })
       .catch((error) => {
         console.error(
@@ -149,24 +259,12 @@ function App() {
           'access_token'
         )
 
-        setUser(null)
-
-        setSelectedSessionId(
-          null
-        )
-
-        setOpenHistorySidebar(
-          false
-        )
-
-        setCurrentPage(
-          'consultation'
-        )
+        // authLoading 由 fallbackToGuest 自己管到訪客身分拿到為止。
+        // 這裡不能共用一個 .finally —— 它會在 catch 後立刻執行，
+        // 訪客還沒登入就關掉載入狀態，畫面一樣會閃登入頁。
+        fallbackToGuest()
       })
-      .finally(() => {
-        setAuthLoading(false)
-      })
-  }, [])
+  }, [silentGuestLogin, fallbackToGuest])
 
 
   // ==========================================
@@ -178,19 +276,9 @@ function App() {
         'access_token'
       )
 
-      setUser(null)
-
-      setSelectedSessionId(
-        null
-      )
-
-      setOpenHistorySidebar(
-        false
-      )
-
-      setCurrentPage(
-        'consultation'
-      )
+      // 原本只清掉使用者就結束，人會被留在登入頁。既然訪客是預設身分，
+      // 憑證失效應該退回訪客，而不是把還在問診的人擋在門外。
+      fallbackToGuest('登入已失效，切換為訪客…')
     }
 
 
@@ -206,7 +294,7 @@ function App() {
         handleExpired
       )
     }
-  }, [])
+  }, [fallbackToGuest])
 
 
   // ==========================================
@@ -216,6 +304,8 @@ function App() {
     userData,
     token
   ) => {
+    setShowAuth(false)
+
     localStorage.setItem(
       'access_token',
       token
@@ -247,15 +337,8 @@ function App() {
       'access_token'
     )
 
-    setUser(null)
-
-    setSelectedSessionId(
-      null
-    )
-
-    setCurrentPage(
-      'consultation'
-    )
+    // 登出不是把人踢出 App，而是回到訪客身分 —— 問診本來就開放訪客使用
+    fallbackToGuest('登出中…')
   }
 
 
@@ -448,18 +531,27 @@ function App() {
             'bold',
         }}
       >
-        驗證登入狀態中...
+        {authStatus}
       </div>
     )
   }
 
 
   // ==========================================
-  // 未登入
+  // 登入 / 註冊畫面
+  //
+  // 兩種情況會走到這裡：
+  //   1. 連訪客身分都取不到（後端連不上）—— 此時 user 為 null
+  //   2. 訪客主動按「登入 / 註冊」想升級成正式帳號
   // ==========================================
-  if (!user) {
+  if (!user || showAuth) {
     return (
       <AuthPage
+        onCancel={
+          user
+            ? () => setShowAuth(false)
+            : null
+        }
         onAuthSuccess={
           handleAuthSuccess
         }
@@ -589,27 +681,54 @@ function App() {
               flexShrink: 0,
             }}
           >
-            {user.username.charAt(0)}
+            {user.is_guest ? '訪' : user.username.charAt(0)}
           </span>
 
           <span style={{ fontSize: '0.8rem', color: t.text }}>
-            {user.is_guest ? `訪客 (${user.username})` : user.username}
+            {user.is_guest ? '訪客' : user.username}
           </span>
 
+          {/*
+            訪客沒有「登出」的概念 —— 預設身分就是訪客，登出只會再拿一個訪客身分。
+            所以訪客看到的是升級成正式帳號的入口，正式帳號才看得到登出。
+          */}
           <button
             type="button"
-            onClick={handleLogout}
-            style={{
-              border: 'none',
-              background: 'none',
-              color: t.muted,
-              cursor: 'pointer',
-              fontSize: '0.76rem',
-              fontFamily: 'inherit',
-              padding: '4px 6px',
-            }}
+            onClick={
+              user.is_guest
+                ? () => setShowAuth(true)
+                : handleLogout
+            }
+            style={
+              user.is_guest
+                ? {
+                    // 訪客：要被看見的入口，用實心膠囊
+                    border: 'none',
+                    borderRadius: '999px',
+                    backgroundColor: t.userBubble,
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    padding: '6px 16px',
+                    whiteSpace: 'nowrap',
+                  }
+                : {
+                    // 正式帳號：登出不需要搶注意力，維持低調的外框膠囊
+                    border: `1px solid ${t.border}`,
+                    borderRadius: '999px',
+                    backgroundColor: 'transparent',
+                    color: t.muted,
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontFamily: 'inherit',
+                    padding: '6px 14px',
+                    whiteSpace: 'nowrap',
+                  }
+            }
           >
-            登出
+            {user.is_guest ? '登入 / 註冊' : '登出'}
           </button>
         </div>
       </div>
@@ -635,6 +754,10 @@ function App() {
       !user.is_guest ? (
 
         <DashboardPage
+          user={
+            user
+          }
+
 
           onStartConsultation={
             handleStartConsultation
@@ -686,6 +809,13 @@ function App() {
 
           onOpenHistory={
             goToHistory
+          }
+
+          onCloseHistory={
+            () =>
+              setOpenHistorySidebar(
+                false
+              )
           }
 
         />

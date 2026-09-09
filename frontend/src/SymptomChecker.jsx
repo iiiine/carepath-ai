@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import api from './api/axios';
+import { useElderMode } from './useElderMode';
 
 import HospitalMap from './HospitalMap';
 import HistorySidebar from './HistorySidebar';
@@ -11,7 +12,7 @@ import UserProfileModal from './UserProfileModal';
 import DoctorScheduleInfo from './DoctorScheduleInfo';
 
 // ★ Step 2B-2：縱向健康趨勢儀表板
-import LongitudinalHealthPanel from './LongitudinalHealthPanel';
+import DashboardPage from './pages/DashboardPage';
 
 // ★ Step 3B-2：AI 就醫摘要
 import VisitSummaryPanel from './VisitSummaryPanel';
@@ -165,112 +166,6 @@ const mergeQuickSymptoms = (
 // Step 4A-1：高齡友善模式
 // ==========================================
 
-const ELDER_MODE_STORAGE_KEY =
-  'carepath_elder_friendly_mode';
-
-
-const ELDER_MODE_CSS = `
-  [data-elder-mode="true"] {
-    letter-spacing: 0.01em;
-  }
-
-  [data-elder-mode="true"] button,
-  [data-elder-mode="true"] a {
-    min-height: 48px !important;
-    font-size: 16px !important;
-    line-height: 1.35 !important;
-  }
-
-  [data-elder-mode="true"] input:not([type="range"]),
-  [data-elder-mode="true"] textarea,
-  [data-elder-mode="true"] select {
-    min-height: 48px !important;
-    font-size: 17px !important;
-    line-height: 1.55 !important;
-  }
-
-  [data-elder-mode="true"] textarea {
-    min-height: 88px !important;
-  }
-
-  [data-elder-mode="true"] input[type="range"] {
-    min-height: 34px !important;
-    height: 34px !important;
-  }
-
-  [data-elder-mode="true"] .elder-readable-text {
-    font-size: 17px !important;
-    line-height: 1.85 !important;
-  }
-
-  [data-elder-mode="true"] .elder-secondary-control {
-    display: none !important;
-  }
-
-  /* 定位狀態與不適度是 div，吃不到上面針對 button 的規則，
-     不補這條的話高齡模式下會比旁邊的按鈕矮一截。 */
-  [data-elder-mode="true"] .elder-control-chip {
-    min-height: 48px !important;
-    font-size: 16px !important;
-    line-height: 1.35 !important;
-  }
-
-  [data-elder-mode="true"] .elder-primary-controls {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    row-gap: 10px;
-  }
-
-  [data-elder-mode="true"] .elder-focus-question {
-    padding: 16px 18px !important;
-    border: 2px solid #2563eb !important;
-    border-radius: 14px !important;
-    background: #eff6ff !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    line-height: 1.8 !important;
-  }
-
-  [data-elder-mode="true"] .elder-previous-model-message {
-    opacity: 0.68;
-  }
-
-  [data-elder-mode="true"] [role="alert"] {
-    padding: 24px !important;
-    border-width: 3px !important;
-    border-radius: 16px !important;
-  }
-
-  [data-elder-mode="true"] [role="alert"] strong {
-    font-size: 22px !important;
-    line-height: 1.4 !important;
-  }
-
-  [data-elder-mode="true"] [role="alert"] button,
-  [data-elder-mode="true"] [role="alert"] a {
-    min-height: 56px !important;
-    padding: 14px 18px !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-  }
-
-  [data-elder-mode="true"] * {
-    scroll-behavior: auto !important;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    [data-elder-mode="true"] *,
-    [data-elder-mode="true"] *::before,
-    [data-elder-mode="true"] *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-`;
-
-
 // ==========================================
 // 上方控制項的共用尺寸
 //
@@ -318,7 +213,8 @@ function SymptomChecker({
   selectedSessionId,
   onSessionLoaded,
   openHistorySidebar = false,
-  onOpenHistory
+  onOpenHistory,
+  onCloseHistory
 }) {
 
   // ==========================================
@@ -345,29 +241,65 @@ function SymptomChecker({
 
 
   // ==========================================
+  // 等待階段提示
+  //
+  // 文字依「經過時間」切換，不是後端回報的真實進度；
+  // 但描述順序與後端實際流程一致（安全篩檢 → 衛教檢索 → 科別建議），
+  // 秒數取自實測：安全抽取約 3.5s、RAG 約 2~3s、主問診約 1.2s，
+  // 加上資料庫往返，暖機狀態總計 12~24 秒。
+  // ==========================================
+  const [waitStage, setWaitStage] =
+    useState(0);
+
+
+  useEffect(() => {
+
+    if (!loading) return;
+
+    const timers = [
+      setTimeout(
+        () => setWaitStage(1),
+        5000
+      ),
+      setTimeout(
+        () => setWaitStage(2),
+        10000
+      ),
+      setTimeout(
+        () => setWaitStage(3),
+        20000
+      )
+    ];
+
+    return () =>
+      timers.forEach(
+        clearTimeout
+      );
+
+  }, [loading]);
+
+
+  const WAIT_MESSAGES = [
+    '正在評估安全風險…',
+    '正在查詢衛教資料…',
+    '正在整理科別建議…',
+    '伺服器回應較慢，請再稍候…'
+  ];
+
+
+  // ==========================================
   // Step 4A-1：高齡友善模式
   //
   // 使用 localStorage 記住使用者選擇，
   // 下次回到 CarePath AI 時維持同一模式。
   // ==========================================
-  const [
-    elderFriendlyMode,
-    setElderFriendlyMode
-  ] = useState(() => {
+  // 狀態改由 ElderModeContext 持有 —— 放在這裡的話，切到 Dashboard
+  // 或縱向趨勢時元件卸載，使用者開的大字模式就沒了。
+  const {
+    elderMode: elderFriendlyMode,
+    toggleElderMode: handleToggleElderFriendlyMode
+  } = useElderMode();
 
-    try {
-
-      return (
-        window.localStorage.getItem(
-          ELDER_MODE_STORAGE_KEY
-        ) === 'true'
-      );
-
-    } catch {
-
-      return false;
-    }
-  });
 
   // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
   // 改成置中的品牌圖 + 一句大標，讓使用者知道要打什麼。
@@ -386,8 +318,9 @@ function SymptomChecker({
   // 只有 App.jsx 明確要求時，
   // 才在開場狀態強制顯示完整 HistorySidebar。
   // ==========================================
+  // 只在使用者點頂部「最近問診」時顯示。原本問診中也常駐一欄，
+  // 等於同一份歷史有兩個入口，而頂部分頁本來就隨時都在。
   const shouldShowHistorySidebar =
-    !isOpening ||
     openHistorySidebar;
 
 
@@ -434,15 +367,6 @@ function SymptomChecker({
     viewMode,
     setViewMode
   ] = useState('chat-only');
-
-
-  // ==========================================
-  // 側邊欄
-  // ==========================================
-  const [
-    isSidebarCollapsed,
-    setIsSidebarCollapsed
-  ] = useState(false);
 
 
   // ==========================================
@@ -803,28 +727,6 @@ function SymptomChecker({
   }, [isMember, user?.id]);
 
 
-  // ==========================================
-  // Step 4A-1：保存高齡友善模式設定
-  // ==========================================
-  useEffect(() => {
-
-    try {
-
-      window.localStorage.setItem(
-        ELDER_MODE_STORAGE_KEY,
-        elderFriendlyMode
-          ? 'true'
-          : 'false'
-      );
-
-    } catch {
-
-      // localStorage 不可用時，
-      // 不影響主要問診功能。
-    }
-
-  }, [elderFriendlyMode]);
-
 
   // ==========================================
   // 第 20 步：
@@ -929,14 +831,6 @@ function SymptomChecker({
   // ==========================================
   // Step 4A-1：切換高齡友善模式
   // ==========================================
-  const handleToggleElderFriendlyMode = () => {
-
-    setElderFriendlyMode(
-      (current) =>
-        !current
-    );
-  };
-
 
   // ==========================================
   // 個人健康資料
@@ -1297,6 +1191,10 @@ function SymptomChecker({
       true
     );
 
+    // 階段是「這次送出」的狀態，在這裡歸零而不是在 effect 裡，
+    // 才不會變成 effect 內的同步 setState。
+    setWaitStage(0);
+
 
     try {
 
@@ -1625,13 +1523,41 @@ function SymptomChecker({
       );
 
 
+      // 分辨錯誤類型再給訊息。統一講「連線有問題」會讓人往錯的方向查。
+      const status =
+        error.response?.status;
+
+      let hint;
+
+      if (!error.response) {
+        // 完全沒收到回應：網路中斷、請求被瀏覽器擋下，或伺服器中途斷線
+        hint =
+          '⚠️ 連線中斷，沒有收到伺服器回應。請檢查網路後再送出一次。';
+
+      } else if (status === 401) {
+        hint =
+          '⚠️ 登入狀態已失效，請重新整理頁面後再試一次。';
+
+      } else if (status === 403) {
+        hint =
+          '⚠️ 這項功能需要正式帳號，請先登入或註冊。';
+
+      } else if (status >= 500) {
+        hint =
+          '⚠️ 伺服器處理時發生錯誤，請稍候再送出一次。';
+
+      } else {
+        hint =
+          `⚠️ 問診請求失敗（${status}），請稍候再試一次。`;
+      }
+
+
       setMessages([
         ...newMessages,
 
         {
           role: 'model',
-          content:
-            '⚠️ 抱歉，目前系統連線有些問題，請確認後端服務是否正常啟動。'
+          content: hint
         }
       ]);
 
@@ -1650,6 +1576,10 @@ function SymptomChecker({
   const handleSelectSession = (
     session
   ) => {
+
+    // 問診區在清單模式下是隱藏的；選了紀錄就是要看那一次的結果，
+    // 不收掉清單的話內容雖然載入了，畫面卻停在原地，看起來像沒反應。
+    onCloseHistory?.();
 
     const savedHistory =
       Array.isArray(
@@ -2125,8 +2055,93 @@ function SymptomChecker({
   // ==========================================
   // UI
   // ==========================================
-  // 個人健康資料 / 健康趨勢 / 定位 / 不適度。開場版面要把它們塞進輸入框裡，
+  // 個人健康資料 / 定位。開場版面要把它們塞進輸入框裡，
   // 一般版面則留在標題列右邊，所以抽成變數只寫一次。
+  // ==========================================
+  // 不適度
+  //
+  // 獨立成一列放在輸入框上方，不放在控制列裡 —— 控制列的其他項目
+  // 都是開關或跳轉，這個是「要跟症狀一起送出的內容」，性質不同。
+  // 五顆數字按鍵各佔一等份：1~5 只有五個值，點一下就到位，
+  // 觸控目標也比滑鈕大得多 —— 長輩用滑桿要精準拖曳並不容易。
+  // ==========================================
+  const painRow = (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '2px 6px 8px',
+        color: t.muted,
+        fontSize: '0.8rem'
+      }}
+    >
+      <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+        不適度
+      </span>
+
+      <span style={{ fontSize: '0.72rem' }}>輕</span>
+
+      <div
+        role="radiogroup"
+        aria-label="自評不適度"
+        style={{
+          display: 'flex',
+          flex: 1,
+          minWidth: 0,
+          gap: '6px'
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((level) => {
+
+          const selected = Number(painLevel) === level;
+
+          return (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={`不適程度 ${level} 分`}
+              onClick={() => setPainLevel(String(level))}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: '7px 0',
+                border: selected
+                  ? 'none'
+                  : `1px solid ${t.border}`,
+                borderRadius: '8px',
+                backgroundColor: selected
+                  ? (level >= 4 ? t.danger : t.userBubble)
+                  : t.panel,
+                color: selected ? '#ffffff' : t.muted,
+                fontFamily: 'inherit',
+                fontSize: '0.85rem',
+                fontWeight: selected ? 700 : 500,
+                lineHeight: 1.2,
+                cursor: 'pointer'
+              }}
+            >
+              {level}
+            </button>
+          );
+        })}
+      </div>
+
+      <span
+        style={{
+          fontSize: '0.72rem',
+          fontWeight: painLevel >= 4 ? 700 : 400,
+          color: painLevel >= 4 ? t.danger : t.muted
+        }}
+      >
+        重
+      </span>
+    </div>
+  );
+
+
   const controlsRow = (
               <div
                 className="elder-primary-controls"
@@ -2165,8 +2180,8 @@ function SymptomChecker({
 
                   title={
                     elderFriendlyMode
-                      ? '關閉高齡友善模式'
-                      : '開啟高齡友善模式'
+                      ? '關閉高齡模式'
+                      : '開啟高齡模式'
                   }
 
                   style={{
@@ -2191,8 +2206,8 @@ function SymptomChecker({
                     <Icon path={mdiCheck} size="1em" />
                   )}
                   {elderFriendlyMode
-                    ? ' 高齡友善'
-                    : '高齡友善'}
+                    ? ' 高齡模式'
+                    : '高齡模式'}
                 </button>
 
 
@@ -2218,28 +2233,6 @@ function SymptomChecker({
                   }}
                 >
                   個人健康資料
-                </button>
-
-
-                {/* Step 2B-2：健康趨勢 */}
-
-                <button
-                  className="elder-secondary-control"
-
-                  type="button"
-
-                  onClick={
-                    handleOpenLongitudinal
-                  }
-
-                  style={{
-                    ...CONTROL_CHIP,
-
-                    cursor:
-                      'pointer'
-                  }}
-                >
-                  健康趨勢
                 </button>
 
 
@@ -2288,77 +2281,6 @@ function SymptomChecker({
                 </div>
 
 
-                {/* 不適程度 */}
-
-                <div
-                  className="elder-control-chip"
-
-                  style={{
-                    ...CONTROL_CHIP,
-
-                    gap:
-                      '8px',
-
-                    color:
-                      t.muted
-                  }}
-                >
-
-                  <span>
-                    不適度{' '}
-
-                    <strong
-                      style={{
-                        color:
-                          painLevel >= 4
-                            ? t.danger
-                            : t.text,
-
-                        fontWeight:
-                          600
-                      }}
-                    >
-                      {painLevel}
-                    </strong>
-                  </span>
-
-
-                  <input
-                    type="range"
-
-                    min="1"
-
-                    max="5"
-
-                    step="1"
-
-                    value={
-                      painLevel
-                    }
-
-                    onChange={(
-                      e
-                    ) =>
-                      setPainLevel(
-                        e.target.value
-                      )
-                    }
-
-                    style={{
-                      width:
-                        '72px',
-
-                      accentColor:
-                        painLevel >= 4
-                          ? t.danger
-                          : t.userBubble,
-
-                      cursor:
-                        'pointer'
-                    }}
-                  />
-
-                </div>
 
               </div>
   );
@@ -2366,12 +2288,6 @@ function SymptomChecker({
   return (
 
     <div
-      data-elder-mode={
-        elderFriendlyMode
-          ? 'true'
-          : 'false'
-      }
-
       style={{
         display:
           'flex',
@@ -2397,11 +2313,6 @@ function SymptomChecker({
       }}
     >
 
-      <style>
-        {ELDER_MODE_CSS}
-      </style>
-
-
       {/* ==================================== */}
       {/* 左側歷史紀錄 */}
       {/* ==================================== */}
@@ -2409,23 +2320,17 @@ function SymptomChecker({
       {shouldShowHistorySidebar && (
       <div
         style={{
-          width:
-            isSidebarCollapsed
-              ? '60px'
-              : '260px',
-
-          transition:
-            'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-
-          flexShrink:
-            0,
-
-          height:
-            '100%'
+          flex: 1,
+          maxWidth: '860px',
+          margin: '0 auto',
+          height: '100%',
+          minWidth: 0
         }}
       >
 
         <HistorySidebar
+          asPage
+
           user={
             user
           }
@@ -2449,6 +2354,12 @@ function SymptomChecker({
 
       <div
         style={{
+          // 顯示歷史清單時整個問診區收起來 —— 一次只呈現一件事
+          display:
+            shouldShowHistorySidebar
+              ? 'none'
+              : undefined,
+
           flex:
             1,
 
@@ -3121,6 +3032,25 @@ function SymptomChecker({
 
                   </div>
 
+
+                  <span
+                    style={{
+                      fontSize:
+                        elderFriendlyMode
+                          ? '1rem'
+                          : '0.82rem',
+
+                      color:
+                        t.muted
+                    }}
+                  >
+                    {
+                      WAIT_MESSAGES[
+                        waitStage
+                      ]
+                    }
+                  </span>
+
                 </div>
 
               )}
@@ -3310,6 +3240,8 @@ function SymptomChecker({
               )
             }
 
+
+            {painRow}
 
             <form
               onSubmit={
@@ -3562,9 +3494,12 @@ function SymptomChecker({
               display:
                 'grid',
 
+              // 高齡模式一律單欄。原本兩欄的最小寬度合計超過 880px，
+              // 字級放大後更容易擠爆，問診對話歷程會被右欄蓋掉。
+              // 直線閱讀對長輩本來也比左右對照容易。
               gridTemplateColumns:
                 elderFriendlyMode
-                  ? 'minmax(360px, 0.9fr) minmax(520px, 1.1fr)'
+                  ? '1fr'
                   : '1fr 1fr',
 
               gap:
@@ -3572,8 +3507,12 @@ function SymptomChecker({
                   ? '16px'
                   : '20px',
 
+              // 單欄堆疊後總高度會超過一個畫面，鎖死 100% 會讓後面的內容
+              // 溢出容器、視覺上疊在一起
               height:
-                '100%',
+                elderFriendlyMode
+                  ? 'auto'
+                  : '100%',
 
               overflowY:
                 'visible',
@@ -3694,7 +3633,7 @@ function SymptomChecker({
                 {
                   elderFriendlyMode
                     ? '切回一般模式'
-                    : '切換簡易大字'
+                    : '切換高齡模式'
                 }
               </button>
 
@@ -3720,7 +3659,9 @@ function SymptomChecker({
                     : 0,
 
                 order:
-                  0
+                  elderFriendlyMode
+                    ? 2
+                    : 0
               }}
             >
 
@@ -3856,7 +3797,9 @@ function SymptomChecker({
                   0,
 
                 order:
-                  0
+                  elderFriendlyMode
+                    ? 1
+                    : 0
               }}
             >
 
@@ -3864,6 +3807,10 @@ function SymptomChecker({
               {/* 問診歷程 */}
               {/* ============================ */}
 
+              {/* 高齡模式原本把這塊整個藏起來（display:none），
+                  推測是想減少長輩看到的資訊量。但使用者要的是「字變大」，
+                  不是「東西變少」—— 看不到自己講過什麼反而更難確認結果是
+                  依據什麼給的。改為一律顯示，靠單欄堆疊維持易讀。 */}
               <div
                 style={{
                   ...getSectionStyle(
@@ -3874,9 +3821,7 @@ function SymptomChecker({
                     1,
 
                   display:
-                    elderFriendlyMode
-                      ? 'none'
-                      : 'flex'
+                    'flex'
                 }}
               >
 
@@ -4000,7 +3945,7 @@ function SymptomChecker({
                           'pointer'
                       }}
                     >
-                      健康趨勢
+                      健康 Dashboard
                     </button>
 
 
@@ -5471,7 +5416,7 @@ function SymptomChecker({
                         700
                     }}
                   >
-                    我的健康趨勢
+                    健康 Dashboard
                   </div>
 
 
@@ -5500,7 +5445,7 @@ function SymptomChecker({
                     handleCloseLongitudinal
                   }
 
-                  aria-label="關閉健康趨勢"
+                  aria-label="關閉健康 Dashboard"
 
                   style={{
                     width:
@@ -5558,10 +5503,34 @@ function SymptomChecker({
                 }}
               >
 
-                <LongitudinalHealthPanel
-                  windowDays={90}
-                  refreshKey={
+                <DashboardPage
+                  user={
+                    user
+                  }
+
+                  key={
                     longitudinalRefreshKey
+                  }
+
+                  onStartConsultation={
+                    () => {
+                      handleCloseLongitudinal();
+                      handleNewChat();
+                    }
+                  }
+
+                  onViewHistory={
+                    () => {
+                      handleCloseLongitudinal();
+                      onOpenHistory?.();
+                    }
+                  }
+
+                  onSelectSession={
+                    (session) => {
+                      handleCloseLongitudinal();
+                      handleSelectSession(session);
+                    }
                   }
                 />
 

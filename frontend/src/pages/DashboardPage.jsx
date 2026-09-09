@@ -13,6 +13,7 @@ import LongitudinalHealthPanel from '../LongitudinalHealthPanel'
 
 
 const DashboardPage = ({
+  user,
   onStartConsultation,
   onViewHistory,
   onSelectSession,
@@ -27,6 +28,10 @@ const DashboardPage = ({
   // 避免 Dashboard 再依賴四支額外 API，
   // 降低「部分資料載入失敗 / 顯示 0」問題。
   // ==========================================
+
+  // 分頁：dashboard = 統計儀表板、trend = 縱向健康趨勢
+  const [tab, setTab] = useState('dashboard');
+
 
   const [
     sessions,
@@ -697,6 +702,59 @@ const DashboardPage = ({
 
 
   // ==========================================
+  // 訪客
+  //
+  // 儀表板與趨勢都建立在歷史問診紀錄上，而訪客沒有持久歷史
+  // （後端 /api/v1/history 對訪客回 403）。與其讓畫面顯示錯誤或
+  // 一片空白，不如明講原因與解法。
+  // ==========================================
+
+  if (user?.is_guest) {
+    return (
+      <div
+        style={{
+          ...styles.page,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '320px'
+        }}
+      >
+        <div
+          style={{
+            textAlign: 'center',
+            maxWidth: '420px',
+            padding: '32px 24px'
+          }}
+        >
+          <div
+            style={{
+              fontSize: '1.05rem',
+              fontWeight: 600,
+              color: t.text,
+              marginBottom: '10px'
+            }}
+          >
+            訪客模式無法檢視健康儀表板
+          </div>
+
+          <div
+            style={{
+              fontSize: '0.88rem',
+              color: t.muted,
+              lineHeight: 1.75
+            }}
+          >
+            儀表板與健康趨勢都是依據您過去的問診紀錄整理的。
+            登入或註冊會員後，系統才會為您保存紀錄並建立長期趨勢。
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+
+  // ==========================================
   // UI
   // ==========================================
 
@@ -913,9 +971,53 @@ const DashboardPage = ({
 
 
         {/* ================================== */}
-        {/* 三顆主要指標 */}
+        {/* 分頁：儀表板 / 健康趨勢 */}
+        {/*
+            比照行動端 DashboardScreen 的兩個分頁。原本趨勢面板夾在統計
+            中間，要看趨勢得先捲過一堆數字，兩種資訊也互相干擾。
+        */}
         {/* ================================== */}
 
+        <div
+          style={{
+            display: 'flex',
+            gap: '3px',
+            alignSelf: 'flex-start',
+            backgroundColor: 'rgba(255,255,255,0.7)',
+            border: `1px solid ${t.border}`,
+            borderRadius: '999px',
+            padding: '3px',
+            marginBottom: '18px',
+          }}
+        >
+          {[
+            ['dashboard', '儀表板'],
+            ['trend', '健康趨勢'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              style={{
+                border: 'none',
+                borderRadius: '999px',
+                padding: '6px 18px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: tab === key ? 600 : 500,
+                color: tab === key ? t.text : t.muted,
+                backgroundColor: tab === key ? t.panel : 'transparent',
+                boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'dashboard' && (
+        /* 三顆主要指標 */
         <section
           style={
             styles.tileRow
@@ -1117,12 +1219,14 @@ const DashboardPage = ({
           </div>
 
         </section>
+        )}
 
 
         {/* ================================== */}
         {/* 近 14 天問診頻率 */}
         {/* ================================== */}
 
+        {tab === 'dashboard' && (
         <section
           style={
             styles.trendPanel
@@ -1267,6 +1371,7 @@ const DashboardPage = ({
           </div>
 
         </section>
+        )}
 
 
         {/* ================================== */}
@@ -1277,6 +1382,7 @@ const DashboardPage = ({
             都由既有後端邏輯處理，不在 Dashboard 重複實作。 */}
         {/* ================================== */}
 
+        {tab === 'trend' && (
         <section
           style={
             styles.longitudinalPanel
@@ -1341,12 +1447,14 @@ const DashboardPage = ({
           </div>
 
         </section>
+        )}
 
 
         {/* ================================== */}
         {/* 最近問診 + 科別分布 */}
         {/* ================================== */}
 
+        {tab === 'dashboard' && (
         <section
           style={
             styles.bottomRow
@@ -1745,6 +1853,7 @@ const DashboardPage = ({
           </div>
 
         </section>
+        )}
 
       </div>
 
