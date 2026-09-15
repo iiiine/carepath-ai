@@ -4,6 +4,8 @@ import json
 
 from typing import Any, Dict, Optional
 
+from api_errors import log_failure
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -728,24 +730,19 @@ def get_visit_summary(
 
     except ValueError as exc:
 
+        log_failure("visit_summary.invalid_data", exc)
+
         raise HTTPException(
             status_code=(
                 status.HTTP_422_UNPROCESSABLE_ENTITY
             ),
-            detail=str(
-                exc
-            ),
+            detail="問診資料不足或格式不正確，無法產生摘要。",
         )
 
 
     except Exception as exc:
 
-        print(
-            "❌ Visit Summary API failed:",
-            repr(
-                exc
-            ),
-        )
+        log_failure("visit_summary", exc)
 
         raise HTTPException(
             status_code=(

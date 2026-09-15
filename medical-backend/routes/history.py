@@ -1,6 +1,8 @@
 # routes/history.py
 import json
 
+from api_errors import log_failure
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
@@ -121,10 +123,7 @@ def get_user_history(
                             ChatMessage(**message)
                         )
                     except Exception as message_error:
-                        print(
-                            "⚠️ 跳過格式錯誤的歷史訊息："
-                            f"{message_error}"
-                        )
+                        log_failure("history", message_error)
 
                 parsed_resources = []
 
@@ -142,10 +141,7 @@ def get_user_history(
                         )
 
                     except Exception as hospital_error:
-                        print(
-                            "⚠️ 跳過格式錯誤的醫院資料："
-                            f"{hospital_error}"
-                        )
+                        log_failure("history", hospital_error)
 
                 history_results.append(
                     ChatSessionResponse(
@@ -193,11 +189,11 @@ def get_user_history(
         raise
 
     except Exception as error:
-        print(f"⚠️ 抓取歷史對話失敗：{error}")
+        log_failure("history", error)
 
         raise HTTPException(
             status_code=500,
-            detail=f"抓取歷史對話失敗：{str(error)}"
+            detail="抓取歷史對話失敗，請稍後再試。"
         )
 
     finally:
@@ -278,7 +274,7 @@ def update_session_title(
 
         raise HTTPException(
             status_code=500,
-            detail=f"標題修改失敗：{str(error)}"
+            detail="標題修改失敗，請稍後再試。"
         )
 
     finally:
@@ -341,7 +337,7 @@ def delete_history_session(
 
         raise HTTPException(
             status_code=500,
-            detail=f"刪除紀錄失敗：{str(error)}"
+            detail="刪除紀錄失敗，請稍後再試。"
         )
 
     finally:

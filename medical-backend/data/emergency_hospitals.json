@@ -1,0 +1,230 @@
+{
+  "source_url": "https://dep.mohw.gov.tw/DOMA/fp-979-4112-106.html",
+  "source_section": "二、全國重度級急救責任醫院急診即時資訊",
+  "source_updated_on": "2026-02-24",
+  "verified_on": "2026-09-16",
+  "review_after": "2026-12-15",
+  "coverage": "部分已核對的重度級急救責任醫院，非全國完整名單，非即時收治資訊",
+  "coordinate_source_files": [
+    "hospitals_5city.json",
+    "tainan_hospitals.json"
+  ],
+  "hospitals": [
+    {
+      "name": "三軍總醫院附設民眾診療服務處",
+      "city": "臺北市",
+      "address": "臺北市內湖區成功路2段325號",
+      "phone": "02-87923311",
+      "latitude": 25.071918,
+      "longitude": 121.592536,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "國泰醫療財團法人國泰綜合醫院",
+      "city": "臺北市",
+      "address": "臺北市大安區仁愛路4段280號,266巷6號",
+      "phone": "02-27082121",
+      "latitude": 25.036911,
+      "longitude": 121.553589,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "國立臺灣大學醫學院附設醫院",
+      "city": "臺北市",
+      "address": "臺北市中正區中山南路7、8號;常德街1號",
+      "phone": "02-23123456",
+      "latitude": 25.040784,
+      "longitude": 121.519354,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "新光醫療財團法人新光吳火獅紀念醫院",
+      "city": "臺北市",
+      "address": "臺北市士林區文昌路95號及士商路51號1至7樓53、55號",
+      "phone": "02-28332211",
+      "latitude": 25.096423,
+      "longitude": 121.520185,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "臺北榮民總醫院",
+      "city": "臺北市",
+      "address": "臺北市北投區石牌路2段201號",
+      "phone": "02-28712121",
+      "latitude": 25.120264,
+      "longitude": 121.520059,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "振興醫療財團法人振興醫院",
+      "city": "臺北市",
+      "address": "臺北市北投區振興街45號",
+      "phone": "02-28264400",
+      "latitude": 25.116077,
+      "longitude": 121.522375,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "臺北醫學大學附設醫院",
+      "city": "臺北市",
+      "address": "臺北市信義區吳興街252號、250號",
+      "phone": "02-27372181",
+      "latitude": 25.026705,
+      "longitude": 121.56337,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "佛教慈濟醫療財團法人台北慈濟醫院",
+      "city": "新北市",
+      "address": "新北市新店區建國路289號",
+      "phone": "02-66289779",
+      "latitude": 24.985866,
+      "longitude": 121.535895,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "天主教耕莘醫療財團法人耕莘醫院",
+      "city": "新北市",
+      "address": "新北市新店區中正路362號、車子路15號",
+      "phone": "02-22193391",
+      "latitude": 24.976393,
+      "longitude": 121.535916,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "衛生福利部臺北醫院",
+      "city": "新北市",
+      "address": "新北市新莊區思源路127號、新北巿新莊區長青街6號2樓、3樓",
+      "phone": "02-22765566",
+      "latitude": 25.042799,
+      "longitude": 121.459031,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "輔仁大學學校財團法人輔仁大學附設醫院",
+      "city": "新北市",
+      "address": "新北市泰山區貴子路69號(地下4層、地上1至13層、15層)",
+      "phone": "02-85128888",
+      "latitude": 25.03982,
+      "longitude": 121.43102,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "長庚醫療財團法人林口長庚紀念醫院",
+      "city": "桃園市",
+      "address": "桃園市龜山區公西里復興街5號、5之7號及文化一路15號",
+      "phone": "03-3281200",
+      "latitude": 25.06146,
+      "longitude": 121.367795,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "衛生福利部桃園醫院",
+      "city": "桃園市",
+      "address": "桃園市桃園區中山路1492號",
+      "phone": "03-3699721",
+      "latitude": 24.977536,
+      "longitude": 121.268087,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "中國醫藥大學附設醫院",
+      "city": "臺中市",
+      "address": "臺中市北區育德路2號",
+      "phone": "04-22052121",
+      "latitude": 24.157637,
+      "longitude": 120.680563,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "中山醫學大學附設醫院",
+      "city": "臺中市",
+      "address": "臺中市南區建國北路一段110號",
+      "phone": "04-24739595",
+      "latitude": 24.121615,
+      "longitude": 120.650034,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "臺中榮民總醫院",
+      "city": "臺中市",
+      "address": "臺中市西屯區臺灣大道4段1650號",
+      "phone": "04-23592525",
+      "latitude": 24.183661,
+      "longitude": 120.604183,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "佛教慈濟醫療財團法人台中慈濟醫院",
+      "city": "臺中市",
+      "address": "臺中市潭子區豐興路1段66、88號",
+      "phone": "04-36060666",
+      "latitude": 24.194079,
+      "longitude": 120.720583,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "童綜合醫療社團法人童綜合醫院",
+      "city": "臺中市",
+      "address": "臺中市梧棲區臺灣大道八段699號",
+      "phone": "04-26581919",
+      "latitude": 24.247228,
+      "longitude": 120.542843,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "義大醫療財團法人義大醫院",
+      "city": "高雄市",
+      "address": "高雄市燕巢區角宿里義大路1號",
+      "phone": "07-6150011",
+      "latitude": 22.7656,
+      "longitude": 120.36441,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "財團法人私立高雄醫學大學附設中和紀念醫院",
+      "city": "高雄市",
+      "address": "高雄市三民區十全一路100號",
+      "phone": "07-3121101",
+      "latitude": 22.645698,
+      "longitude": 120.309349,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "長庚醫療財團法人高雄長庚紀念醫院",
+      "city": "高雄市",
+      "address": "高雄市鳥松區大埤路123號",
+      "phone": "07-7317123",
+      "latitude": 22.648957,
+      "longitude": 120.355541,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "高雄榮民總醫院",
+      "city": "高雄市",
+      "address": "高雄市左營區大中一路386號",
+      "phone": "07-3422121",
+      "latitude": 22.678389,
+      "longitude": 120.322833,
+      "coordinate_source": "name"
+    },
+    {
+      "name": "國立成功大學醫學院附設醫院",
+      "city": "臺南市",
+      "address": "臺南市北區勝利路138號",
+      "phone": "06-2353535",
+      "latitude": 23.00221,
+      "longitude": 120.21923,
+      "coordinate_source": "existing_tainan_data"
+    },
+    {
+      "name": "奇美醫療財團法人奇美醫院",
+      "city": "臺南市",
+      "address": "臺南市永康區中華路901號",
+      "phone": "06-2812811",
+      "latitude": 23.020606,
+      "longitude": 120.221897,
+      "coordinate_source": "existing_tainan_data"
+    }
+  ]
+}

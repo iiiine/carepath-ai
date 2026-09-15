@@ -53,7 +53,7 @@ assert len(no_coord) == 3, [h["name"] for h in no_coord]
 
 # 帶座標：有 distance_meters 且由近到遠
 res = list_hospitals(lat=22.997, lng=120.212)["hospitals"]
-dists = [h["distance_meters"] for h in res]
+dists = [h["distance_meters"] for h in res if h["distance_meters"] is not None]
 assert dists == sorted(dists) and dists[0] < 1000
 
 # 台北車站附近應該找得到 1 公里內的醫院
@@ -61,7 +61,7 @@ res = list_hospitals(lat=25.0478, lng=121.5170)["hospitals"]
 assert res[0]["distance_meters"] < 1000, res[0]
 
 # 沒有座標的醫院一律排到最後，不會擠掉真正近的
-assert res[-1]["distance_meters"] == 9999999
+assert res[-1]["distance_meters"] is None
 
 
 # ============================================================

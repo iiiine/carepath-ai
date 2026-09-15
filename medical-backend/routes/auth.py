@@ -840,7 +840,7 @@ def register(
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             ),
             detail=(
-                f"註冊失敗：{str(exc)}"
+                "註冊失敗，請稍後再試。"
             ),
         )
 
@@ -1275,8 +1275,7 @@ def guest_login():
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             ),
             detail=(
-                "訪客登入建立失敗："
-                f"{str(exc)}"
+                "訪客登入建立失敗，請稍後再試。"
             ),
         )
 

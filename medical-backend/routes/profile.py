@@ -1,4 +1,6 @@
 # routes/profile.py
+from api_errors import log_failure
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional
@@ -94,7 +96,8 @@ def update_user_profile(payload: ProfileSchema, current_user=Depends(get_current
             conn.commit()
             return {"status": "success", "message": "健康基本資料已更新"}
     except Exception as e:
-        print(f"⚠️ 儲存 Profile 失敗: {e}")
-        raise HTTPException(status_code=500, detail=f"資料庫寫入失敗: {str(e)}")
+        log_failure("profile", e)
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="健康資料儲存失敗，請稍後再試。")
     finally:
         conn.close()

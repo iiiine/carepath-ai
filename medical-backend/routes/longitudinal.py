@@ -20,6 +20,7 @@ GET /api/v1/longitudinal
 """
 
 from __future__ import annotations
+from api_errors import log_failure
 
 from typing import Any, Dict
 
@@ -340,12 +341,7 @@ def get_longitudinal_health_analysis(
 
     except Exception as exc:
 
-        print(
-            "❌ Longitudinal Health Intelligence API error:",
-            repr(
-                exc
-            ),
-        )
+        log_failure("longitudinal", exc)
 
 
         raise HTTPException(

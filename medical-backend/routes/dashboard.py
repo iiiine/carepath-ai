@@ -1,3 +1,5 @@
+from api_errors import log_failure
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg2.extras import RealDictCursor
 
@@ -201,9 +203,7 @@ def get_dashboard_summary(
         raise
 
     except Exception as error:
-        print(
-            f"❌ Dashboard summary 查詢失敗：{error}"
-        )
+        log_failure("dashboard", error)
 
         raise HTTPException(
             status_code=500,
@@ -311,9 +311,7 @@ def get_pain_trend(
         raise
 
     except Exception as error:
-        print(
-            f"❌ Dashboard pain trend 查詢失敗：{error}"
-        )
+        log_failure("dashboard", error)
 
         raise HTTPException(
             status_code=500,
@@ -428,9 +426,7 @@ def get_recent_sessions(
         raise
 
     except Exception as error:
-        print(
-            f"❌ Dashboard recent sessions 查詢失敗：{error}"
-        )
+        log_failure("dashboard", error)
 
         raise HTTPException(
             status_code=500,
@@ -548,9 +544,7 @@ def get_department_stats(
         raise
 
     except Exception as error:
-        print(
-            f"❌ Dashboard departments 查詢失敗：{error}"
-        )
+        log_failure("dashboard", error)
 
         raise HTTPException(
             status_code=500,

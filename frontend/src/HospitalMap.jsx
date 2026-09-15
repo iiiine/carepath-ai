@@ -1,3 +1,4 @@
+import { coordinatesOf, distanceText, navigationUrl } from './location';
 import { useState, useEffect } from 'react';
 import { APIProvider, Map, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import api from './api/axios';
@@ -7,17 +8,19 @@ import { BaymaxAvatar } from './Baymax';
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const TAINAN_CENTER = { lat: 22.99, lng: 120.21 };
 
-const fmtDist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} 公里` : `${m} 公尺`);
+
 
 // 後端有時給 lat/lng、有時給 latitude/longitude，統一在這裡轉
-const coordOf = (h) => ({ lat: Number(h.lat ?? h.latitude), lng: Number(h.lng ?? h.longitude) });
+const coordOf = coordinatesOf;
 
 // 建立組件負責「自動縮放地圖視野 (fitBounds)」
 function MapController({ displayHospitals, userPos }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !displayHospitals || displayHospitals.length === 0) return;
+    if (!map || !displayHospitals) return;
+    const positions = displayHospitals.map(coordOf).filter(Boolean);
+    if (!positions.length && !userPos) return;
 
     // 建立包含所有地標與使用者位置的 Bounds 邊界
     const bounds = new window.google.maps.LatLngBounds();
@@ -26,12 +29,7 @@ function MapController({ displayHospitals, userPos }) {
       bounds.extend(userPos);
     }
 
-    displayHospitals.forEach((h) => {
-      const { lat, lng } = coordOf(h);
-      if (lat && lng) {
-        bounds.extend({ lat, lng });
-      }
-    });
+    positions.forEach(position => bounds.extend(position));
 
     // 移動視野並加上邊距 (Padding)
     map.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
@@ -54,39 +52,23 @@ function rankIcon(n, isTop) {
 }
 
 // 接受傳入 hospitalsProp (問診後傳進來的 5 間醫院)
-function HospitalMap({ isFullscreen, hospitalsProp = null }) {
-  const [userPos, setUserPos] = useState(null);
-  const [located, setLocated] = useState(false);
+function HospitalMap({ isFullscreen, hospitalsProp = null, userLocation = null }) {
+  const lat = userLocation?.latitude ?? null;
+  const lng = userLocation?.longitude ?? null;
+  const userPos = coordOf(userLocation);
   const [hospitals, setHospitals] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState(false);
 
+  // Location is owned by the parent; never request a second, potentially different position.
   useEffect(() => {
-    if (!navigator.geolocation) return setLocated(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => { setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setLocated(true); },
-      () => setLocated(true),
-      { timeout: 5000 }
-    );
-  }, []);
-
-  // 只有在【沒有傳入特定醫院清單】時，才去撈取全臺南的醫院
-  useEffect(() => {
-    if (!located) return;
-    // 已經有問診結果就不抓全量。注意要用 null 判斷：問診完但查無醫院時是空陣列 []，
-    // 這種情況該顯示「查無」，不是退回顯示全部醫院。
-    if (hospitalsProp) return;
-
-    const params = userPos ? { lat: userPos.lat, lng: userPos.lng } : {};
-    api.get('/api/v1/hospitals', { 
-      params,
-      headers: {
-        'ngrok-skip-browser-warning': 'true' 
-      }
-    })
-      .then((res) => setHospitals(res.data.hospitals))
-      .catch(() => setError(true));
-  }, [located, userPos, hospitalsProp]);
+    if (hospitalsProp !== null) return;
+    let cancelled = false;
+    api.get('/api/v1/hospitals', { params: lat !== null && lng !== null ? { lat, lng } : {} })
+      .then(res => { if (!cancelled) setHospitals(res.data.hospitals); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [lat, lng, hospitalsProp]);
 
   // 決定目前要在地圖顯示的醫院：有問診結果就用 hospitalsProp（即使是空的），否則用全量 hospitals
   const displayHospitals = hospitalsProp ?? hospitals;
@@ -98,13 +80,14 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
   const top = isRanked ? displayHospitals[0] : null;
   const rest = isRanked ? displayHospitals.slice(1) : [];
 
-  if (!MAPS_KEY) return <p style={{ color: t.danger, fontSize: '0.88rem' }}>未設定 Google Maps API key</p>;
+  if (!MAPS_KEY) return <p style={{ color: t.danger, fontSize: '0.88rem' }}>地圖暫時無法顯示，請使用院所地址查詢。</p>;
   if (error && !hospitalsProp) return <p style={{ color: t.danger, fontSize: '0.88rem' }}>無法載入醫院地圖資料</p>;
   if (!displayHospitals) return <p style={{ color: t.muted, fontSize: '0.88rem' }}>醫院地圖載入中...</p>;
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* 首選卡：直接推第一名，省掉使用者自己比對五間 */}
+      {!userPos && <p style={{ margin: 0, fontSize: '0.78rem', color: t.muted }}>未顯示您的定位；地圖中心只是瀏覽視角。</p>}
+      {/* 顯示排序後的院所，不宣稱它距離最近或最適合。 */}
       {top && (
         <div style={{
           display: 'flex', gap: '10px', alignItems: 'flex-start', flexShrink: 0,
@@ -116,17 +99,17 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
               <span style={{
                 fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em',
                 color: t.page, backgroundColor: t.userBubble, borderRadius: '4px', padding: '2px 7px',
-              }}>最推薦</span>
-              <span style={{ fontSize: '0.7rem', color: t.muted }}>專長最符合 · 距離最近</span>
+              }}>院所參考</span>
+              <span style={{ fontSize: '0.7rem', color: t.muted }}>依科別與可用資料排序</span>
             </div>
             <div style={{ fontSize: '1rem', fontWeight: 700, color: t.text, lineHeight: 1.35 }}>{top.name}</div>
             <div style={{ fontSize: '0.75rem', color: t.muted }}>
               {top.address}
-              {top.distance_meters != null && ` · ${fmtDist(top.distance_meters)}`}
+              {distanceText(top) && ` · 直線距離 ${distanceText(top)}`}
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
               <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${coordOf(top).lat},${coordOf(top).lng}`}
+                href={navigationUrl(top)}
                 target="_blank" rel="noreferrer"
                 style={{
                   textDecoration: 'none', fontSize: '0.76rem', fontWeight: 600,
@@ -162,7 +145,7 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
             padding: '8px 14px', fontSize: '0.82rem', fontWeight: 500,
             boxShadow: '0 2px 8px rgba(0,0,0,0.10)', whiteSpace: 'nowrap',
           }}>
-            附近查無合作院所，建議直接前往鄰近醫院就診
+            此查詢沒有符合的院所資料，可調整地區或向院方查詢。
           </div>
         )}
 
@@ -185,8 +168,9 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
             )}
 
             {displayHospitals.map((h, idx) => {
-              const { lat, lng } = coordOf(h);
-              if (!lat || !lng) return null;
+              const position = coordOf(h);
+              if (!position) return null;
+              const { lat, lng } = position;
 
               return (
                 <Marker
@@ -209,10 +193,10 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
                   <strong>{selected.name}</strong>
                   <br />{selected.address}
                   <br /><a href={`tel:${selected.phone}`} style={{ color: t.text }}>{selected.phone}</a>
-                  {selected.distance_meters != null && <><br />距離約 {fmtDist(selected.distance_meters)}</>}
+                  {distanceText(selected) && <><br />直線距離約 {distanceText(selected)}</>}
                   <br />
                   <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`}
+                    href={navigationUrl(selected)}
                     target="_blank" rel="noreferrer"
                   >
                     導航至此
@@ -230,12 +214,12 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
             zIndex: 5, display: 'flex', gap: '6px',
           }}>
             {rest.map((h, i) => {
-              const { lat, lng } = coordOf(h);
+              const position = coordOf(h);
               return (
                 <button
                   key={h.hospital_code || h.name || i}
                   type="button"
-                  onClick={() => lat && lng && setSelected({ ...h, lat, lng })}
+                  onClick={() => position ? setSelected({ ...h, ...position }) : window.open(navigationUrl(h), '_blank', 'noopener,noreferrer')}
                   style={{
                     flexGrow: 1, flexBasis: 0, minWidth: 0, cursor: 'pointer', fontFamily: 'inherit',
                     backgroundColor: 'rgba(255,255,255,0.94)', border: `1px solid ${t.border}`,
@@ -249,7 +233,7 @@ function HospitalMap({ isFullscreen, hospitalsProp = null }) {
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>{h.name}</span>
                   <span style={{ fontSize: '0.62rem', color: t.muted }}>
-                    {h.distance_meters != null ? fmtDist(h.distance_meters) : ''}
+                    {distanceText(h)}
                   </span>
                 </button>
               );

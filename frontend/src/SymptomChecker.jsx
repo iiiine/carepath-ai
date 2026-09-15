@@ -1,3 +1,6 @@
+import { CITIES, distanceText } from './location';
+import { useLocationSelection } from './useLocationSelection';
+import EmergencyResources from './EmergencyResources';
 
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -24,12 +27,9 @@ import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } fro
 
 
 // ==========================================
-// 定位失敗時使用的備援位置
+// 定位與地區由 useLocationSelection 管理；未定位不補座標。
 // ==========================================
-const FALLBACK_LOCATION = {
-  latitude: 23.0,
-  longitude: 120.2
-};
+
 
 
 // ==========================================
@@ -387,27 +387,7 @@ function SymptomChecker({
   // ==========================================
   // Safety Alert：尋找附近急診
   // ==========================================
-  const handleOpenNearbyEmergency = () => {
 
-    const latitude =
-      userLocation?.latitude ??
-      FALLBACK_LOCATION.latitude;
-
-    const longitude =
-      userLocation?.longitude ??
-      FALLBACK_LOCATION.longitude;
-
-    const mapUrl =
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        `急診 ${latitude},${longitude}`
-      )}`;
-
-    window.open(
-      mapUrl,
-      '_blank',
-      'noopener,noreferrer'
-    );
-  };
 
 
   // ==========================================
@@ -524,14 +504,8 @@ function SymptomChecker({
 
 
   // ==========================================
-  // 就醫摘要 Session ID 自動恢復
+  // 就醫摘要保存狀態
   // ==========================================
-
-  const [
-    visitSummaryResolving,
-    setVisitSummaryResolving
-  ] = useState(false);
-
 
   const [
     visitSummaryResolveError,
@@ -552,23 +526,10 @@ function SymptomChecker({
   // ==========================================
   // 使用者真實位置
   // ==========================================
-  const [
-    userLocation,
-    setUserLocation
-  ] = useState(null);
+  const { location: userLocation, city: selectedCity, setCity: setSelectedCity, status: locationStatus } = useLocationSelection();
+  // Capture the position used by this result; later location changes must not relabel it.
+  const [resultLocation, setResultLocation] = useState(null);
 
-
-  // ==========================================
-  // 定位狀態
-  //
-  // loading
-  // success
-  // fallback
-  // ==========================================
-  const [
-    locationStatus,
-    setLocationStatus
-  ] = useState('loading');
 
 
   // ==========================================
@@ -729,103 +690,7 @@ function SymptomChecker({
 
 
   // ==========================================
-  // 第 20 步：
-  // 取得使用者目前位置
-  // ==========================================
-  useEffect(() => {
 
-    if (!navigator.geolocation) {
-
-      console.warn(
-        '此瀏覽器不支援定位功能，將使用備援位置。'
-      );
-
-
-      setUserLocation(
-        FALLBACK_LOCATION
-      );
-
-
-      setLocationStatus(
-        'fallback'
-      );
-
-
-      return;
-    }
-
-
-    setLocationStatus(
-      'loading'
-    );
-
-
-    navigator.geolocation.getCurrentPosition(
-
-      // ======================================
-      // 成功
-      // ======================================
-      (position) => {
-
-        const location = {
-          latitude:
-            position.coords.latitude,
-
-          longitude:
-            position.coords.longitude
-        };
-
-
-        console.log(
-          '取得使用者位置成功：',
-          location
-        );
-
-
-        setUserLocation(
-          location
-        );
-
-
-        setLocationStatus(
-          'success'
-        );
-      },
-
-
-      // ======================================
-      // 失敗
-      // ======================================
-      (error) => {
-
-        console.warn(
-          '無法取得使用者位置，改用備援座標：',
-          error
-        );
-
-
-        setUserLocation(
-          FALLBACK_LOCATION
-        );
-
-
-        setLocationStatus(
-          'fallback'
-        );
-      },
-
-
-      // ======================================
-      // 定位設定
-      // ======================================
-      {
-        enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: 300000
-      }
-    );
-
-  }, []);
 
 
   // ==========================================
@@ -883,215 +748,8 @@ function SymptomChecker({
 
 
   // ==========================================
-  // Step 3B-2 + Fix：
-  // 就醫摘要 Session ID 自動恢復
-  //
-  // 正常情況：
-  // - 新問診：直接使用 /diagnose 回傳 session_id
-  // - 歷史問診：直接使用 session.id
-  //
-  // 若前端暫時沒有拿到 session_id，
-  // 會員可從 /api/v1/history 找回本次最近紀錄。
+  // 就醫摘要使用 API 或歷史紀錄提供的確切 ID。
   // ==========================================
-
-  const resolveVisitSummarySessionId =
-    async () => {
-
-      if (
-        currentSessionId !== null
-        &&
-        currentSessionId !== undefined
-      ) {
-        return currentSessionId;
-      }
-
-
-      if (user?.is_guest) {
-        return null;
-      }
-
-
-      setVisitSummaryResolving(
-        true
-      );
-
-
-      setVisitSummaryResolveError(
-        ''
-      );
-
-
-      try {
-
-        const response =
-          await api.get(
-            '/api/v1/history'
-          );
-
-
-        const sessions =
-          Array.isArray(
-            response.data
-          )
-            ? [
-                ...response.data
-              ]
-            : [];
-
-
-        sessions.sort(
-          (
-            a,
-            b
-          ) =>
-            (
-              Number(
-                b?.id
-              )
-              ||
-              0
-            )
-            -
-            (
-              Number(
-                a?.id
-              )
-              ||
-              0
-            )
-        );
-
-
-        const targetSymptom =
-          String(
-            diagnosisResult?.symptom
-            ||
-            ''
-          ).trim();
-
-
-        const targetDepartment =
-          String(
-            diagnosisResult
-              ?.suggested_department
-            ||
-            ''
-          ).trim();
-
-
-        const match =
-          sessions.find(
-            (
-              session
-            ) => {
-
-              const originalSymptom =
-                String(
-                  session
-                    ?.original_symptom
-                  ||
-                  ''
-                ).trim();
-
-
-              const latestSymptom =
-                String(
-                  session
-                    ?.symptom_text
-                  ||
-                  ''
-                ).trim();
-
-
-              return (
-                targetSymptom
-                &&
-                (
-                  originalSymptom
-                  ===
-                  targetSymptom
-                  ||
-                  latestSymptom
-                  ===
-                  targetSymptom
-                )
-              );
-            }
-          )
-          ||
-          sessions.find(
-            (
-              session
-            ) => {
-
-              return (
-                targetDepartment
-                &&
-                String(
-                  session
-                    ?.suggested_department
-                  ||
-                  ''
-                ).trim()
-                ===
-                targetDepartment
-                &&
-                Number(
-                  session?.pain_level
-                )
-                ===
-                Number(
-                  painLevel
-                )
-              );
-            }
-          );
-
-
-        if (
-          match?.id !== null
-          &&
-          match?.id !== undefined
-        ) {
-
-          setCurrentSessionId(
-            match.id
-          );
-
-
-          return match.id;
-        }
-
-
-        setVisitSummaryResolveError(
-          '目前找不到對應的就醫摘要紀錄，請重新整理後再試。'
-        );
-
-
-        return null;
-
-      } catch (error) {
-
-        console.error(
-          '就醫摘要 Session ID 同步失敗：',
-          error
-        );
-
-
-        setVisitSummaryResolveError(
-          '就醫摘要同步失敗，請稍後再試。'
-        );
-
-
-        return null;
-
-      } finally {
-
-        setVisitSummaryResolving(
-          false
-        );
-      }
-    };
 
 
   // ==========================================
@@ -1099,32 +757,18 @@ function SymptomChecker({
   // ==========================================
 
   const handleOpenVisitSummary =
-    async () => {
+    () => {
 
-      let sessionId =
-        currentSessionId;
+      if (user?.is_guest) return;
 
-
-      if (
-        sessionId === null
-        ||
-        sessionId === undefined
-      ) {
-
-        sessionId =
-          await resolveVisitSummarySessionId();
-      }
-
-
-      if (
-        sessionId === null
-        ||
-        sessionId === undefined
-      ) {
-
+      if (currentSessionId === null || currentSessionId === undefined) {
+        setVisitSummaryResolveError(
+          '本次問診尚未取得已保存的紀錄，無法開啟摘要。請從歷史紀錄選擇已保存的問診。'
+        );
         return;
       }
 
+      setVisitSummaryResolveError('');
 
       setVisitSummaryRefreshKey(
         (current) =>
@@ -1201,25 +845,8 @@ function SymptomChecker({
       // ======================================
       // 使用真實位置
       // ======================================
-      const latitude =
-        userLocation?.latitude ??
-        FALLBACK_LOCATION.latitude;
-
-
-      const longitude =
-        userLocation?.longitude ??
-        FALLBACK_LOCATION.longitude;
-
-
-      console.log(
-        '本次問診使用座標：',
-        {
-          latitude,
-          longitude,
-          locationStatus
-        }
-      );
-
+      const latitude = userLocation?.latitude ?? null;
+      const longitude = userLocation?.longitude ?? null;
 
       // ======================================
       // 呼叫 AI 問診 API
@@ -1239,6 +866,7 @@ function SymptomChecker({
 
             user_longitude:
               longitude,
+            user_city: selectedCity || null,
 
             history:
               history
@@ -1439,10 +1067,18 @@ function SymptomChecker({
       // ======================================
       // Step 3B-2：保存本次新問診的 Session ID
       // ======================================
+      setResultLocation(userLocation);
       setCurrentSessionId(
         data.session_id
         ??
         null
+      );
+      setVisitSummaryResolveError(
+        data.save_status === 'failed'
+          ? '問診結果已產生，但歷史紀錄未保存成功，暫時無法提供就醫摘要。'
+          : (!user?.is_guest && data.session_id == null)
+            ? '本次問診未取得紀錄編號，暫時無法提供就醫摘要。'
+            : ''
       );
 
 
@@ -1625,6 +1261,7 @@ function SymptomChecker({
     );
 
 
+    setResultLocation(null);
     // Step 3B-2：歷史問診直接使用資料庫 Session ID
     setCurrentSessionId(
       session.id
@@ -2236,6 +1873,15 @@ function SymptomChecker({
                 </button>
 
 
+                <label style={{ ...CONTROL_CHIP, gap: 6 }}>
+                  地區
+                  <select aria-label="選擇縣市" value={selectedCity} onChange={event => setSelectedCity(event.target.value)}
+                    style={{ maxWidth: 180 }} title="地區選擇用於下一次問診與急診查詢">
+                    <option value="">使用定位／未定位不計距離</option>
+                    {CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                  </select>
+                </label>
+
                 {/* 定位狀態 */}
 
                 <div
@@ -2248,7 +1894,7 @@ function SymptomChecker({
                       : locationStatus ===
                         'loading'
                         ? '正在取得位置'
-                        : '目前使用備援位置'
+                        : '未取得定位；仍可問診或手動選擇縣市'
                   }
 
                   style={{
@@ -2276,7 +1922,9 @@ function SymptomChecker({
                     : locationStatus ===
                       'loading'
                       ? ' 定位中'
-                      : ' 備援位置'}
+                      : locationStatus === 'manual' ? ` ${selectedCity}（手動）`
+                        : locationStatus === 'denied' ? ' 未定位（未授權）'
+                          : locationStatus === 'timeout' ? ' 未定位（逾時）' : ' 未定位'}
 
                 </div>
 
@@ -2499,7 +2147,7 @@ function SymptomChecker({
                         '0.85rem'
                     }}
                   >
-                    描述您的症狀，我會協助判斷科別並推薦附近院所
+                    描述您的症狀，我會協助判斷科別並提供院所資料
                   </p>
 
                 </div>
@@ -2571,7 +2219,7 @@ function SymptomChecker({
                           fontSize: '1rem',
                         }}
                       >
-                        緊急醫療警示
+                        {safetyAlert?.safety?.technical_failure ? '安全評估未完成' : '緊急醫療警示'}
                       </strong>
 
                       <span
@@ -2660,40 +2308,7 @@ function SymptomChecker({
                         flexWrap: 'wrap',
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={handleOpenNearbyEmergency}
-                        style={{
-                          border: 'none',
-                          backgroundColor: '#dc2626',
-                          color: '#ffffff',
-                          borderRadius: '8px',
-                          padding: '9px 14px',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        尋找附近急診
-                      </button>
-
-                      <a
-                        href="tel:119"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          border: '1px solid #dc2626',
-                          color: '#991b1b',
-                          backgroundColor: '#ffffff',
-                          borderRadius: '8px',
-                          padding: '9px 14px',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                          textDecoration: 'none',
-                        }}
-                      >
-                        撥打 119
-                      </a>
+                      <EmergencyResources location={userLocation} city={selectedCity} safety={safetyAlert.safety} />
 
                       <button
                         type="button"
@@ -2833,7 +2448,7 @@ function SymptomChecker({
                         lineHeight: 1.6,
                       }}
                     >
-                      用你自己的話講就好，我會判斷該看哪一科，再幫你找附近的院所。
+                      用你自己的話講就好，我會協助判斷該看哪一科，再提供院所資料。
                     </div>
                   </div>
                 </div>
@@ -3696,7 +3311,7 @@ function SymptomChecker({
                       600
                   }}
                 >
-                  附近醫療院所地圖
+                  醫療院所地圖
                 </h3>
 
 
@@ -3763,6 +3378,7 @@ function SymptomChecker({
                     'map'
                   }
 
+                  userLocation={resultLocation}
                   hospitalsProp={
                     diagnosisResult
                       ? diagnosisResult.nearby_medical_resources
@@ -4413,8 +4029,6 @@ function SymptomChecker({
 
                           disabled={
                             user?.is_guest
-                            ||
-                            visitSummaryResolving
                           }
 
                           style={{
@@ -4461,11 +4075,9 @@ function SymptomChecker({
                               700,
 
                             cursor:
-                              visitSummaryResolving
-                                ? 'wait'
-                                : user?.is_guest
-                                  ? 'not-allowed'
-                                  : 'pointer',
+                              user?.is_guest
+                                ? 'not-allowed'
+                                : 'pointer',
 
                             opacity:
                               user?.is_guest
@@ -4486,9 +4098,7 @@ function SymptomChecker({
                             {
                               user?.is_guest
                                 ? '會員可使用 AI 就醫摘要'
-                                : visitSummaryResolving
-                                  ? '正在同步就醫摘要…'
-                                  : '查看 AI 就醫摘要'
+                                : '查看 AI 就醫摘要'
                             }
                           </span>
 
@@ -4796,9 +4406,7 @@ function SymptomChecker({
                                     }
 
 
-                                    {hospital.distance_meters !=
-                                      null &&
-                                      ` · 約 ${hospital.distance_meters} 公尺`}
+                                    {distanceText(hospital) && ` · ${isViewingHistorySession ? '問診當時' : ''}直線距離約 ${distanceText(hospital)}`}
 
                                   </div>
 
@@ -5074,7 +4682,7 @@ function SymptomChecker({
                               '0.8rem'
                           }}
                         >
-                          此筆問診沒有儲存醫療院所資料
+                          目前沒有符合此次查詢的院所資料，可調整地區或向院方查詢。
                         </div>
 
                       )}
