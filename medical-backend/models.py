@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Union
+from locations import UserLocation
+from typing import List, Literal, Optional, Union
 
 
 # ============================================================
@@ -15,7 +16,7 @@ class ChatMessage(BaseModel):
 # 2. 前端傳入的 Request Payload
 # ============================================================
 
-class SymptomRequest(BaseModel):
+class SymptomRequest(UserLocation):
     pain_level: int = Field(
         default=3,
         ge=1,
@@ -24,9 +25,6 @@ class SymptomRequest(BaseModel):
     )
 
     symptom_text: str
-
-    user_latitude: Optional[float] = 23.0
-    user_longitude: Optional[float] = 120.2
 
     history: List[ChatMessage] = Field(
         default_factory=list
@@ -113,7 +111,8 @@ class HospitalResponse(BaseModel):
     address: str
     phone: str
 
-    distance_meters: int
+    distance_meters: Optional[int] = Field(None, ge=0)
+    distance_reference: Optional[Literal["provided_coordinates"]] = None
 
     booking_url: Optional[str] = None
 
@@ -243,6 +242,10 @@ class DiagnosisResponse(BaseModel):
     # --------------------------------------------------------
     session_id: Optional[int] = None
 
+    # 僅描述歷史保存結果，不影響本次問診結果是否完成。
+    save_status: Literal["saved", "failed", "not_applicable"] = "not_applicable"
+    location_context: dict = Field(default_factory=lambda: {"source": "unavailable", "city": None})
+
     symptom: str
 
     suggested_department: str
@@ -312,8 +315,10 @@ class SafetyAlertResponse(BaseModel):
         default_factory=list
     )
 
-    # 現階段 emergency 先不做一般門診推薦。
-    # 後續可以改成附近急診資源。
+    # 警示先回傳，前端另外取得已核對急救責任院所，不等待資源查詢。
+    resources_endpoint: str = "/api/v1/emergency-resources"
+
+    # 保留既有欄位相容性；急症不使用一般門診清單。
     nearby_medical_resources: List[HospitalResponse] = Field(
         default_factory=list
     )

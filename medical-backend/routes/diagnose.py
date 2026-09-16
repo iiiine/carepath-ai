@@ -8,6 +8,8 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Union
 
+from api_errors import log_failure
+
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -56,6 +58,7 @@ from services import (
 # ============================================================
 
 from routes.hospitals import haversine_meters
+from locations import valid_coordinates, in_city, distance_key
 
 
 # ============================================================
@@ -1139,24 +1142,27 @@ def diagnose_symptom(
                     # ----------------------------------------
                     # 排除條件
                     #
-                    # 沒有座標就算不出距離，一律排除。
+                    # 無座標的院所在這條路徑一律排除。
+                    # 已上架的 APK 直接用 latitude / longitude 組
+                    # Google Maps 導航連結，沒有 null 防護，
+                    # 座標缺值會變成 destination=null,null 的死連結，
+                    # 而那個版本已經無法再更新。
+                    # 網頁端改用名稱＋地址導航，不受此限，
+                    # /api/v1/hospitals 仍保留無座標院所。
                     #
                     # 沒有該科別醫師時，
                     # 退回比對醫院官方公告的科別，
                     # 兩者都沒有才排除。
                     # ----------------------------------------
 
-                    if (
-                        hospital[
-                            "latitude"
-                        ]
-                        is None
-                        or hospital[
-                            "longitude"
-                        ]
-                        is None
+                    if not valid_coordinates(
+                        hospital["latitude"],
+                        hospital["longitude"],
                     ):
+                        continue
 
+
+                    if not in_city(hospital.get("address"), payload.user_city):
                         continue
 
 
@@ -1205,42 +1211,14 @@ def diagnose_symptom(
 
 
                     # ----------------------------------------
-                    # Location fallback 防護
+                    # 距離只根據實際提供的成對座標計算，缺值保留 None。
                     # ----------------------------------------
-
-                    user_latitude = (
-                        payload.user_latitude
-                        if payload.user_latitude
-                        is not None
-                        else 23.0
-                    )
-
-
-                    user_longitude = (
-                        payload.user_longitude
-                        if payload.user_longitude
-                        is not None
-                        else 120.2
-                    )
-
-
-                    distance = round(
-                        haversine_meters(
-                            user_latitude,
-                            user_longitude,
-                            float(
-                                hospital[
-                                    "latitude"
-                                ]
-                            ),
-                            float(
-                                hospital[
-                                    "longitude"
-                                ]
-                            ),
-                        )
-                    )
-
+                    distance = None
+                    if payload.user_latitude is not None and valid_coordinates(hospital['latitude'], hospital['longitude']):
+                        distance = round(haversine_meters(
+                            payload.user_latitude, payload.user_longitude,
+                            float(hospital['latitude']), float(hospital['longitude']),
+                        ))
 
                     scored_resources.append(
                         (
@@ -1282,9 +1260,8 @@ def diagnose_symptom(
                                         "longitude"
                                     ]
                                 ),
-                                distance_meters=(
-                                    distance
-                                ),
+                                distance_meters=distance,
+                                distance_reference="provided_coordinates" if distance is not None else None,
                                 available_doctors=(
                                     hospital_docs
                                 ),
@@ -1301,50 +1278,13 @@ def diagnose_symptom(
 
 
                 # --------------------------------------------
-                # 先距離取前 10
+                # 有定位時保留原本「距離候選→專長」排序；未知距離在後。
+                # 無定位時不任意先截取十間，按科別／專長並以代碼穩定排序。
                 # --------------------------------------------
-
-                scored_resources.sort(
-                    key=lambda item:
-                        item[
-                            1
-                        ].distance_meters
-                )
-
-
-                nearest = (
-                    scored_resources[
-                        :10
-                    ]
-                )
-
-
-                # --------------------------------------------
-                # 再按醫師專長相關度排序
-                #
-                # 同分：
-                # 距離近者優先
-                # --------------------------------------------
-
-                nearest.sort(
-                    key=lambda item:
-                        (
-                            -item[0],
-                            item[
-                                1
-                            ].distance_meters,
-                        )
-                )
-
-
-                matched_resources = [
-                    hospital
-                    for _,
-                    hospital
-                    in nearest[
-                        :5
-                    ]
-                ]
+                scored_resources.sort(key=lambda item: (distance_key(item[1].distance_meters), item[1].hospital_code))
+                candidates = scored_resources[:10] if payload.user_latitude is not None else scored_resources
+                candidates.sort(key=lambda item: (-item[0], distance_key(item[1].distance_meters), item[1].hospital_code))
+                matched_resources = [hospital for _, hospital in candidates[:5]]
 
 
         finally:
@@ -1373,7 +1313,7 @@ def diagnose_symptom(
             "有關，"
             f"建議就診科別為 "
             f"{suggested_dept}。"
-            "以下提供附近院所與醫師資訊供您參考。"
+
         )
 
 
@@ -1392,6 +1332,18 @@ def diagnose_symptom(
                 "作為初步評估與轉診方向。"
             )
 
+
+        area = f"{payload.user_city}的" if payload.user_city else ""
+        if matched_resources:
+            custom_message += f"以下提供{area}符合科別的院所資料。"
+            if any(h.available_doctors for h in matched_resources):
+                custom_message += "有提供醫師名單的院所會一併列出；門診與掛號狀態請向院方確認。"
+            else:
+                custom_message += "目前沒有符合科別的醫師名單，請向院方確認門診。"
+        else:
+            custom_message += f"目前查無{area}符合科別的院所資料，可調整地區或向院方查詢。"
+        if payload.user_latitude is None:
+            custom_message += "尚未取得您的定位，不提供附近距離。"
 
         # ----------------------------------------------------
         # Urgent 額外安全提醒
@@ -1420,13 +1372,18 @@ def diagnose_symptom(
         # 會員自動保存完整歷史紀錄
         # ====================================================
 
+        session_id = None
+        save_status = "not_applicable" if current_user.get("is_guest") else "failed"
+
         if not current_user.get(
             "is_guest"
         ):
 
-            save_conn = (
-                get_db_connection()
-            )
+            try:
+                save_conn = get_db_connection()
+            except Exception as save_err:
+                log_failure("diagnose.save_connect", save_err)
+                save_conn = None
 
 
             if save_conn:
@@ -1560,7 +1517,7 @@ def diagnose_symptom(
                                 %s::jsonb,
                                 %s::jsonb,
                                 %s::jsonb
-                            );
+                            ) RETURNING id;
                             """,
                             (
                                 current_user[
@@ -1593,7 +1550,15 @@ def diagnose_symptom(
                         )
 
 
+                        inserted = cur.fetchone()
+                        if not inserted or not isinstance(inserted[0], int):
+                            raise RuntimeError("Missing inserted session ID")
+                        inserted_id = inserted[0]
+
                     save_conn.commit()
+                    # Never expose an ID before the transaction commits successfully.
+                    session_id = inserted_id
+                    save_status = "saved"
 
 
                     print(
@@ -1606,18 +1571,18 @@ def diagnose_symptom(
 
 
                 except Exception as save_err:
-
-                    save_conn.rollback()
-
-                    print(
-                        "⚠️ 歷史紀錄儲存失敗："
-                        f"{save_err}"
-                    )
+                    log_failure("diagnose.save", save_err)
+                    try:
+                        save_conn.rollback()
+                    except Exception as rollback_err:
+                        log_failure("diagnose.save_rollback", rollback_err)
 
 
                 finally:
-
-                    save_conn.close()
+                    try:
+                        save_conn.close()
+                    except Exception as close_err:
+                        log_failure("diagnose.save_close", close_err)
 
 
         # ====================================================
@@ -1628,6 +1593,9 @@ def diagnose_symptom(
         return DiagnosisResponse(
             status="completed",
             is_complete=True,
+            session_id=session_id,
+            save_status=save_status,
+            location_context=payload.context(),
             symptom=payload.symptom_text,
             suggested_department=(
                 suggested_dept
@@ -1661,18 +1629,12 @@ def diagnose_symptom(
 
     except Exception as exc:
 
-        print(
-            "❌ Diagnose 系統錯誤：",
-            repr(
-                exc
-            ),
-        )
+        log_failure("diagnose", exc)
 
 
         raise HTTPException(
             status_code=500,
             detail=(
-                "系統處理失敗："
-                f"{str(exc)}"
+                "系統處理失敗，請稍後再試。"
             ),
         )

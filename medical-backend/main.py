@@ -22,6 +22,7 @@ import uvicorn
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from api_errors import install_error_handlers
 
 _elapsed("載入 fastapi")
 
@@ -42,6 +43,8 @@ _elapsed("載入 services：含 PGVector 建構與資料庫連線")
 from routes.auth import (
     router as auth_router,
 )
+from routes.doctor_schedules import router as doctor_schedules_router
+from routes.emergency_resources import router as emergency_resources_router
 
 from routes.diagnose import (
     router as diagnose_router,
@@ -93,6 +96,8 @@ app = FastAPI(
     ),
     version="2026.08",
 )
+
+install_error_handlers(app)
 
 
 # ============================================================
@@ -266,6 +271,9 @@ app.include_router(
 app.include_router(
     visit_summary_router
 )
+
+app.include_router(doctor_schedules_router)
+app.include_router(emergency_resources_router)
 
 
 # ============================================================

@@ -3,15 +3,17 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg2.extras import RealDictCursor
 
 from services import get_db_connection
+from routes.auth import get_current_user
 
 
 router = APIRouter(
     prefix="/api/v1",
     tags=["Doctor Schedules"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
