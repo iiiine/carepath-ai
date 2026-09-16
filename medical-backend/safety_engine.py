@@ -1,7 +1,22 @@
 
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping
+from itertools import product
+from typing import Any, Callable, Iterator, List, Mapping
+
+from safety_types import (
+    STATE_ABSENT,
+    STATE_PRESENT,
+    EngineResult,
+    FlagStates,
+    IndeterminateRule,
+    Truth,
+    any_of,
+    has,
+    normalize_flag_states,
+    t_and,
+    t_or,
+)
 
 
 # ============================================================
@@ -9,9 +24,12 @@ from typing import Any, Callable, Dict, List, Mapping
 #
 # 每次修改正式規則時更新版本，
 # 方便未來追蹤某次問診使用的是哪一版安全規則。
+#
+# 2026.09.2：規則改用三態（safety_types），新增 indeterminate_rules。
+#            命中條件與 2026.09.1 相同，只有 present 會命中。
 # ============================================================
 
-SAFETY_ENGINE_VERSION = "2026.09.1"
+SAFETY_ENGINE_VERSION = "2026.09.2"
 
 
 # ============================================================
@@ -32,6 +50,10 @@ RISK_PRIORITY = {
 
 # ============================================================
 # Rule
+#
+# predicate 一律回傳 Truth，不可回傳 bool。
+# 組合時用 t_and / t_or，不可用 Python 的 and / or ——
+# Truth.__bool__ 會直接拋 TypeError。
 # ============================================================
 
 @dataclass(frozen=True)
@@ -40,97 +62,7 @@ class SafetyRule:
     risk_level: str
     title: str
     reason: str
-    predicate: Callable[[Mapping[str, bool]], bool]
-
-
-# ============================================================
-# Boolean normalization
-#
-# 未來 Gemini 結構化結果可能出現：
-#
-# true
-# false
-# "true"
-# "false"
-# 1
-# 0
-#
-# 這裡統一轉換。
-# ============================================================
-
-def _to_bool(value: Any) -> bool:
-
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, int):
-        return value == 1
-
-    if isinstance(value, str):
-
-        normalized = (
-            value
-            .strip()
-            .lower()
-        )
-
-        return normalized in {
-            "true",
-            "1",
-            "yes",
-            "y",
-        }
-
-    return False
-
-
-def normalize_flags(
-    raw_flags: Mapping[str, Any] | None,
-) -> Dict[str, bool]:
-
-    if not raw_flags:
-        return {}
-
-    return {
-        str(key): _to_bool(value)
-        for key, value in raw_flags.items()
-    }
-
-
-# ============================================================
-# Helper
-# ============================================================
-
-def has(
-    flags: Mapping[str, bool],
-    key: str,
-) -> bool:
-
-    return bool(
-        flags.get(key, False)
-    )
-
-
-def any_of(
-    flags: Mapping[str, bool],
-    *keys: str,
-) -> bool:
-
-    return any(
-        has(flags, key)
-        for key in keys
-    )
-
-
-def all_of(
-    flags: Mapping[str, bool],
-    *keys: str,
-) -> bool:
-
-    return all(
-        has(flags, key)
-        for key in keys
-    )
+    predicate: Callable[[FlagStates], Truth]
 
 
 # ============================================================
@@ -282,18 +214,18 @@ EMERGENCY_RULES: List[SafetyRule] = [
             "胸痛合併呼吸困難、昏厥、"
             "冷汗或其他高風險症狀。"
         ),
-        predicate=lambda f: (
+        predicate=lambda f: t_and(
             has(
                 f,
                 "chest_pain",
-            )
-            and any_of(
+            ),
+            any_of(
                 f,
                 "shortness_of_breath",
                 "severe_shortness_of_breath",
                 "fainting",
                 "cold_sweat",
-            )
+            ),
         ),
     ),
 
@@ -366,17 +298,17 @@ EMERGENCY_RULES: List[SafetyRule] = [
             "頭部外傷合併失去意識、"
             "意識異常或其他高風險因素。"
         ),
-        predicate=lambda f: (
+        predicate=lambda f: t_and(
             has(
                 f,
                 "head_injury",
-            )
-            and any_of(
+            ),
+            any_of(
                 f,
                 "loss_of_consciousness",
                 "severe_altered_consciousness",
                 "taking_anticoagulants",
-            )
+            ),
         ),
     ),
 
@@ -392,28 +324,28 @@ EMERGENCY_RULES: List[SafetyRule] = [
             "懷孕期間出現大量陰道出血，"
             "或出血合併劇烈腹痛／昏厥。"
         ),
-        predicate=lambda f: (
+        predicate=lambda f: t_and(
             has(
                 f,
                 "pregnant",
-            )
-            and (
+            ),
+            t_or(
                 has(
                     f,
                     "heavy_vaginal_bleeding",
-                )
-                or (
+                ),
+                t_and(
                     has(
                         f,
                         "vaginal_bleeding",
-                    )
-                    and any_of(
+                    ),
+                    any_of(
                         f,
                         "severe_abdominal_pain",
                         "fainting",
-                    )
-                )
-            )
+                    ),
+                ),
+            ),
         ),
     ),
 
@@ -429,16 +361,16 @@ EMERGENCY_RULES: List[SafetyRule] = [
             "發燒合併頸部僵硬、"
             "嚴重意識改變等高風險症狀。"
         ),
-        predicate=lambda f: (
+        predicate=lambda f: t_and(
             has(
                 f,
                 "fever",
-            )
-            and any_of(
+            ),
+            any_of(
                 f,
                 "stiff_neck",
                 "severe_altered_consciousness",
-            )
+            ),
         ),
     ),
 ]
@@ -571,52 +503,250 @@ ALL_RULES = (
 
 
 # ============================================================
+# Swing set
+#
+# 規則求值為 UNKNOWN 時，找出「哪些 unknown 旗標值得追問」。
+#
+# 旗標 k 屬於 swing_set 的條件：
+# 存在某種其他 unknown 旗標的補值方式，
+# 使得 k = present 時規則成立，而 k = absent 時不成立。
+#
+# 換句話說，k 的答案真的會左右這條規則。
+# 例：chest_pain = present、fainting = absent，
+#     shortness_of_breath / cold_sweat 為 unknown
+#     → swing_set = [shortness_of_breath, cold_sweat]，
+#       不會去問已經否認的 fainting。
+#
+# 規則引用的旗標最多五、六個，窮舉成本可以忽略。
+# ============================================================
+
+class _KeyRecorder(Mapping[str, Any]):
+    """記下 predicate 讀過哪些旗標。"""
+
+    def __init__(
+        self,
+        flags: FlagStates,
+    ) -> None:
+
+        self._flags = flags
+        self.keys: List[str] = []
+
+
+    def __getitem__(
+        self,
+        key: str,
+    ) -> Any:
+
+        if key not in self.keys:
+            self.keys.append(key)
+
+        return self._flags[key]
+
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._flags)
+
+
+    def __len__(self) -> int:
+        return len(self._flags)
+
+
+def _evaluate_rule(
+    rule: SafetyRule,
+    flags: FlagStates,
+) -> Truth:
+
+    result = rule.predicate(
+        flags
+    )
+
+    # 回傳 bool 代表規則沒改寫乾淨，
+    # 默默當成不命中會往「不升級」倒，所以直接拋例外。
+    if not isinstance(
+        result,
+        Truth,
+    ):
+
+        raise TypeError(
+            f"規則 {rule.code} 回傳 "
+            f"{type(result).__name__}，必須回傳 Truth"
+        )
+
+    return result
+
+
+def _swing_set(
+    rule: SafetyRule,
+    flags: FlagStates,
+) -> List[str]:
+
+    recorder = _KeyRecorder(
+        flags
+    )
+
+    # t_and / t_or 的參數會先全部求值，
+    # 所以跑一次就能記到規則引用的所有旗標。
+    _evaluate_rule(
+        rule,
+        recorder,
+    )
+
+    unknown_keys = [
+        key
+        for key in recorder.keys
+        if has(flags, key) is Truth.UNKNOWN
+    ]
+
+    swing: List[str] = []
+
+    for key in unknown_keys:
+
+        others = [
+            other
+            for other in unknown_keys
+            if other != key
+        ]
+
+        for fill in product(
+            (STATE_PRESENT, STATE_ABSENT),
+            repeat=len(others),
+        ):
+
+            filled = {
+                **flags,
+                **dict(zip(others, fill)),
+            }
+
+            if (
+                _evaluate_rule(rule, {**filled, key: STATE_PRESENT})
+                is Truth.TRUE
+                and _evaluate_rule(rule, {**filled, key: STATE_ABSENT})
+                is not Truth.TRUE
+            ):
+
+                swing.append(key)
+                break
+
+    return swing
+
+
+# ============================================================
+# 規則求值失敗
+#
+# 規則逐條隔離執行：一條出錯不影響其他條繼續跑，
+# 但只要有任何一條出錯，整體評估就視為失敗。
+#
+# 不可以跳過出錯的規則 ——
+# 「這條規則沒跑成功」不等於「這條規則沒命中」，
+# 跳過的方向是往不升級倒。
+# ============================================================
+
+class SafetyRuleEvaluationError(RuntimeError):
+
+    def __init__(
+        self,
+        failures: List[tuple],
+    ) -> None:
+
+        # [(rule_code, exception), ...]，保留全部，方便一次看完所有出錯的規則
+        self.failures = failures
+
+        super().__init__(
+            "安全規則求值失敗："
+            + "、".join(
+                f"{code}（{type(exc).__name__}: {exc}）"
+                for code, exc in failures
+            )
+        )
+
+
+# ============================================================
 # Safety Assessment
 # ============================================================
 
 def evaluate_red_flags(
-    raw_flags: Mapping[str, Any] | None,
-) -> Dict[str, Any]:
+    flag_states: FlagStates | None,
+) -> EngineResult:
     """
-    根據「已結構化的症狀旗標」進行安全風險判斷。
+    根據「已結構化的三態症狀旗標」進行安全風險判斷。
 
     注意：
-    這個函式本身不負責 NLP。
-    不應直接把自然語言症狀丟進來。
+    這個函式本身不負責 NLP，也不負責跨輪合併。
+    輸入必須是合併後的 present / absent / unknown。
 
     正式流程會是：
 
     使用者自然語言
         ↓
-    LLM / Structured Extraction
+    LLM / Structured Extraction（三態）
         ↓
-    symptom_flags
+    flag_states
         ↓
     evaluate_red_flags()
+
+    風險判定只看 Truth.TRUE：unknown 不會升級風險，
+    而是列進 indeterminate_rules 供追問使用。
+
+    規則逐條隔離執行，全部跑完後只要有任何一條出錯，
+    就拋 SafetyRuleEvaluationError（列出所有出錯的規則），
+    由 safety_pipeline 轉成 risk_level = unknown 並中止問診。
     """
 
-    flags = normalize_flags(
-        raw_flags
+    flags = normalize_flag_states(
+        flag_states
     )
 
     matched_rules: List[SafetyRule] = []
+
+    indeterminate_rules: List[IndeterminateRule] = []
+
+    failures: List[tuple] = []
 
     for rule in ALL_RULES:
 
         try:
 
-            if rule.predicate(
-                flags
-            ):
+            truth = _evaluate_rule(
+                rule,
+                flags,
+            )
+
+            if truth is Truth.TRUE:
+
                 matched_rules.append(
                     rule
                 )
 
-        except Exception:
+            elif truth is Truth.UNKNOWN:
 
-            # Safety engine 不應因單一規則錯誤
-            # 讓整個診斷 API crash。
-            continue
+                indeterminate_rules.append(
+                    {
+                        "code":
+                            rule.code,
+
+                        "risk_level":
+                            rule.risk_level,
+
+                        "swing_set":
+                            _swing_set(
+                                rule,
+                                flags,
+                            ),
+                    }
+                )
+
+        except Exception as exc:
+
+            failures.append(
+                (rule.code, exc)
+            )
+
+
+    if failures:
+
+        raise SafetyRuleEvaluationError(
+            failures
+        )
 
 
     # ========================================================
@@ -726,6 +856,9 @@ def evaluate_red_flags(
 
         "safety_action":
             safety_action,
+
+        "indeterminate_rules":
+            indeterminate_rules,
     }
 
 
@@ -740,127 +873,128 @@ def evaluate_red_flags(
 
 if __name__ == "__main__":
 
+    P, A, U = (
+        STATE_PRESENT,
+        STATE_ABSENT,
+        "unknown",
+    )
+
+    def codes(result):
+        return [
+            flag["code"]
+            for flag in result["red_flags"]
+        ]
+
+    def indeterminate(result):
+        return {
+            rule["code"]: rule["swing_set"]
+            for rule in result["indeterminate_rules"]
+        }
+
+
     examples = [
 
         {
-            "name":
-                "一般頭痛",
-
-            "flags": {
-                "headache":
-                    True,
-            },
+            "name": "一般頭痛（其餘沒提到）",
+            "flags": {"headache": P},
+            "risk_level": RISK_STANDARD,
+            "codes": [],
         },
 
         {
-            "name":
-                "胸痛 + 呼吸困難",
-
-            "flags": {
-                "chest_pain":
-                    True,
-
-                "shortness_of_breath":
-                    True,
-            },
+            "name": "胸痛 + 呼吸困難",
+            "flags": {"chest_pain": P, "shortness_of_breath": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["HIGH_RISK_CHEST_PAIN", "CHEST_PAIN"],
         },
 
         {
-            "name":
-                "疑似中風",
-
-            "flags": {
-                "one_sided_weakness":
-                    True,
-            },
+            "name": "疑似中風",
+            "flags": {"one_sided_weakness": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["NEURO_STROKE_SIGN"],
         },
 
         {
-            "name":
-                "單純胸痛",
-
-            "flags": {
-                "chest_pain":
-                    True,
-            },
+            "name": "單純胸痛，伴隨症狀沒問",
+            "flags": {"chest_pain": P},
+            "risk_level": RISK_URGENT,
+            "codes": ["CHEST_PAIN"],
         },
 
         {
-            "name":
-                "神經症狀已恢復但近期曾發生",
-
-            "flags": {
-                "recent_resolved_neurologic_deficit":
-                    True,
-            },
+            "name": "神經症狀已恢復但近期曾發生",
+            "flags": {"recent_resolved_neurologic_deficit": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["RECENT_RESOLVED_NEUROLOGIC_DEFICIT"],
         },
 
         {
-            "name":
-                "只有生氣，沒有傷害想法",
-
+            "name": "只有生氣，沒有傷害想法",
             "flags": {},
+            "risk_level": RISK_STANDARD,
+            "codes": [],
         },
 
         {
-            "name":
-                "有傷害他人的想法但無計畫",
-
+            "name": "有傷害他人的想法但無計畫",
             "flags": {
-                "harm_others_thoughts":
-                    True,
-
-                "harm_others_intent_or_plan":
-                    False,
-
-                "imminent_harm_to_others":
-                    False,
+                "harm_others_thoughts": P,
+                "harm_others_intent_or_plan": A,
+                "imminent_harm_to_others": A,
             },
+            "risk_level": RISK_URGENT,
+            "codes": ["HARM_TO_OTHERS_THOUGHTS"],
         },
 
         {
-            "name":
-                "有自傷想法但無計畫",
-
+            "name": "有自傷想法但無計畫",
             "flags": {
-                "self_harm_thoughts":
-                    True,
-
-                "self_harm_intent_or_plan":
-                    False,
-
-                "imminent_self_harm":
-                    False,
+                "self_harm_thoughts": P,
+                "self_harm_intent_or_plan": A,
+                "imminent_self_harm": A,
             },
+            "risk_level": RISK_URGENT,
+            "codes": ["SELF_HARM_THOUGHTS"],
         },
 
         {
-            "name":
-                "明確自傷計畫",
-
+            "name": "明確自傷計畫",
             "flags": {
-                "self_harm_thoughts":
-                    True,
-
-                "self_harm_intent_or_plan":
-                    True,
+                "self_harm_thoughts": P,
+                "self_harm_intent_or_plan": P,
             },
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["SELF_HARM_INTENT_OR_PLAN", "SELF_HARM_THOUGHTS"],
         },
 
         {
-            "name":
-                "立即傷害他人危險",
-
+            "name": "立即傷害他人危險",
             "flags": {
-                "harm_others_thoughts":
-                    True,
-
-                "harm_others_intent_or_plan":
-                    True,
-
-                "imminent_harm_to_others":
-                    True,
+                "harm_others_thoughts": P,
+                "harm_others_intent_or_plan": P,
+                "imminent_harm_to_others": P,
             },
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["HARM_TO_OTHERS_INTENT_OR_PLAN", "HARM_TO_OTHERS_THOUGHTS"],
+        },
+
+        {
+            "name": "孕期出血 + 昏厥（巢狀規則）",
+            "flags": {
+                "pregnant": P,
+                "vaginal_bleeding": P,
+                "fainting": P,
+            },
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["PREGNANCY_EMERGENCY", "FAINTING"],
+        },
+
+        {
+            "name": "非 present 的舊版 bool 一律視為 unknown，不會命中",
+            "flags": {"chest_pain": True},
+            "risk_level": RISK_STANDARD,
+            "codes": [],
         },
 
     ]
@@ -872,42 +1006,120 @@ if __name__ == "__main__":
             example["flags"]
         )
 
-        print(
-            "=" * 60
-        )
+        assert result["risk_level"] == example["risk_level"], example["name"]
+        assert codes(result) == example["codes"], (example["name"], codes(result))
+        assert result["should_stop_normal_flow"] == (
+            example["risk_level"] == RISK_EMERGENCY
+        ), example["name"]
 
         print(
-            example["name"]
+            "✓",
+            example["name"],
+            "→",
+            result["risk_level"],
+            codes(result),
         )
 
-        print(
-            "risk_level =",
-            result["risk_level"]
+
+    # FALSE 的短路權：明確否認就不列入待確認
+    result = evaluate_red_flags(
+        {"chest_pain": A}
+    )
+    assert "HIGH_RISK_CHEST_PAIN" not in indeterminate(result)
+    assert "CHEST_PAIN" not in indeterminate(result)
+
+    # 胸痛成立、昏厥已否認：只追問還沒問過的伴隨症狀
+    result = evaluate_red_flags(
+        {"chest_pain": P, "fainting": A}
+    )
+    assert indeterminate(result)["HIGH_RISK_CHEST_PAIN"] == [
+        "shortness_of_breath",
+        "severe_shortness_of_breath",
+        "cold_sweat",
+    ]
+
+    # 什麼都沒問：swing_set 是規則引用的全部旗標
+    result = evaluate_red_flags({})
+    assert result["risk_level"] == RISK_STANDARD
+    assert len(result["indeterminate_rules"]) == len(ALL_RULES)
+    assert indeterminate(result)["HEAD_INJURY"] == ["head_injury"]
+
+    # 巢狀規則：大量出血已確認，就不必再問一般出血與腹痛
+    result = evaluate_red_flags(
+        {"pregnant": U, "heavy_vaginal_bleeding": P}
+    )
+    assert indeterminate(result)["PREGNANCY_EMERGENCY"] == ["pregnant"]
+
+    # 已命中的規則不會出現在 indeterminate_rules
+    result = evaluate_red_flags(
+        {"head_injury": P, "loss_of_consciousness": P}
+    )
+    assert "HIGH_RISK_HEAD_INJURY" in codes(result)
+    assert "HIGH_RISK_HEAD_INJURY" not in indeterminate(result)
+
+    # 規則誤回 bool 必須拋例外，不可被當成不命中
+    bad_rule = SafetyRule(
+        code="BAD_RULE",
+        risk_level=RISK_EMERGENCY,
+        title="",
+        reason="",
+        predicate=lambda f: False,
+    )
+
+    try:
+        _evaluate_rule(bad_rule, {})
+
+    except TypeError:
+        pass
+
+    else:
+        raise AssertionError(
+            "回傳 bool 的規則應該拋 TypeError"
         )
 
-        print(
-            "should_stop_normal_flow =",
-            result[
-                "should_stop_normal_flow"
-            ]
+    # 逐條隔離：出錯的規則不會中斷其他規則，
+    # 但全部跑完後必須拋例外並列出每一條出錯的規則
+    crash_rule = SafetyRule(
+        code="CRASH_RULE",
+        risk_level=RISK_URGENT,
+        title="",
+        reason="",
+        predicate=lambda f: f["missing_key"],
+    )
+
+    later_rule_calls = []
+
+    later_rule = SafetyRule(
+        code="LATER_RULE",
+        risk_level=RISK_URGENT,
+        title="",
+        reason="",
+        predicate=lambda f: (
+            later_rule_calls.append(True)
+            or has(f, "head_injury")
+        ),
+    )
+
+    original_rules = ALL_RULES
+    ALL_RULES = [bad_rule, crash_rule, later_rule]
+
+    try:
+        evaluate_red_flags({"head_injury": P})
+
+    except SafetyRuleEvaluationError as exc:
+        assert [code for code, _ in exc.failures] == [
+            "BAD_RULE",
+            "CRASH_RULE",
+        ], exc.failures
+        assert later_rule_calls, "出錯規則之後的規則也要照跑"
+
+    else:
+        raise AssertionError(
+            "有規則出錯時應該拋 SafetyRuleEvaluationError"
         )
 
-        print(
-            "matched_rule_count =",
-            result[
-                "matched_rule_count"
-            ]
-        )
-
-        for flag in result[
-            "red_flags"
-        ]:
-
-            print(
-                "-",
-                flag["code"],
-                flag["title"],
-            )
+    finally:
+        ALL_RULES = original_rules
 
     print(
         "=" * 60

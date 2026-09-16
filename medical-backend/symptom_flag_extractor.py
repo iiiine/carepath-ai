@@ -961,13 +961,13 @@ def extract_symptom_flags(
 
 
     # ========================================================
-    # Safety Engine 只需要 bool mapping。
+    # 舊版 bool mapping，僅為相容保留。
     #
     # present → True
     # absent / unknown → False
     #
-    # 但我們仍保留原始 tri-state，
-    # 後續可以用 unknown 做追問。
+    # Safety Engine 自 2026.09.2 起改吃 states（三態），
+    # 不可再把 safety_flags 餵給引擎。
     # ========================================================
 
     safety_flags = {
