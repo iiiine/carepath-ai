@@ -1861,6 +1861,12 @@ function SymptomChecker({
   // ==========================================
   const handleNewChat = () => {
 
+    // 與 handleSelectSession 同理：清單模式下問診區是 display:none。
+    // 不收掉清單的話，底下狀態雖然全部重設了，畫面仍停在清單上，
+    // 使用者看到的就是「按鈕沒反應」。
+    onCloseHistory?.();
+
+
     setDiagnosisResult(
       null
     );
