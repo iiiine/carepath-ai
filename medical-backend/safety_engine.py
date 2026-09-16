@@ -631,6 +631,36 @@ def _swing_set(
 
 
 # ============================================================
+# 規則求值失敗
+#
+# 規則逐條隔離執行：一條出錯不影響其他條繼續跑，
+# 但只要有任何一條出錯，整體評估就視為失敗。
+#
+# 不可以跳過出錯的規則 ——
+# 「這條規則沒跑成功」不等於「這條規則沒命中」，
+# 跳過的方向是往不升級倒。
+# ============================================================
+
+class SafetyRuleEvaluationError(RuntimeError):
+
+    def __init__(
+        self,
+        failures: List[tuple],
+    ) -> None:
+
+        # [(rule_code, exception), ...]，保留全部，方便一次看完所有出錯的規則
+        self.failures = failures
+
+        super().__init__(
+            "安全規則求值失敗："
+            + "、".join(
+                f"{code}（{type(exc).__name__}: {exc}）"
+                for code, exc in failures
+            )
+        )
+
+
+# ============================================================
 # Safety Assessment
 # ============================================================
 
@@ -657,9 +687,9 @@ def evaluate_red_flags(
     風險判定只看 Truth.TRUE：unknown 不會升級風險，
     而是列進 indeterminate_rules 供追問使用。
 
-    規則求值出錯時直接拋例外，不跳過該規則 ——
-    safety_pipeline 會把例外轉成 risk_level = unknown 並中止問診。
-    「這條規則沒跑成功」不等於「這條規則沒命中」。
+    規則逐條隔離執行，全部跑完後只要有任何一條出錯，
+    就拋 SafetyRuleEvaluationError（列出所有出錯的規則），
+    由 safety_pipeline 轉成 risk_level = unknown 並中止問診。
     """
 
     flags = normalize_flag_states(
@@ -670,36 +700,53 @@ def evaluate_red_flags(
 
     indeterminate_rules: List[IndeterminateRule] = []
 
+    failures: List[tuple] = []
+
     for rule in ALL_RULES:
 
-        truth = _evaluate_rule(
-            rule,
-            flags,
+        try:
+
+            truth = _evaluate_rule(
+                rule,
+                flags,
+            )
+
+            if truth is Truth.TRUE:
+
+                matched_rules.append(
+                    rule
+                )
+
+            elif truth is Truth.UNKNOWN:
+
+                indeterminate_rules.append(
+                    {
+                        "code":
+                            rule.code,
+
+                        "risk_level":
+                            rule.risk_level,
+
+                        "swing_set":
+                            _swing_set(
+                                rule,
+                                flags,
+                            ),
+                    }
+                )
+
+        except Exception as exc:
+
+            failures.append(
+                (rule.code, exc)
+            )
+
+
+    if failures:
+
+        raise SafetyRuleEvaluationError(
+            failures
         )
-
-        if truth is Truth.TRUE:
-
-            matched_rules.append(
-                rule
-            )
-
-        elif truth is Truth.UNKNOWN:
-
-            indeterminate_rules.append(
-                {
-                    "code":
-                        rule.code,
-
-                    "risk_level":
-                        rule.risk_level,
-
-                    "swing_set":
-                        _swing_set(
-                            rule,
-                            flags,
-                        ),
-                }
-            )
 
 
     # ========================================================
@@ -1029,6 +1076,50 @@ if __name__ == "__main__":
         raise AssertionError(
             "回傳 bool 的規則應該拋 TypeError"
         )
+
+    # 逐條隔離：出錯的規則不會中斷其他規則，
+    # 但全部跑完後必須拋例外並列出每一條出錯的規則
+    crash_rule = SafetyRule(
+        code="CRASH_RULE",
+        risk_level=RISK_URGENT,
+        title="",
+        reason="",
+        predicate=lambda f: f["missing_key"],
+    )
+
+    later_rule_calls = []
+
+    later_rule = SafetyRule(
+        code="LATER_RULE",
+        risk_level=RISK_URGENT,
+        title="",
+        reason="",
+        predicate=lambda f: (
+            later_rule_calls.append(True)
+            or has(f, "head_injury")
+        ),
+    )
+
+    original_rules = ALL_RULES
+    ALL_RULES = [bad_rule, crash_rule, later_rule]
+
+    try:
+        evaluate_red_flags({"head_injury": P})
+
+    except SafetyRuleEvaluationError as exc:
+        assert [code for code, _ in exc.failures] == [
+            "BAD_RULE",
+            "CRASH_RULE",
+        ], exc.failures
+        assert later_rule_calls, "出錯規則之後的規則也要照跑"
+
+    else:
+        raise AssertionError(
+            "有規則出錯時應該拋 SafetyRuleEvaluationError"
+        )
+
+    finally:
+        ALL_RULES = original_rules
 
     print(
         "=" * 60
