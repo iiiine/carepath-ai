@@ -18,7 +18,10 @@ import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 import VisitSummaryPanel from './VisitSummaryPanel';
 
-const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
+import { CITIES, distanceText, navigationUrl } from '../utils/location';
+import { locate } from '../utils/locate';
+import { summaryMode } from '../utils/summary';
+import EmergencyResources from '../components/EmergencyResources';
 
 // ============================================================
 // 快捷症狀
@@ -179,7 +182,11 @@ export default function ConsultScreen() {
   const [loading, setLoading] = useState(false);
   const [painLevel, setPainLevel] = useState(3);
   
-  const [userLocation, setUserLocation] = useState(null);
+  const [deviceLocation, setDeviceLocation] = useState(null);
+  const [selectedCity, setSelectedCity] = useState('');
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
+  const [resultLocation, setResultLocation] = useState(null);
+  const userLocation = selectedCity ? null : deviceLocation;
   const [locationStatus, setLocationStatus] = useState('loading');
   const [history, setHistory] = useState([]);
   const [messages, setMessages] = useState([
@@ -193,11 +200,13 @@ export default function ConsultScreen() {
   const styles = useMemo(() => makeStyles(s), [s]);
   const [safetyAlert, setSafetyAlert] = useState(null);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+  const requestVersion = useRef(0);
 
-  // 🎯 核心修復：如果沒有資料庫 sessionId (例如訪客問診)，就採用臨時本地快取，確保訪客也能看摘要！
+  // 訪客可看未保存的本機摘要；會員保存失敗不能冒充訪客結果。
   const [tempSummaryData, setTempSummaryData] = useState(null);
 
-  const sessionId = route.params?.sessionId || diagnosisResult?.session_id;
+  const summaryState = summaryMode(diagnosisResult, !!user?.is_guest);
+  const sessionId = summaryState === 'saved' ? diagnosisResult?.session_id : null;
   // 快捷標籤：只存後端回來的常問症狀原始資料，實際清單由 useMemo 推導。
   //
   // 連同 userId 一起存的理由：訪客、登出、換帳號都只要靠推導條件擋掉，
@@ -297,23 +306,11 @@ export default function ConsultScreen() {
   }, [isMember, user?.id]);
 
   useEffect(() => {
-    (async () => {
-      setLocationStatus('loading');
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setUserLocation(FALLBACK_LOCATION);
-          setLocationStatus('fallback');
-          return;
-        }
-        let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setUserLocation({ latitude: location.coords.latitude, longitude: location.coords.longitude });
-        setLocationStatus('success');
-      } catch (error) {
-        setUserLocation(FALLBACK_LOCATION);
-        setLocationStatus('fallback');
-      }
-    })();
+    let cancelled = false;
+    locate(Location).then(({ position, status }) => {
+      if (!cancelled) { setDeviceLocation(position); setLocationStatus(status); }
+    }).catch(() => { if (!cancelled) setLocationStatus('unavailable'); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -321,10 +318,16 @@ export default function ConsultScreen() {
   }, [route.params?.sessionId]);
 
   const loadHistoricalSession = async (id) => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
       setLoadingHistory(true);
+      setTempSummaryData(null);
+      setSummaryModalVisible(false);
+      setDiagnosisResult(null);
+      setResultLocation(null);
       const res = await client.get('/api/v1/history');
+      if (version !== requestVersion.current) return;
       const sessionList = Array.isArray(res.data) ? res.data : [];
       const targetSession = sessionList.find(session => String(session.id) === String(id));
       
@@ -351,33 +354,39 @@ export default function ConsultScreen() {
       });
       
     } catch (error) {
+      if (version !== requestVersion.current) return;
       console.error('讀取歷史紀錄失敗:', error);
       Alert.alert('提示', '無法載入該筆紀錄，請確認網路連線');
     } finally {
-      setLoading(false);
-      setLoadingHistory(false);
+      if (version === requestVersion.current) { setLoading(false); setLoadingHistory(false); }
     }
   };
 
   const handleSendMessage = async (textToSubmit = inputText) => {
     if (!textToSubmit.trim() || loading || safetyAlert) return;
+    const version = ++requestVersion.current;
     const userText = textToSubmit.trim();
     setInputText(''); 
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setLoading(true);
 
     try {
-      const lat = userLocation?.latitude ?? FALLBACK_LOCATION.latitude;
-      const lng = userLocation?.longitude ?? FALLBACK_LOCATION.longitude;
+      const lat = userLocation?.latitude ?? null;
+      const lng = userLocation?.longitude ?? null;
       const response = await client.post('/api/v1/diagnose', {
-        pain_level: Number(painLevel), symptom_text: userText, user_latitude: lat, user_longitude: lng, history: history
+        pain_level: Number(painLevel), symptom_text: userText, user_latitude: lat, user_longitude: lng, user_city: selectedCity || null, history: history
       });
 
+      if (version !== requestVersion.current) return;
       const data = response.data;
+      setTempSummaryData(null);
+      setSummaryModalVisible(false);
+      setResultLocation(userLocation);
       
       // 🎯 安全優先設計：緊急安全阻斷
       if (data.status === 'safety_alert') {
         setSafetyAlert(data);
+        setDiagnosisResult(null);
         setMessages(prev => [...prev, { role: 'model', content: data.message }]);
         setHistory(data.history || []);
         setLoading(false);
@@ -391,9 +400,8 @@ export default function ConsultScreen() {
       } else {
         setDiagnosisResult(data);
 
-        // 🎯 核心優化：新問診結束後，如果後端沒有生成 session_id (例如訪客)，
-        // 則直接為 VisitSummaryPanel 組裝本次的暫存摘要資料，達到100%平權體驗！
-        if (!data.session_id) {
+        // 只為訪客建立明確標示未保存的本機摘要。
+        if (summaryMode(data, !!user?.is_guest) === 'local') {
           const user_age = user && !user.is_guest ? (user.age || '未填') : '未提供';
           const user_gender = user && !user.is_guest ? (user.gender || '未填') : '未提供';
 
@@ -410,9 +418,9 @@ export default function ConsultScreen() {
               handoff_text: `【CarePath AI 臨床分流摘要】\n主訴症狀：${data.symptom || userText}\n自評不適度：${painLevel}/5\n建議就診科別：${data.suggested_department || '一般科'}\n可能原因：${(data.possible_causes || []).join('、')}\n\n* 請將此摘要出示給醫療診間護理人員或醫師參考。`,
               disclaimer: "此摘要僅供就醫溝通參考，不能取代醫師問診、檢查與正式診斷。",
               safety: {
-                risk_level: "standard",
-                risk_label: "一般",
-                safety_action: "目前安全篩檢無即時高危險警訊，可依推薦科別就醫諮詢。",
+                risk_level: "unknown",
+                risk_label: "安全評估未完成",
+                safety_action: "本機摘要未取得完整安全評估，不能據此判定風險。",
                 red_flags: []
               },
               patient_context: {
@@ -433,25 +441,24 @@ export default function ConsultScreen() {
         }
       }
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'model', content: '系統連線異常，請確認網路狀態。' }]);
+      if (version === requestVersion.current) setMessages(prev => [...prev, { role: 'model', content: '系統連線異常，請確認網路狀態。' }]);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
   const handleResetChat = () => {
+    requestVersion.current += 1;
+    setLoading(false);
+    setLoadingHistory(false);
     navigation.setParams({ sessionId: undefined });
     setDiagnosisResult(null);
+    setResultLocation(null);
+    setSummaryModalVisible(false);
     setSafetyAlert(null);
     setTempSummaryData(null); // 重設暫存摘要
     setHistory([]);
     setMessages([{ role: 'model', content: '您好！我是 CarePath AI，請在下方選擇您不舒服的程度。您今天哪裡不舒服呢？' }]);
-  };
-
-  const handleNearbyEmergency = () => {
-    const lat = userLocation?.latitude ?? FALLBACK_LOCATION.latitude;
-    const lng = userLocation?.longitude ?? FALLBACK_LOCATION.longitude;
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=急診+${lat},${lng}`);
   };
 
   // 渲染氣泡，如果是高齡模式，除最後一筆外淡化
@@ -564,18 +571,30 @@ export default function ConsultScreen() {
               <Image source={require('../../assets/carepath-wordmark.png')} style={styles.wordmarkImage} resizeMode="contain" />
               <Text style={styles.mainTitle}>今天哪裡不舒服？</Text>
               <Text style={styles.subTitle}>
-                用您自己的話說就好，我會幫您判斷看哪一科，再找附近的醫院診所。
+                用您自己的話說就好，我會幫您判斷看哪一科，再提供醫療院所資訊。
               </Text>
             </View>
           )}
 
           {/* 🎯 安全優先設計：緊急安全阻斷看板 */}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="選擇問診地區" onPress={() => setCityPickerVisible(true)} style={{ padding: 12 }}>
+            <Text>地區：{selectedCity || (userLocation ? '使用實際定位' : '未定位，不計距離')} · 選擇縣市</Text>
+          </TouchableOpacity>
+          <Modal visible={cityPickerVisible} animationType="slide" onRequestClose={() => setCityPickerVisible(false)}>
+            <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 60 }}>
+              <Text>地區選擇用於下一次問診與急診查詢</Text>
+              {['', ...CITIES].map(city => <TouchableOpacity key={city || 'auto'} accessibilityRole="button" onPress={() => { setSelectedCity(city); setCityPickerVisible(false); }} style={{ padding: 14 }}>
+                <Text>{city || '使用定位／未定位不計距離'}</Text>
+              </TouchableOpacity>)}
+              <TouchableOpacity accessibilityRole="button" onPress={() => setCityPickerVisible(false)} style={{ padding: 14 }}><Text>取消</Text></TouchableOpacity>
+            </ScrollView>
+          </Modal>
           {safetyAlert && (
             <View style={styles.safetyAlertContainer}>
               <View style={styles.safetyHeaderRow}>
                 <View style={styles.safetyAlertIcon}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>!</Text></View>
-                <Text style={styles.safetyAlertTitle}>醫療安全風險警報</Text>
-                <View style={styles.safetyBadge}><Text style={styles.safetyBadgeText}>緊急</Text></View>
+                <Text style={styles.safetyAlertTitle}>{safetyAlert.safety?.technical_failure ? '安全評估未完成' : '醫療安全風險警報'}</Text>
+                <View style={styles.safetyBadge}><Text style={styles.safetyBadgeText}>{safetyAlert.safety?.technical_failure ? "待確認" : "緊急"}</Text></View>
               </View>
 
               <Text style={styles.safetyMessage}>
@@ -594,26 +613,7 @@ export default function ConsultScreen() {
                 </View>
               )}
 
-              <View style={styles.safetyActionsRow}>
-                <TouchableOpacity
-                  onPress={handleNearbyEmergency}
-                  style={styles.safetyActionBtnPrimary}
-                  accessibilityLabel="搜尋最近急診"
-                  accessibilityRole="button"
-                >
-                  <Icon name="map-marker-radius" size={16} color="#FFFFFF" />
-                  <Text style={styles.safetyActionTextPrimary}>搜尋最近急診</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => Linking.openURL('tel:119')}
-                  style={styles.safetyActionBtnDanger}
-                  accessibilityLabel="撥打 119 求助"
-                  accessibilityRole="button"
-                >
-                  <Icon name="phone" size={16} color="#FFFFFF" />
-                  <Text style={styles.safetyActionTextPrimary}>撥打 119 求助</Text>
-                </TouchableOpacity>
-              </View>
+              <EmergencyResources location={userLocation} city={selectedCity} safety={safetyAlert.safety} />
               <TouchableOpacity onPress={handleResetChat} style={styles.safetyResetBtn}>
                 <Text style={styles.safetyResetBtnText}>重新開始問診</Text>
               </TouchableOpacity>
@@ -638,20 +638,23 @@ export default function ConsultScreen() {
                   <Text style={styles.infoValue}>{Array.isArray(diagnosisResult.possible_causes) ? diagnosisResult.possible_causes.join('、') : ''}</Text>
                 </View>
 
-                {/* 🎯 AI 就醫摘要按鈕：不論有沒有資料庫 sessionId，只要問診完成即 100% 允許點擊！ */}
+                {summaryState === 'unavailable' && <Text style={styles.infoValue}>
+                  {diagnosisResult.save_status === 'failed' ? '問診結果已產生，但紀錄保存失敗，暫時無法提供就醫摘要。' : '本次問診未取得已保存的紀錄，無法開啟摘要。'}
+                </Text>}
+                {tempSummaryData && <Text style={styles.infoValue}>訪客本機摘要，未保存至帳號；重開問診或重新啟動 App 後不保留。</Text>}
                 {(sessionId || tempSummaryData) && (
                   <TouchableOpacity
                     style={styles.summaryTriggerBtn}
                     onPress={() => setSummaryModalVisible(true)}
                   >
                     <Text style={styles.summaryTriggerText}>
-                      📄 開啟本次 AI 就醫摘要 (出示給醫師)
+                      {tempSummaryData ? '查看訪客本機摘要（未保存）' : '開啟本次 AI 就醫摘要'}
                     </Text>
                   </TouchableOpacity>
                 )}
               </CollapsibleBox>
 
-              <CollapsibleBox title="附近推薦醫療院所" defaultExpanded={true} maxHeight={600}>
+              <CollapsibleBox title="醫療院所參考" defaultExpanded={true} maxHeight={600}>
                 
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.length > 0 && (
                   (() => {
@@ -662,18 +665,18 @@ export default function ConsultScreen() {
                           <Image source={require('../../assets/carepath-icon.png')} style={styles.topRecommendMascot} resizeMode="contain" />
                           <View style={{ flex: 1 }}>
                             <View style={styles.topRecommendBadgeRow}>
-                              <View style={styles.topBadge}><Text style={styles.topBadgeText}>最推薦</Text></View>
-                              <Text style={styles.topBadgeSub}>專長最符合、距離最近</Text>
+                              <View style={styles.topBadge}><Text style={styles.topBadgeText}>院所參考</Text></View>
+                              <Text style={styles.topBadgeSub}>依科別與可用資料排序</Text>
                             </View>
                             <Text style={styles.topHospitalName}>{topHospital.name}</Text>
                             <Text style={styles.topHospitalInfo}>
                               {topHospital.address} 
-                              {topHospital.distance_meters != null ? ` · 約 ${(topHospital.distance_meters / 1000).toFixed(1)} 公里` : ''}
+                              {distanceText(topHospital) ? ` · 問診當時直線距離約 ${distanceText(topHospital)}` : ''}
                             </Text>
                           </View>
                         </View>
                         <View style={styles.topRecommendActions}>
-                          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${topHospital.latitude},${topHospital.longitude}`)} style={styles.topActionBtnPrimary}>
+                          <TouchableOpacity onPress={() => Linking.openURL(navigationUrl(topHospital))} style={styles.topActionBtnPrimary}>
                             <Text style={styles.topActionBtnTextPrimary}>導航前往</Text>
                           </TouchableOpacity>
                           {topHospital.phone && (
@@ -691,8 +694,7 @@ export default function ConsultScreen() {
                   <View style={styles.mapCard}>
                     <NearbyHospitalMap
                       style={styles.map}
-                      userLocation={userLocation}
-                      fallbackLocation={FALLBACK_LOCATION}
+                      userLocation={resultLocation}
                       hospitals={diagnosisResult.nearby_medical_resources}
                     />
                   </View>
@@ -730,7 +732,7 @@ export default function ConsultScreen() {
                             <Text style={styles.actionBtnText}>撥打電話</Text>
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}`)} style={[styles.actionBtn, styles.actionBtnPrimary]}>
+                        <TouchableOpacity onPress={() => Linking.openURL(navigationUrl(hospital))} style={[styles.actionBtn, styles.actionBtnPrimary]}>
                           <Text style={styles.actionBtnTextPrimary}>開啟導航</Text>
                         </TouchableOpacity>
                       </View>
@@ -775,13 +777,16 @@ export default function ConsultScreen() {
 
         {!diagnosisResult && !safetyAlert && (
           <View style={styles.bottomSection}>
+            {/* 輸入時只隱藏內容，保留高度，避免 blur 後送出按鈕位移。 */}
             {/* 單行橫向捲動：原本是置中換行，六個標籤會排成參差的 3+3 或 4+2，
                 高齡模式字級放大後更亂。改成一行可滑，字級變動也不會重排。 */}
-            {!inputFocused && (
-              <ScrollView
+            <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={styles.quickTagsScroll}
+                pointerEvents={inputFocused ? 'none' : 'auto'}
+                accessibilityElementsHidden={inputFocused}
+                importantForAccessibility={inputFocused ? 'no-hide-descendants' : 'auto'}
+                style={[styles.quickTagsScroll, inputFocused && { opacity: 0 }]}
                 contentContainerStyle={styles.quickTags}
                 keyboardShouldPersistTaps="handled"
               >
@@ -805,7 +810,6 @@ export default function ConsultScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            )}
 
             <View style={styles.inputBox}>
               <TextInput
@@ -833,8 +837,7 @@ export default function ConsultScreen() {
               </TouchableOpacity>
             </View>
             
-            {!inputFocused && (
-              <>
+            <View style={{ opacity: inputFocused ? 0 : 1 }} pointerEvents={inputFocused ? 'none' : 'auto'} accessibilityElementsHidden={inputFocused} importantForAccessibility={inputFocused ? 'no-hide-descendants' : 'auto'}>
                 {/* 不適度改用 slider：原本是點一下加一、到 5 再繞回 1，
                     要選 2 得從 3 一路點四次。滑動可直接抵達目標值。 */}
                 <View style={styles.painRow}>
@@ -865,12 +868,11 @@ export default function ConsultScreen() {
                       color={locationStatus === 'success' ? t.userBubble : t.muted}
                     />
                     <Text style={[styles.controlBadgeText, locationStatus === 'success' && { color: t.userBubble }]}>
-                      {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
+                      {selectedCity || (locationStatus === 'loading' ? '定位中，可繼續問診' : locationStatus === 'success' ? '已定位' : '未定位，不計距離')}
                     </Text>
                   </View>
                 </View>
-              </>
-            )}
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -945,7 +947,7 @@ export default function ConsultScreen() {
           
           <View style={{ flex: 1 }}>
             {/* 🎯 核心修復：如果 tempSummaryData 存在，優先在 VisitSummaryPanel 中直接渲染暫存資料；否則正常拉取 API */}
-            <VisitSummaryPanel sessionId={sessionId} tempSummaryData={tempSummaryData} />
+            <VisitSummaryPanel key={sessionId || "local"} sessionId={sessionId} tempSummaryData={tempSummaryData} />
           </View>
         </View>
       </Modal>

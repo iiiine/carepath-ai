@@ -8,21 +8,26 @@
 // 交給 Metro 依副檔名解析，才能真正把它排除在 web bundle 之外。
 
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text } from 'react-native';
+import { coordinatesOf } from '../utils/location';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 
 export default function NearbyHospitalMap({
     style,
     userLocation,
-    fallbackLocation,
     hospitals,
 }) {
-    const lat = Number(userLocation?.latitude ?? fallbackLocation.latitude);
-    const lng = Number(userLocation?.longitude ?? fallbackLocation.longitude);
+    const user = coordinatesOf(userLocation);
+    const first = (hospitals || []).map(coordinatesOf).find(Boolean);
+    const center = user || first;
+    if (!center) return <View style={style}><Text>未提供可顯示的座標，請使用下方院所地址導覽。</Text></View>;
+    const lat = center.lat;
+    const lng = center.lng;
 
     return (
         <MapView
+            key={`${lat},${lng}`}
             // 只有 Android 指定 Google Maps，這樣才吃得到 app.config.js 掛的金鑰。
             // iOS 不能跟著設：PROVIDER_GOOGLE 會改要 Google Maps iOS SDK 的金鑰，
             // 留 undefined 走系統內建的 Apple Maps，不必額外申請。
@@ -35,17 +40,16 @@ export default function NearbyHospitalMap({
                 longitudeDelta: 0.02,
             }}
         >
-            <Marker
-                coordinate={{ latitude: lat, longitude: lng }}
-                title="目前位置"
+            {user && <Marker
+                coordinate={{ latitude: user.lat, longitude: user.lng }}
+                title="問診當時位置"
                 pinColor="red"
-            />
+            />}
 
             {Array.isArray(hospitals) && hospitals.map((hospital, idx) => {
-                const hLat = parseFloat(hospital.latitude);
-                const hLng = parseFloat(hospital.longitude);
-
-                if (isNaN(hLat) || isNaN(hLng)) return null;
+                const point = coordinatesOf(hospital);
+                if (!point) return null;
+                const { lat: hLat, lng: hLng } = point;
 
                 return (
                     <Marker
