@@ -16,7 +16,6 @@ from enum import Enum
 from typing import (
     Any,
     Dict,
-    List,
     Mapping,
     Protocol,
 )
@@ -130,7 +129,7 @@ class Truth(str, Enum):
 # ============================================================
 # 組合子
 #
-# 以下六個函式由 A 在階段 1 實作，階段 0 只定簽章。
+# 以下五個函式由 A 在階段 1 實作，階段 0 只定簽章。
 #
 # 真值表（實作必須完全符合，A 的 smoke test 要涵蓋全部組合）：
 #
