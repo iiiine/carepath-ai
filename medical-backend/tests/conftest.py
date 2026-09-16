@@ -16,12 +16,37 @@ def app():
         patch.setenv("AUTH_SECRET_KEY", "offline-test-key-not-for-deployment")
         patch.setenv("AUTH_TOKEN_EXPIRE_MINUTES", "1440")
         patch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
-        def no_network(*args, **kwargs):
+        # Windows 的 ProactorEventLoop 會在 _make_self_pipe() 用 socket.socketpair()，
+        # 而 socketpair() 在 Windows 沒有原生實作，會退回 loopback connect。
+        # 無條件封鎖 connect 會讓 TestClient 連起都起不來（實測 65 個 error），
+        # 因此放行 loopback；要擋的 Neon 與 Gemini 都是遠端，不受影響。
+        real_connect = socket.socket.connect
+        real_connect_ex = socket.socket.connect_ex
+
+        def is_loopback(address):
+            return (
+                isinstance(address, tuple)
+                and len(address) >= 1
+                and address[0] in ("127.0.0.1", "::1", "localhost")
+            )
+
+        def no_network(self, address=None, *args, **kwargs):
+            if is_loopback(address):
+                return real_connect(self, address, *args, **kwargs)
             raise AssertionError("Network access is forbidden in offline tests")
+
+        def no_network_ex(self, address=None, *args, **kwargs):
+            if is_loopback(address):
+                return real_connect_ex(self, address, *args, **kwargs)
+            raise AssertionError("Network access is forbidden in offline tests")
+
+        def no_database(*args, **kwargs):
+            raise AssertionError("Network access is forbidden in offline tests")
+
         patch.setattr(socket.socket, "connect", no_network)
-        patch.setattr(socket.socket, "connect_ex", no_network)
-        patch.setattr("psycopg2.connect", no_network)
-        patch.setattr("psycopg.connect", no_network)
+        patch.setattr(socket.socket, "connect_ex", no_network_ex)
+        patch.setattr("psycopg2.connect", no_database)
+        patch.setattr("psycopg.connect", no_database)
         services = importlib.import_module("services")
         patch.setattr(services, "run_health_check", lambda: None)
         yield importlib.import_module("main").app
