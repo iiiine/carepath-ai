@@ -1142,12 +1142,25 @@ def diagnose_symptom(
                     # ----------------------------------------
                     # 排除條件
                     #
-                    # 缺少座標仍可提供院所資料，但不提供距離。
+                    # 無座標的院所在這條路徑一律排除。
+                    # 已上架的 APK 直接用 latitude / longitude 組
+                    # Google Maps 導航連結，沒有 null 防護，
+                    # 座標缺值會變成 destination=null,null 的死連結，
+                    # 而那個版本已經無法再更新。
+                    # 網頁端改用名稱＋地址導航，不受此限，
+                    # /api/v1/hospitals 仍保留無座標院所。
                     #
                     # 沒有該科別醫師時，
                     # 退回比對醫院官方公告的科別，
                     # 兩者都沒有才排除。
                     # ----------------------------------------
+
+                    if not valid_coordinates(
+                        hospital["latitude"],
+                        hospital["longitude"],
+                    ):
+                        continue
+
 
                     if not in_city(hospital.get("address"), payload.user_city):
                         continue

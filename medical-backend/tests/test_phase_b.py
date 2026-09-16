@@ -43,22 +43,33 @@ def test_diagnose_unknown_distances_and_city_filter(client, member, diagnosis_se
     assert response.status_code == 200, response.text
     data = response.json()
     resources = data['nearby_medical_resources']
-    missing = next(h for h in resources if h['hospital_code'] == 'A')
-    assert missing['distance_meters'] is None
-    assert missing['distance_reference'] is None
+    # 無座標院所（A）不進問診推薦：已上架的 APK 會拿 null 座標組出死連結。
+    assert all(h['hospital_code'] != 'A' for h in resources)
     assert '目前沒有符合科別的醫師名單' in data['message']
     assert '附近院所與醫師' not in data['message']
     if 'user_city' in selection:
-        assert {h['hospital_code'] for h in resources} == {'A', 'B'}
+        assert {h['hospital_code'] for h in resources} == {'B'}
         assert data['location_context'] == {'source': 'city', 'city': '臺南市'}
     if 'user_latitude' in selection:
         assert resources[0]['hospital_code'] == 'B'
         assert resources[0]['distance_meters'] == 0
         assert resources[0]['distance_reference'] == 'provided_coordinates'
-        assert resources[-1]['hospital_code'] == 'A'
     else:
         assert all(h['distance_meters'] is None for h in resources)
         assert '不提供附近距離' in data['message']
+
+
+def test_diagnose_drops_hospitals_without_coordinates(client, member, diagnosis_setup):
+    """缺座標的院所即使符合科別也不推薦，避免 APK 組出 destination=null,null。"""
+    cursor = diagnosis_setup.resources.cursor.return_value.__enter__.return_value
+    cursor.fetchall.side_effect = [[hospital('A', None, None), hospital('B')], []]
+    response = client.post('/api/v1/diagnose', json={
+        'symptom_text': '測試症狀', 'user_latitude': 22.99, 'user_longitude': 120.21,
+    })
+    assert response.status_code == 200, response.text
+    resources = response.json()['nearby_medical_resources']
+    assert [h['hospital_code'] for h in resources] == ['B']
+    assert all(h['latitude'] is not None and h['longitude'] is not None for h in resources)
 
 
 def test_no_location_does_not_truncate_candidates_before_specialty_sort(client, member, diagnosis_setup):
