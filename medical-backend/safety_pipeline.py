@@ -18,7 +18,7 @@ from safety_engine import (
 # Pipeline Version
 # ============================================================
 
-SAFETY_PIPELINE_VERSION = "2026.08.1"
+SAFETY_PIPELINE_VERSION = "2026.09.1"
 
 
 # ============================================================
@@ -139,10 +139,12 @@ def run_safety_pipeline(
         )
 
 
+        # 引擎吃三態，不可再傳 safety_flags（bool）：
+        # bool 會被收斂成 unknown，所有規則都不會命中。
         assessment = (
             evaluate_red_flags(
                 extraction[
-                    "safety_flags"
+                    "states"
                 ]
             )
         )

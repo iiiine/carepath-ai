@@ -129,9 +129,7 @@ class Truth(str, Enum):
 # ============================================================
 # 組合子
 #
-# 以下五個函式由 A 在階段 1 實作，階段 0 只定簽章。
-#
-# 真值表（實作必須完全符合，A 的 smoke test 要涵蓋全部組合）：
+# 真值表（實作必須完全符合，smoke test 涵蓋全部組合）：
 #
 #   has(flags, key)
 #       present            → TRUE
@@ -168,14 +166,46 @@ class Truth(str, Enum):
 # 真的有需要時再一起加，不要單方面補。
 # ============================================================
 
+def _require_truths(
+    truths: tuple,
+) -> None:
+    """
+    t_and / t_or 只收 Truth。
+
+    混進 bool（例如舊版 has() 的回傳）時，
+    `False is Truth.FALSE` 不成立，會被默默算成 UNKNOWN，
+    所以這裡直接拋例外。
+    """
+
+    for truth in truths:
+
+        if not isinstance(
+            truth,
+            Truth,
+        ):
+
+            raise TypeError(
+                "t_and / t_or 只接受 Truth，"
+                f"收到 {type(truth).__name__}"
+            )
+
+
 def has(
     flags: FlagStates,
     key: str,
 ) -> Truth:
 
-    raise NotImplementedError(
-        "階段 1 由 A 實作"
+    state = normalize_state(
+        flags.get(key)
     )
+
+    if state == STATE_PRESENT:
+        return Truth.TRUE
+
+    if state == STATE_ABSENT:
+        return Truth.FALSE
+
+    return Truth.UNKNOWN
 
 
 def any_of(
@@ -183,8 +213,11 @@ def any_of(
     *keys: str,
 ) -> Truth:
 
-    raise NotImplementedError(
-        "階段 1 由 A 實作"
+    return t_or(
+        *(
+            has(flags, key)
+            for key in keys
+        )
     )
 
 
@@ -193,8 +226,11 @@ def all_of(
     *keys: str,
 ) -> Truth:
 
-    raise NotImplementedError(
-        "階段 1 由 A 實作"
+    return t_and(
+        *(
+            has(flags, key)
+            for key in keys
+        )
     )
 
 
@@ -202,18 +238,42 @@ def t_and(
     *truths: Truth,
 ) -> Truth:
 
-    raise NotImplementedError(
-        "階段 1 由 A 實作"
-    )
+    _require_truths(truths)
+
+    if any(
+        truth is Truth.FALSE
+        for truth in truths
+    ):
+        return Truth.FALSE
+
+    if all(
+        truth is Truth.TRUE
+        for truth in truths
+    ):
+        return Truth.TRUE
+
+    return Truth.UNKNOWN
 
 
 def t_or(
     *truths: Truth,
 ) -> Truth:
 
-    raise NotImplementedError(
-        "階段 1 由 A 實作"
-    )
+    _require_truths(truths)
+
+    if any(
+        truth is Truth.TRUE
+        for truth in truths
+    ):
+        return Truth.TRUE
+
+    if all(
+        truth is Truth.FALSE
+        for truth in truths
+    ):
+        return Truth.FALSE
+
+    return Truth.UNKNOWN
 
 
 # ============================================================
@@ -326,5 +386,82 @@ if __name__ == "__main__":
     # 可以序列化成 JSON 友善的字串
     assert Truth.UNKNOWN.value == "U"
     assert Truth.TRUE == "T"
+
+
+    # 組合子真值表：窮舉三態的所有組合
+    from itertools import product
+
+    T, F, U = (
+        Truth.TRUE,
+        Truth.FALSE,
+        Truth.UNKNOWN,
+    )
+
+    STATE_TO_TRUTH = {
+        STATE_PRESENT: T,
+        STATE_ABSENT: F,
+        STATE_UNKNOWN: U,
+    }
+
+    for state, expected in STATE_TO_TRUTH.items():
+        assert has({"k": state}, "k") is expected
+
+    assert has({}, "k") is U
+    assert has({"k": True}, "k") is U
+    assert has({"k": " Present "}, "k") is T
+
+    for size in (1, 2, 3):
+
+        for truths in product(
+            (T, F, U),
+            repeat=size,
+        ):
+
+            expected_and = (
+                F if F in truths
+                else T if all(t is T for t in truths)
+                else U
+            )
+
+            expected_or = (
+                T if T in truths
+                else F if all(t is F for t in truths)
+                else U
+            )
+
+            assert t_and(*truths) is expected_and, truths
+            assert t_or(*truths) is expected_or, truths
+
+        for states in product(
+            VALID_STATES,
+            repeat=size,
+        ):
+
+            flags = {
+                f"k{i}": state
+                for i, state in enumerate(states)
+            }
+            keys = list(flags)
+            truths = [
+                STATE_TO_TRUTH[state]
+                for state in states
+            ]
+
+            assert any_of(flags, *keys) is t_or(*truths), states
+            assert all_of(flags, *keys) is t_and(*truths), states
+
+    # 混進 bool 必須當場炸掉，不可默默算成 UNKNOWN
+    for combinator in (t_and, t_or):
+
+        try:
+            combinator(T, False)
+
+        except TypeError:
+            pass
+
+        else:
+            raise AssertionError(
+                f"{combinator.__name__} 應拒絕 bool"
+            )
 
     print("✅ safety_types 契約檢查通過")
