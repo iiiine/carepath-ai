@@ -4,7 +4,7 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from locations import in_city, valid_coordinates, distance_key
+from locations import hospital_in_city, valid_coordinates, distance_key
 from routes.hospitals import haversine_meters
 
 DIRECTORY_PATH = Path(__file__).parent / 'data' / 'emergency_hospitals.json'
@@ -28,7 +28,7 @@ def find_emergency_resources(location):
             return {**metadata, 'status': 'needs_review'}
         result = []
         for h in snapshot['hospitals']:
-            if not in_city(h['address'], location.user_city):
+            if not hospital_in_city(h, location.user_city):
                 continue
             distance = None
             if location.user_latitude is not None:

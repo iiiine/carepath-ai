@@ -1,5 +1,6 @@
 """Location validation shared by diagnosis and resource queries."""
 import math
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -51,8 +52,36 @@ def valid_coordinates(lat, lng):
         return False
 
 
+# 地址可能帶郵遞區號前綴（如 710臺南市中西區…），比對縣市前先去掉。
+POSTAL_PREFIX = re.compile(r'^\d{3,6}')
+
+
+def normalize_address(address):
+    text = str(address or '').strip().replace('台', '臺')
+    return POSTAL_PREFIX.sub('', text).lstrip()
+
+
 def in_city(address, city):
-    return not city or str(address or '').strip().replace('台', '臺').startswith(city)
+    """依地址前綴判斷縣市。
+
+    hospitals 資料表沒有結構化的縣市欄位，只能比對地址開頭，
+    因此這個判斷依賴「地址以縣市名開頭」這個前提。
+    有 city 欄位可用時請改用 hospital_in_city()。
+    """
+    return not city or normalize_address(address).startswith(city)
+
+
+def hospital_in_city(hospital, city):
+    """優先採用已核對的 city 欄位，缺值才退回地址前綴比對。"""
+    if not city:
+        return True
+
+    recorded = str(hospital.get('city') or '').strip().replace('台', '臺')
+
+    if recorded:
+        return recorded == city
+
+    return in_city(hospital.get('address'), city)
 
 
 def distance_key(distance):
