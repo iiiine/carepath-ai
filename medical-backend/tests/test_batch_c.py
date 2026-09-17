@@ -207,3 +207,65 @@ def test_load_status_constants_match_the_store(app):
     assert (LOAD_NEW, LOAD_OK, LOAD_UNAVAILABLE) == (
         s.LOAD_NEW, s.LOAD_OK, s.LOAD_UNAVAILABLE,
     )
+
+
+# ============================================================
+# 安全追問的 API 形狀
+# ============================================================
+
+def _pipeline_with_clarification(monkeypatch):
+    """讓 pipeline 回傳一條「已帶動」的 emergency 未定案規則。"""
+    from routes import diagnose
+    from safety_state import advance
+
+    def fake(symptom_text, history=None, prior_state=None, prior_state_unavailable=False):
+        result = {
+            "assessment_status": "success", "risk_level": "urgent",
+            "risk_label": "儘快就醫", "should_stop_normal_flow": False,
+            "requires_human_review": True, "has_red_flags": False,
+            "safety_action": "", "red_flags": [],
+            "engine_version": "test", "extractor_version": "test",
+            "indeterminate_rules": [
+                {"code": "HIGH_RISK_HEAD_INJURY", "risk_level": "emergency",
+                 "engaged": True, "swing_set": ["taking_anticoagulants"]},
+            ],
+        }
+        result["next_state"] = advance(prior_state, {"head_injury": "present"}, result)
+        return result
+
+    monkeypatch.setattr(diagnose, "run_safety_pipeline", fake)
+
+
+def test_safety_followup_uses_asking_not_safety_alert(client, member, diagnosis_setup, store, monkeypatch):
+    """
+    追問絕不可走 safety_alert：
+    已上架 APK 的警示徽章寫死是「緊急」，不讀 risk_level，
+    「資訊不足」走那條路徑會被誤標成緊急。
+    """
+    _pipeline_with_clarification(monkeypatch)
+
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    assert data["status"] == "asking"
+    assert data["status"] != "safety_alert"
+    assert data["is_complete"] is False
+    assert "安全評估尚未完成" in data["message"]
+
+
+def test_safety_followup_skips_the_consultation_model(client, member, diagnosis_setup, store, monkeypatch):
+    """安全資訊沒問清楚前不做科別推薦，也省一次 Gemini 呼叫。"""
+    _pipeline_with_clarification(monkeypatch)
+
+    client.post("/api/v1/diagnose", json=APK_PAYLOAD)
+
+    diagnosis_setup.ai.assert_not_called()
+
+
+def test_asked_flags_are_persisted(client, member, diagnosis_setup, store, monkeypatch):
+    """問過的項目要寫進狀態，否則下一輪會重複問。"""
+    _pipeline_with_clarification(monkeypatch)
+
+    client.post("/api/v1/diagnose", json=APK_PAYLOAD)
+
+    saved_state = store["save"][0][2]
+    assert "taking_anticoagulants" in saved_state["asked_flags"]

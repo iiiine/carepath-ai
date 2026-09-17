@@ -67,6 +67,11 @@ from locations import valid_coordinates, in_city, distance_key
 
 from safety_pipeline import run_safety_pipeline
 
+from safety_followup import (
+    build_followup_message,
+    pending_clarifications,
+)
+
 from safety_state_store import (
     LOAD_UNAVAILABLE,
     load_state,
@@ -628,6 +633,68 @@ def diagnose_symptom(
 
 
     # --------------------------------------------------------
+    # 安全追問
+    #
+    # 只針對「已被主訴帶動」且為 emergency 的未定案規則發問，
+    # 每輪最多兩題、問過的不再問。詳見 safety_followup。
+    #
+    # 訪客沒有伺服器端狀態，改用用戶端 history 推導已問過的項目 ——
+    # history 是用戶端控制的，但訪客本來就沒有可信狀態，不算退步。
+    # --------------------------------------------------------
+
+    if is_guest:
+
+        asked_before = [
+            flag
+            for flag in (
+                safety_result.get(
+                    "next_state"
+                )
+                or {}
+            ).get(
+                "asked_flags",
+                [],
+            )
+        ]
+
+    else:
+
+        asked_before = (
+            prior_state
+            or {}
+        ).get(
+            "asked_flags",
+            [],
+        )
+
+
+    clarifications = pending_clarifications(
+        safety_result,
+        asked_before,
+    )
+
+
+    # 把本輪問出去的項目記進狀態，避免下一輪重複問
+    if clarifications and safety_result.get(
+        "next_state"
+    ):
+
+        safety_result[
+            "next_state"
+        ][
+            "asked_flags"
+        ] = sorted(
+            set(
+                asked_before
+            )
+            | {
+                item["flag"]
+                for item in clarifications
+            }
+        )
+
+
+    # --------------------------------------------------------
     # 保存推進後的狀態
     #
     # 存不進去就不發 conversation_id：發了一個下輪讀不到的 ID，
@@ -755,6 +822,65 @@ def diagnose_symptom(
             safety=safety_model,
             history=alert_history,
             nearby_medical_resources=[],
+        )
+
+
+    # ========================================================
+    # Step 2.5
+    # 安全追問
+    #
+    # 走一般追問的形狀（status=asking、is_complete=false），
+    # 刻意不走 safety_alert —— 已上架的 APK 警示徽章寫死是「緊急」，
+    # 把「資訊不足」丟進那條路徑會被誤標成緊急。
+    #
+    # 這裡直接回應，不進 RAG 與一般問診 Gemini：
+    # 安全資訊沒問清楚之前，科別推薦沒有意義，也省一次模型呼叫。
+    # ========================================================
+
+    if clarifications:
+
+        followup_message = (
+            build_followup_message(
+                clarifications
+            )
+        )
+
+
+        followup_history = (
+            payload.history
+            + [
+                ChatMessage(
+                    role="user",
+                    content=(
+                        payload.symptom_text
+                    ),
+                ),
+                ChatMessage(
+                    role="model",
+                    content=(
+                        followup_message
+                    ),
+                ),
+            ]
+        )
+
+
+        print(
+            "🛡️ [安全追問] "
+            + "、".join(
+                item["flag"]
+                for item in clarifications
+            )
+        )
+
+
+        return FollowUpResponse(
+            status="asking",
+            is_complete=False,
+            conversation_id=conversation_id,
+            message=followup_message,
+            history=followup_history,
+            safety=safety_model,
         )
 
 

@@ -29,7 +29,7 @@ from safety_types import (
 #            命中條件與 2026.09.1 相同，只有 present 會命中。
 # ============================================================
 
-SAFETY_ENGINE_VERSION = "2026.09.2"
+SAFETY_ENGINE_VERSION = "2026.09.3"
 
 
 # ============================================================
@@ -575,6 +575,36 @@ def _evaluate_rule(
     return result
 
 
+def _is_engaged(
+    rule: SafetyRule,
+    flags: FlagStates,
+) -> bool:
+    """
+    規則是否已被目前的主訴帶動 —— 至少有一個引用到的旗標已經是 present。
+
+    用途是追問的相關性閘門。第一輪所有旗標都是 unknown，
+    此時幾乎每條 emergency 規則都會是 UNKNOWN；
+    若不設這道閘門，使用者只說「頭痛」也會被問到自傷意念與陰道出血。
+
+    未被帶動的規則仍然列在 indeterminate_rules 供稽核，
+    只是不應該拿來產生追問。
+    """
+
+    recorder = _KeyRecorder(
+        flags
+    )
+
+    _evaluate_rule(
+        rule,
+        recorder,
+    )
+
+    return any(
+        has(flags, key) is Truth.TRUE
+        for key in recorder.keys
+    )
+
+
 def _swing_set(
     rule: SafetyRule,
     flags: FlagStates,
@@ -729,6 +759,13 @@ def evaluate_red_flags(
 
                         "swing_set":
                             _swing_set(
+                                rule,
+                                flags,
+                            ),
+
+                        # 追問的相關性閘門，見 _is_engaged
+                        "engaged":
+                            _is_engaged(
                                 rule,
                                 flags,
                             ),
