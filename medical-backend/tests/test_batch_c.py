@@ -42,7 +42,7 @@ def store(monkeypatch, diagnosis_setup):
         "incoming": {},
     }
 
-    def fake_load(conversation_id, user_id):
+    def fake_load(conversation_id, user_id, **kwargs):
         calls["load"].append((conversation_id, user_id))
         return box["state"], box["status"]
 
@@ -269,3 +269,75 @@ def test_asked_flags_are_persisted(client, member, diagnosis_setup, store, monke
 
     saved_state = store["save"][0][2]
     assert "taking_anticoagulants" in saved_state["asked_flags"]
+
+
+# ============================================================
+# review 指出的問題
+# ============================================================
+
+def test_version_change_restarts_the_conversation(app, monkeypatch):
+    """
+    規則或抽取換版後，舊狀態裡的旗標語意可能已經不同，不可沿用。
+
+    方向與過期處理一致：重算而非沿用陳舊狀態。
+    """
+    import safety_state_store as store
+    from tests.conftest import connection
+
+    # 舊狀態的 engine_version 與目前不同
+    conn, cur = connection(one=({}, [], [], [], 3, False, "2026.01.0", "x"))
+    monkeypatch.setattr(store, "get_db_connection", lambda *a, **k: conn)
+
+    _, status = store.load_state(
+        "44444444-4444-4444-8444-444444444444", 7,
+        engine_version="2026.09.3", extractor_version="x",
+    )
+
+    assert status == store.LOAD_RESTART
+
+
+def test_same_version_is_reused(app, monkeypatch):
+    import safety_state_store as store
+    from tests.conftest import connection
+
+    conn, _ = connection(one=({"chest_pain": "present"}, [], [], [], 3, False, "2026.09.3", "x"))
+    monkeypatch.setattr(store, "get_db_connection", lambda *a, **k: conn)
+
+    state, status = store.load_state(
+        "44444444-4444-4444-8444-444444444444", 7,
+        engine_version="2026.09.3", extractor_version="x",
+    )
+
+    assert status == store.LOAD_OK
+    assert state["flag_states"] == {"chest_pain": "present"}
+
+
+def test_audit_flag_lists_share_one_basis():
+    """
+    present / absent / unknown 三份清單必須同樣反映合併後的狀態。
+
+    只有部分改成合併後的話，同一個旗標會同時出現在兩份清單裡。
+    """
+    from safety_state import merge_flag_states
+    from symptom_flag_extractor import SymptomFlagsSchema
+
+    schema = SymptomFlagsSchema()
+    states = {k: getattr(schema, k) for k in SymptomFlagsSchema.model_fields}
+    merged = merge_flag_states({"chest_pain": "present"}, states)
+
+    present = {k for k, v in merged.items() if v == "present"}
+    absent = {k for k, v in merged.items() if v == "absent"}
+    unknown = {k for k, v in merged.items() if v == "unknown"}
+
+    assert present & unknown == set()
+    assert absent & unknown == set()
+    assert present | absent | unknown == set(merged)
+
+
+def test_pregnancy_question_does_not_presume_the_subject():
+    """腹痛會帶動 PREGNANCY_EMERGENCY，任何性別的使用者都可能看到這題。"""
+    from safety_followup import QUESTIONS
+
+    for flag in ("pregnant", "vaginal_bleeding", "heavy_vaginal_bleeding"):
+        assert "您" not in QUESTIONS[flag], QUESTIONS[flag]
+        assert "不適用" in QUESTIONS[flag]

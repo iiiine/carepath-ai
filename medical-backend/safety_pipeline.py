@@ -12,6 +12,7 @@ from symptom_flag_extractor import (
 from safety_types import (
     STATE_ABSENT,
     STATE_PRESENT,
+    STATE_UNKNOWN,
 )
 
 from safety_state import (
@@ -385,9 +386,9 @@ def run_safety_pipeline(
                 next_state,
 
             "unknown_flags":
-                extraction.get(
-                    "unknown_flags",
-                    [],
+                _flags_in_state(
+                    merged_flags,
+                    STATE_UNKNOWN,
                 ),
 
             "flag_states":

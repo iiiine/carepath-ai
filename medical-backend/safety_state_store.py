@@ -48,12 +48,18 @@ def _valid_uuid(
 def load_state(
     conversation_id: Optional[str],
     user_id: int,
+    engine_version: Optional[str] = None,
+    extractor_version: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], str]:
     """
     讀取既有的跨輪狀態。
 
     回傳 (state, status)。state 一律是可用的 dict，
     呼叫端靠 status 決定要不要繼續。
+
+    帶入目前的版本號時會一併比對：規則或抽取語意換版之後，
+    舊狀態裡的旗標意義可能已經不同，沿用會得到無法回推的判斷，
+    因此一律當成新對話重新評估（與過期的處理一致，方向保守）。
     """
 
     if not conversation_id:
@@ -92,7 +98,9 @@ def load_state(
                     asked_flags,
                     resolved_recently,
                     turn_count,
-                    expires_at < CURRENT_TIMESTAMP AS is_expired
+                    expires_at < CURRENT_TIMESTAMP AS is_expired,
+                    engine_version,
+                    extractor_version
                 FROM {TABLE}
                 WHERE id = %s
                   AND user_id = %s;
@@ -115,6 +123,16 @@ def load_state(
         # 過期：一次問診對話是短生命週期的東西，
         # 隔太久回來重算比沿用陳舊狀態合理。
         if row[5]:
+            return empty_state(), LOAD_RESTART
+
+
+        # 換版：旗標語意可能已經不同，不沿用。
+        # 只在呼叫端有提供版本時比對，避免舊呼叫端意外全部重算。
+        if engine_version and row[6] and row[6] != engine_version:
+            return empty_state(), LOAD_RESTART
+
+
+        if extractor_version and row[7] and row[7] != extractor_version:
             return empty_state(), LOAD_RESTART
 
 

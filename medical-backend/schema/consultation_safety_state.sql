@@ -37,7 +37,13 @@ CREATE TABLE IF NOT EXISTS consultation_safety_state (
     flag_states         jsonb        NOT NULL DEFAULT '{}'::jsonb,
 
     -- 本對話中已經成立過的規則代碼。
-    -- emergency 一旦成立就固定，不因其他欄位變 unknown 而解除。
+    --
+    -- 目前是純稽核欄位，沒有任何程式讀它做判斷。
+    -- 跨輪保護實際生效的機制是 flag_states 的 present 黏性：
+    -- 旗標不退回 unknown，規則自然會再次命中。
+    --
+    -- 不要誤以為這裡還有一層 enforcement 接著 ——
+    -- 黏性若被改壞，這個欄位不會救你。
     established_rules   jsonb        NOT NULL DEFAULT '[]'::jsonb,
 
     -- 已經追問過的旗標，避免同一項重複問。

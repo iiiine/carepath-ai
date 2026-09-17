@@ -67,6 +67,10 @@ from locations import valid_coordinates, in_city, distance_key
 
 from safety_pipeline import run_safety_pipeline
 
+from safety_engine import SAFETY_ENGINE_VERSION
+
+from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
+
 from safety_followup import (
     build_followup_message,
     pending_clarifications,
@@ -609,6 +613,12 @@ def diagnose_symptom(
                 current_user[
                     "id"
                 ],
+                engine_version=(
+                    SAFETY_ENGINE_VERSION
+                ),
+                extractor_version=(
+                    SYMPTOM_EXTRACTOR_VERSION
+                ),
             )
         )
 
@@ -638,34 +648,24 @@ def diagnose_symptom(
     # 只針對「已被主訴帶動」且為 emergency 的未定案規則發問，
     # 每輪最多兩題、問過的不再問。詳見 safety_followup。
     #
-    # 訪客沒有伺服器端狀態，改用用戶端 history 推導已問過的項目 ——
-    # history 是用戶端控制的，但訪客本來就沒有可信狀態，不算退步。
+    # 訪客沒有伺服器端狀態，因此不做跨輪去重。
+    #
+    # 曾經考慮從用戶端 history 比對問句文字來推導「已問過」，
+    # 但那要拿 model 訊息去對 QUESTIONS 的內容，問句一改比對就靜默失效，
+    # 這種脆弱模式不該出現在安全相關路徑上。
+    #
+    # 實務上去重會自然發生：使用者回答「沒有」之後抽取器把旗標設成
+    # absent，規則就不再是未定案，自然不會再問。只有使用者不回答時
+    # 才會重複問，屬於體驗問題，不是安全退化。
     # --------------------------------------------------------
 
-    if is_guest:
-
-        asked_before = [
-            flag
-            for flag in (
-                safety_result.get(
-                    "next_state"
-                )
-                or {}
-            ).get(
-                "asked_flags",
-                [],
-            )
-        ]
-
-    else:
-
-        asked_before = (
-            prior_state
-            or {}
-        ).get(
-            "asked_flags",
-            [],
-        )
+    asked_before = (
+        prior_state
+        or {}
+    ).get(
+        "asked_flags",
+        [],
+    )
 
 
     clarifications = pending_clarifications(

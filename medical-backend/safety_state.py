@@ -166,6 +166,9 @@ def detect_resolved(
 #
 # established_rules / asked_flags / resolved_recently 都是只進不出：
 # 「本輪沒再命中」不代表「先前沒成立過」。
+#
+# 注意 established_rules 目前是純稽核紀錄，沒有任何地方讀它做判斷。
+# 跨輪保護靠的是 flag_states 的 present 黏性，不是這個欄位。
 # ============================================================
 
 def _accumulate(
