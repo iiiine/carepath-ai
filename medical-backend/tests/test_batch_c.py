@@ -1,0 +1,209 @@
+"""批次 C：跨輪安全狀態的 API 層行為，含已上架 APK 的相容硬條件。"""
+
+import pytest
+
+from safety_state import empty_state
+
+# safety_state_store 會 import services，不可以在模組層載入 ——
+# 那會讓 services 在 app fixture 的 monkeypatch 生效前就被匯入，
+# 連帶弄壞 test_imports 的離線隔離斷言。
+LOAD_NEW = "new"
+LOAD_OK = "loaded"
+LOAD_UNAVAILABLE = "unavailable"
+
+
+# 已上架 APK 的實際封包（ConsultScreen.js:373）：永遠成對座標，不送 conversation_id
+APK_PAYLOAD = {
+    "pain_level": 3,
+    "symptom_text": "喉嚨痛兩天",
+    "user_latitude": 23.0,
+    "user_longitude": 120.2,
+    "history": [],
+}
+
+
+@pytest.fixture
+def store(monkeypatch, diagnosis_setup):
+    """
+    攔截狀態讀寫，讓路由邏輯不必碰資料庫。
+
+    假 pipeline 走真實的 safety_state.advance，
+    這樣「prior_state 有沒有真的參與合併」才驗得出來。
+    """
+
+    from routes import diagnose
+    from safety_state import advance
+
+    calls = {"load": [], "save": []}
+    box = {
+        "status": LOAD_NEW,
+        "state": empty_state(),
+        "saved_id": "11111111-1111-4111-8111-111111111111",
+        "incoming": {},
+    }
+
+    def fake_load(conversation_id, user_id):
+        calls["load"].append((conversation_id, user_id))
+        return box["state"], box["status"]
+
+    def fake_save(conversation_id, user_id, state, **kwargs):
+        calls["save"].append((conversation_id, user_id, state))
+        return box["saved_id"]
+
+    def fake_pipeline(symptom_text, history=None, prior_state=None,
+                      prior_state_unavailable=False):
+        if prior_state_unavailable:
+            import safety_pipeline
+            return safety_pipeline.run_safety_pipeline(
+                symptom_text, history, prior_state, True
+            )
+
+        assessment = {
+            "assessment_status": "success", "risk_level": "standard",
+            "risk_label": "一般", "should_stop_normal_flow": False,
+            "requires_human_review": False, "has_red_flags": False,
+            "safety_action": "", "red_flags": [],
+            "engine_version": "test", "extractor_version": "test",
+        }
+        assessment["next_state"] = advance(prior_state, box["incoming"], assessment)
+        return assessment
+
+    monkeypatch.setattr(diagnose, "load_state", fake_load)
+    monkeypatch.setattr(diagnose, "save_state", fake_save)
+    monkeypatch.setattr(diagnose, "run_safety_pipeline", fake_pipeline)
+
+    calls["box"] = box
+    return calls
+
+
+# ============================================================
+# APK 硬條件
+# ============================================================
+
+def test_apk_payload_without_conversation_id_is_accepted(client, member, diagnosis_setup, store):
+    """APK 不送 conversation_id，缺少時必須退回單輪評估而不是回 422。"""
+    response = client.post("/api/v1/diagnose", json=APK_PAYLOAD)
+
+    assert response.status_code == 200, response.text
+    assert store["load"] == [(None, 7)]
+
+
+def test_apk_response_shape_is_unchanged(client, member, diagnosis_setup, store):
+    """新增欄位必須是純新增，APK 既有讀取的欄位一個都不能少。"""
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    for key in ("status", "is_complete", "message", "session_id",
+                "save_status", "suggested_department", "nearby_medical_resources"):
+        assert key in data, f"APK 依賴的欄位 {key} 消失了"
+
+    assert "conversation_id" in data
+
+
+def test_follow_up_still_uses_is_complete_false(client, member, diagnosis_setup, store):
+    """追問必須維持 is_complete:false，APK 第 389 行只認這個。"""
+    diagnosis_setup.ai.return_value.text = (
+        '{"is_complete": false, "follow_up_question": "持續多久了？"}'
+    )
+
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    assert data["status"] == "asking"
+    assert data["is_complete"] is False
+    assert "conversation_id" in data
+
+
+@pytest.mark.parametrize("bad", ["", "not-a-uuid", "../../etc", "00000000"])
+def test_malformed_conversation_id_does_not_error(client, member, diagnosis_setup, store, bad):
+    """格式錯誤的 conversation_id 視為新對話重新評估，不可回 4xx/5xx。"""
+    response = client.post("/api/v1/diagnose", json={**APK_PAYLOAD, "conversation_id": bad})
+
+    assert response.status_code == 200, response.text
+
+
+# ============================================================
+# 跨輪保護
+# ============================================================
+
+def test_conversation_id_is_returned_and_state_saved(client, member, diagnosis_setup, store):
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    assert data["conversation_id"] == store["box"]["saved_id"]
+    assert len(store["save"]) == 1
+
+    _, user_id, state = store["save"][0]
+    assert user_id == 7
+    assert state["turn_count"] == 1
+
+
+def test_prior_state_reaches_the_engine(client, member, diagnosis_setup, store):
+    """先前成立的 present 必須參與本輪判斷，否則跨輪保護等於沒做。"""
+    store["box"]["state"] = {
+        **empty_state(),
+        "flag_states": {"one_sided_weakness": "present"},
+        "turn_count": 1,
+    }
+    store["box"]["status"] = LOAD_OK
+    store["box"]["incoming"] = {"one_sided_weakness": "absent"}   # 本輪說「好了」
+
+    data = client.post(
+        "/api/v1/diagnose",
+        json={**APK_PAYLOAD, "conversation_id": "22222222-2222-4222-8222-222222222222"},
+    ).json()
+
+    # conftest 的 safety pipeline 是 mock 的，這裡驗的是狀態確實被帶進來並推進
+    assert store["load"] == [("22222222-2222-4222-8222-222222222222", 7)]
+    saved_state = store["save"][0][2]
+    # 本輪被否認，但先前是 present —— 合併後必須維持 present（症狀消失不等於風險解除）
+    assert saved_state["flag_states"]["one_sided_weakness"] == "present"
+    assert saved_state["resolved_recently"] == ["one_sided_weakness"]
+    assert saved_state["turn_count"] == 2
+
+
+def test_state_unavailable_fails_safe(client, member, diagnosis_setup, monkeypatch, store):
+    """
+    帶了 conversation_id 但狀態讀不到時，不可以當成新對話繼續。
+
+    「讀不到」不等於「沒有危險」—— 先前很可能已經有成立的警訊。
+    """
+    from routes import diagnose
+    import safety_pipeline
+
+    store["box"]["status"] = LOAD_UNAVAILABLE
+
+    # 這個案例要跑真實 pipeline 的 fail-safe，不用 conftest 的 mock
+    monkeypatch.setattr(diagnose, "run_safety_pipeline", safety_pipeline.run_safety_pipeline)
+
+    data = client.post(
+        "/api/v1/diagnose",
+        json={**APK_PAYLOAD, "conversation_id": "33333333-3333-4333-8333-333333333333"},
+    ).json()
+
+    assert data["status"] == "safety_alert"
+    assert data["safety"]["risk_level"] == "unknown"
+    assert data["safety"]["should_stop_normal_flow"] is True
+    assert data["safety"]["technical_failure"] is True
+
+
+def test_guest_never_touches_the_state_store(client, app, diagnosis_setup, store):
+    """訪客維持現況每輪重算，不讀也不寫跨輪狀態。"""
+    from routes.auth import get_current_user
+
+    app.dependency_overrides[get_current_user] = lambda: {"id": 99, "is_guest": True}
+
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    assert store["load"] == []
+    assert store["save"] == []
+    assert data["conversation_id"] is None
+
+
+def test_load_status_constants_match_the_store(app):
+    """
+    上面為了避免在模組層匯入 services 而複製了常數字串，
+    這裡確認它們沒有跟真實模組漂移。
+    """
+    import safety_state_store as s
+
+    assert (LOAD_NEW, LOAD_OK, LOAD_UNAVAILABLE) == (
+        s.LOAD_NEW, s.LOAD_OK, s.LOAD_UNAVAILABLE,
+    )

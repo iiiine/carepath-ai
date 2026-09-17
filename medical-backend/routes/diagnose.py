@@ -67,6 +67,12 @@ from locations import valid_coordinates, in_city, distance_key
 
 from safety_pipeline import run_safety_pipeline
 
+from safety_state_store import (
+    LOAD_UNAVAILABLE,
+    load_state,
+    save_state,
+)
+
 
 # ============================================================
 # 醫院固定看診時段
@@ -570,6 +576,38 @@ def diagnose_symptom(
     # 之前執行。
     # ========================================================
 
+    # --------------------------------------------------------
+    # 跨輪安全狀態
+    #
+    # 訪客不做伺服器端狀態（維持現況每輪重算），
+    # 未帶 conversation_id 的用戶端（含已上架的 APK）也一樣，
+    # 兩者都不會因此出錯。
+    # --------------------------------------------------------
+
+    is_guest = bool(
+        current_user.get(
+            "is_guest"
+        )
+    )
+
+
+    if is_guest:
+
+        prior_state = None
+        prior_state_status = "new"
+
+    else:
+
+        prior_state, prior_state_status = (
+            load_state(
+                payload.conversation_id,
+                current_user[
+                    "id"
+                ],
+            )
+        )
+
+
     safety_result = (
         run_safety_pipeline(
             symptom_text=(
@@ -578,8 +616,46 @@ def diagnose_symptom(
             history=(
                 payload.history
             ),
+            prior_state=(
+                prior_state
+            ),
+            prior_state_unavailable=(
+                prior_state_status
+                == LOAD_UNAVAILABLE
+            ),
         )
     )
+
+
+    # --------------------------------------------------------
+    # 保存推進後的狀態
+    #
+    # 存不進去就不發 conversation_id：發了一個下輪讀不到的 ID，
+    # 會被當成新對話，先前成立的警訊就消失了。
+    # --------------------------------------------------------
+
+    conversation_id = None
+
+
+    if not is_guest and safety_result.get(
+        "next_state"
+    ):
+
+        conversation_id = save_state(
+            payload.conversation_id,
+            current_user[
+                "id"
+            ],
+            safety_result[
+                "next_state"
+            ],
+            engine_version=safety_result.get(
+                "engine_version"
+            ),
+            extractor_version=safety_result.get(
+                "extractor_version"
+            ),
+        )
 
 
     safety_model = (
@@ -674,6 +750,7 @@ def diagnose_symptom(
         return SafetyAlertResponse(
             status="safety_alert",
             is_complete=True,
+            conversation_id=conversation_id,
             message=safety_message,
             safety=safety_model,
             history=alert_history,
@@ -1027,6 +1104,7 @@ def diagnose_symptom(
             return FollowUpResponse(
                 status="asking",
                 is_complete=False,
+                conversation_id=conversation_id,
                 message=follow_up_message,
                 history=follow_up_history,
                 safety=safety_model,
@@ -1661,6 +1739,7 @@ def diagnose_symptom(
             status="completed",
             is_complete=True,
             session_id=session_id,
+            conversation_id=conversation_id,
             save_status=save_status,
             location_context=payload.context(),
             symptom=payload.symptom_text,

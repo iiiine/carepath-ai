@@ -26,6 +26,12 @@ class SymptomRequest(UserLocation):
 
     symptom_text: str
 
+    # 同一段對話的跨輪安全狀態識別碼，由後端發放。
+    #
+    # 必須維持 Optional：已上架的 APK 不會送這個欄位，
+    # 缺少時退回單輪評估，絕不可因此回 422。
+    conversation_id: Optional[str] = None
+
     history: List[ChatMessage] = Field(
         default_factory=list
     )
@@ -242,6 +248,10 @@ class DiagnosisResponse(BaseModel):
     # --------------------------------------------------------
     session_id: Optional[int] = None
 
+    # 跨輪安全狀態識別碼。用戶端應在同一段對話的後續請求帶回，
+    # 不帶回只會退回單輪評估，不會出錯。
+    conversation_id: Optional[str] = None
+
     # 僅描述歷史保存結果，不影響本次問診結果是否完成。
     save_status: Literal["saved", "failed", "not_applicable"] = "not_applicable"
     location_context: dict = Field(default_factory=lambda: {"source": "unavailable", "city": None})
@@ -274,6 +284,9 @@ class FollowUpResponse(BaseModel):
     is_complete: bool = False
 
     message: str
+
+    # 跨輪安全狀態識別碼，後續請求帶回即可延續先前累積的警訊。
+    conversation_id: Optional[str] = None
 
     history: List[ChatMessage] = Field(
         default_factory=list
@@ -310,6 +323,8 @@ class SafetyAlertResponse(BaseModel):
     # Safety Alert 一定必須有安全評估內容，
     # 因此這裡不要設 Optional。
     safety: SafetyAssessmentResponse
+
+    conversation_id: Optional[str] = None
 
     history: List[ChatMessage] = Field(
         default_factory=list
