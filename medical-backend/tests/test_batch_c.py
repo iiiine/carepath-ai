@@ -216,6 +216,7 @@ def test_load_status_constants_match_the_store(app):
 def _pipeline_with_clarification(monkeypatch):
     """讓 pipeline 回傳一條「已帶動」的 emergency 未定案規則。"""
     from routes import diagnose
+    from safety_observability import assessment_completeness
     from safety_state import advance
 
     def fake(symptom_text, history=None, prior_state=None, prior_state_unavailable=False):
@@ -230,6 +231,8 @@ def _pipeline_with_clarification(monkeypatch):
                  "engaged": True, "swing_set": ["taking_anticoagulants"]},
             ],
         }
+        # 用真實函式算，讓測試驗到的是正式邏輯而不是假值
+        result["assessment_completeness"] = assessment_completeness(result)
         result["next_state"] = advance(prior_state, {"head_injury": "present"}, result)
         return result
 
@@ -341,3 +344,48 @@ def test_pregnancy_question_does_not_presume_the_subject():
     for flag in ("pregnant", "vaginal_bleeding", "heavy_vaginal_bleeding"):
         assert "您" not in QUESTIONS[flag], QUESTIONS[flag]
         assert "不適用" in QUESTIONS[flag]
+
+
+# ============================================================
+# 步驟 4：觀測與評估完整度
+# ============================================================
+
+def test_incomplete_assessment_is_a_field_not_just_prose(client, member, diagnosis_setup, store, monkeypatch):
+    """
+    「資訊不足」與「已確認低風險」的 risk_level 都可能是 standard，
+    必須用獨立欄位分開，不能只寫在文案裡。
+    """
+    _pipeline_with_clarification(monkeypatch)
+
+    data = client.post("/api/v1/diagnose", json=APK_PAYLOAD).json()
+
+    assert data["safety"]["assessment_completeness"] == "insufficient"
+
+
+def test_completeness_does_not_touch_risk_level(app):
+    """新欄位與 risk_level 正交，不可改動既有四值。"""
+    from safety_observability import COMPLETE, INSUFFICIENT, assessment_completeness
+
+    engaged = {"indeterminate_rules": [
+        {"code": "X", "risk_level": "emergency", "engaged": True},
+    ]}
+    assert assessment_completeness(engaged) == INSUFFICIENT
+
+    not_engaged = {"indeterminate_rules": [
+        {"code": "X", "risk_level": "emergency", "engaged": False},
+    ]}
+    assert assessment_completeness(not_engaged) == COMPLETE
+
+
+def test_observation_failure_never_breaks_the_consultation(client, member, diagnosis_setup, store, monkeypatch):
+    """觀測是旁路，壞掉不可以影響問診。"""
+    from routes import diagnose
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("觀測炸了")
+
+    monkeypatch.setattr(diagnose, "observe_turn", boom)
+
+    response = client.post("/api/v1/diagnose", json=APK_PAYLOAD)
+
+    assert response.status_code == 200, response.text

@@ -9,6 +9,11 @@ from symptom_flag_extractor import (
     extract_symptom_flags,
 )
 
+from safety_observability import (
+    INSUFFICIENT,
+    assessment_completeness,
+)
+
 from safety_types import (
     STATE_ABSENT,
     STATE_PRESENT,
@@ -314,6 +319,11 @@ def run_safety_pipeline(
             "risk_level":
                 risk_level,
 
+            "assessment_completeness":
+                assessment_completeness(
+                    assessment
+                ),
+
             "risk_label":
                 RISK_LABELS.get(
                     risk_level,
@@ -482,6 +492,10 @@ def run_safety_pipeline(
 
             "risk_level":
                 "unknown",
+
+            # 技術失敗時評估當然是不完整的
+            "assessment_completeness":
+                INSUFFICIENT,
 
             "risk_label":
                 RISK_LABELS[

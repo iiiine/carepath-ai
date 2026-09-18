@@ -71,6 +71,11 @@ from safety_engine import SAFETY_ENGINE_VERSION
 
 from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
 
+from safety_observability import (
+    format_observation,
+    observe_turn,
+)
+
 from safety_followup import (
     PREGNANCY_SPECIFIC_FLAGS,
     build_followup_message,
@@ -770,6 +775,38 @@ def diagnose_symptom(
         asked_before,
         biological_sex=biological_sex,
     )
+
+
+    # --------------------------------------------------------
+    # 觀測（批次 C 步驟 4）
+    #
+    # 只寫後端 log，不進 API 回應、不影響任何行為。
+    # 用來回答「追問多常觸發、使用者答不答」這些現在還不知道的事，
+    # 也是驗證每輪上限與發問優先序是否合理的依據。
+    # --------------------------------------------------------
+
+    try:
+
+        print(
+            format_observation(
+                observe_turn(
+                    prior_state,
+                    safety_result.get(
+                        "next_state"
+                    ),
+                    safety_result,
+                    clarifications,
+                )
+            )
+        )
+
+    except Exception as observe_err:
+
+        # 觀測壞掉不可以影響問診
+        log_failure(
+            "diagnose.observe",
+            observe_err,
+        )
 
 
     # 把本輪問出去的項目記進狀態，避免下一輪重複問

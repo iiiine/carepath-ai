@@ -171,6 +171,14 @@ class SafetyAssessmentResponse(BaseModel):
     # standard / urgent / emergency / unknown
     risk_level: str
 
+    # complete / insufficient
+    #
+    # 與 risk_level 正交：「資訊不足」與「已確認低風險」的 risk_level
+    # 都可能是 standard，但意義完全不同，必須分開表示。
+    #
+    # 已上架的 APK 讀不到這個欄位，那邊靠追問文案傳達同一件事。
+    assessment_completeness: str = "complete"
+
     # 一般 / 儘快就醫 / 緊急 / 無法完成安全評估
     risk_label: str
 
