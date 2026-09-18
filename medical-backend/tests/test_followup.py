@@ -130,3 +130,70 @@ def test_message_makes_no_diagnostic_claim():
 
 def test_empty_clarifications_produce_no_message():
     assert build_followup_message([]) == ""
+
+
+# ============================================================
+# 2026-09-18 臨床審閱決定
+# ============================================================
+
+def test_chest_pain_does_not_spend_both_slots_on_breathing():
+    """
+    「呼吸急促」與「喘到說不完一句話」基本上是同一件事的兩個程度。
+    兩題都問等於浪費名額，鑑別力更高的冷汗反而問不到。
+    """
+    asked = flags_for({"chest_pain": P})
+
+    assert "cold_sweat" in asked
+    assert not {"shortness_of_breath", "severe_shortness_of_breath"} <= set(asked)
+
+
+def test_head_injury_asks_about_anticoagulants_first():
+    """病人會主動說自己昏過去，不會主動說在吃抗凝血劑。"""
+    asked = flags_for({"head_injury": P})
+
+    assert asked[0] == "taking_anticoagulants"
+
+
+def test_male_is_not_asked_about_pregnancy():
+    from safety_engine import evaluate_red_flags
+    from safety_followup import PREGNANCY_SPECIFIC_FLAGS, pending_clarifications
+
+    for complaint in ("severe_abdominal_pain", "fainting"):
+        asked = [
+            item["flag"]
+            for item in pending_clarifications(
+                evaluate_red_flags({complaint: P}), biological_sex="男",
+            )
+        ]
+        assert not set(asked) & set(PREGNANCY_SPECIFIC_FLAGS), asked
+
+
+@pytest.mark.parametrize("sex", [None, "女", "其他", "", "unknown-value"])
+def test_anything_other_than_male_still_gets_asked(sex):
+    """保守預設在「問」那一側：只有明確為男才跳過。"""
+    from safety_engine import evaluate_red_flags
+    from safety_followup import PREGNANCY_SPECIFIC_FLAGS, pending_clarifications
+
+    asked = [
+        item["flag"]
+        for item in pending_clarifications(
+            evaluate_red_flags({"severe_abdominal_pain": P}), biological_sex=sex,
+        )
+    ]
+
+    assert set(asked) & set(PREGNANCY_SPECIFIC_FLAGS), (sex, asked)
+
+
+def test_suppression_does_not_affect_non_pregnancy_questions():
+    asked_male = flags_for({"chest_pain": P})
+    from safety_engine import evaluate_red_flags
+    from safety_followup import pending_clarifications
+
+    asked_with_sex = [
+        item["flag"]
+        for item in pending_clarifications(
+            evaluate_red_flags({"chest_pain": P}), biological_sex="男",
+        )
+    ]
+
+    assert asked_male == asked_with_sex

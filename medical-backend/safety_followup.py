@@ -9,7 +9,7 @@
    措辭要能用是／否回答，不做任何診斷暗示。
 """
 
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 
 SAFETY_FOLLOWUP_VERSION = "2026.09.1"
@@ -27,6 +27,79 @@ SAFETY_FOLLOWUP_VERSION = "2026.09.1"
 # ============================================================
 
 MAX_QUESTIONS_PER_TURN = 2
+
+
+# ============================================================
+# 發問優先序（2026-09-18 臨床審閱決定）
+#
+# 數字小的先問。同規則內若不排序，順序會落在規則定義順序上，
+# 而每輪只有兩個名額，實測會出現兩個問題：
+#
+#   1. 胸痛會連問「呼吸急促」與「喘到說不完一句話」——
+#      後者基本上是前者的子集，兩個名額都花在喘，
+#      鑑別力更高的冷汗與昏厥反而沒問到。
+#
+#   2. 頭部撞擊會先問昏迷與意識狀態，問不到抗凝血劑。
+#      病人會主動說自己昏過去，不會主動說在吃阿斯匹靈。
+#
+# 原則：病人越不會主動提、對判斷影響越大的，越先問。
+# ============================================================
+
+FLAG_PRIORITY: Dict[str, int] = {
+
+    # 少被主動提及，且對判斷影響大
+    "cold_sweat": 10,
+    "taking_anticoagulants": 10,
+    "pregnant": 10,
+
+    "stiff_neck": 15,
+
+    "severe_shortness_of_breath": 20,
+    "loss_of_consciousness": 20,
+    "heavy_vaginal_bleeding": 20,
+    "chest_pain": 20,
+    "head_injury": 20,
+    "fever": 20,
+
+    "fainting": 30,
+    "severe_altered_consciousness": 30,
+    "vaginal_bleeding": 30,
+
+    # 與上面某題高度重疊，或病人多半已經講過
+    "shortness_of_breath": 40,
+    "severe_abdominal_pain": 40,
+}
+
+
+# 沒有排進去的旗標排在最後
+DEFAULT_PRIORITY = 99
+
+
+# ============================================================
+# 懷孕相關問題的抑制
+#
+# 這三題只在生理性別明確為「男」時跳過。
+#
+# user_profiles 的欄位問的就是「生理性別」（網頁端下拉為 男／女／其他），
+# 正是決定懷孕相關性的屬性。保守預設在「問」那一側：
+# 女、其他、沒填、訪客、行動端自由輸入的怪值，一律照問。
+#
+# 這不只是體驗問題 —— 每輪只有兩個名額，
+# 男性使用者說「肚子很痛」時兩題都花在懷孕上，
+# 等於安全層對他實質上什麼都沒問。
+#
+# 殘餘風險：生理性別填「男」但仍可能懷孕的使用者會被跳過。
+# 該欄位問的是生理性別，且這類使用者多半會自行說明。
+# ============================================================
+
+PREGNANCY_SPECIFIC_FLAGS = (
+    "pregnant",
+    "vaginal_bleeding",
+    "heavy_vaginal_bleeding",
+)
+
+
+BIOLOGICAL_SEX_WITHOUT_PREGNANCY = "男"
 
 
 # ============================================================
@@ -96,11 +169,15 @@ def pending_clarifications(
     assessment: Mapping[str, Any] | None,
     asked_flags: Iterable[str] | None = None,
     limit: int = MAX_QUESTIONS_PER_TURN,
+    biological_sex: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """
     決定這一輪要追問哪些旗標。
 
     回傳 [{"flag", "question", "for_rule"}]，沒有要問的就是空清單。
+
+    biological_sex 明確為「男」時跳過懷孕相關問題；
+    其餘一切情況（含 None）照問。
     """
 
     already = set(
@@ -136,11 +213,28 @@ def pending_clarifications(
     )
 
 
+    def by_priority(flag: str) -> int:
+        return FLAG_PRIORITY.get(
+            flag,
+            DEFAULT_PRIORITY,
+        )
+
+
     for rule in ordered:
 
-        for flag in (rule.get("swing_set") or []):
+        for flag in sorted(
+            rule.get("swing_set") or [],
+            key=by_priority,
+        ):
 
             if flag in already or flag in seen:
+                continue
+
+
+            if (
+                flag in PREGNANCY_SPECIFIC_FLAGS
+                and biological_sex == BIOLOGICAL_SEX_WITHOUT_PREGNANCY
+            ):
                 continue
 
 

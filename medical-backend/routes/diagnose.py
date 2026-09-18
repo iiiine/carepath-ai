@@ -6,7 +6,7 @@ import re
 
 from datetime import datetime
 from functools import lru_cache
-from typing import Union
+from typing import Optional, Union
 
 from api_errors import log_failure
 
@@ -72,6 +72,7 @@ from safety_engine import SAFETY_ENGINE_VERSION
 from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
 
 from safety_followup import (
+    PREGNANCY_SPECIFIC_FLAGS,
     build_followup_message,
     pending_clarifications,
 )
@@ -371,6 +372,73 @@ SUPPORT_FLAG_PREFIXES = (
 )
 
 
+def fetch_biological_sex(
+    user_id: int,
+) -> Optional[str]:
+    """
+    取得生理性別，供懷孕相關追問的抑制使用。
+
+    刻意只查這一個欄位，也刻意在需要時才呼叫 ——
+    每條 Neon 連線約 1.45 秒，不值得為少數情況讓每一輪都多付。
+
+    查不到就回 None，代表「不確定」，追問會照問（保守方向）。
+    """
+
+    conn = get_db_connection()
+
+
+    if not conn:
+        return None
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                SELECT gender
+                FROM user_profiles
+                WHERE user_id = %s;
+                """,
+                (
+                    user_id,
+                ),
+            )
+
+
+            row = cur.fetchone()
+
+
+        return (
+            row[0]
+            if row
+            else None
+        )
+
+
+    except Exception as exc:
+
+        log_failure(
+            "diagnose.biological_sex",
+            exc,
+        )
+
+        return None
+
+
+    finally:
+
+        try:
+            conn.close()
+
+        except Exception as close_err:
+            log_failure(
+                "diagnose.biological_sex_close",
+                close_err,
+            )
+
+
 def build_safety_model(
     safety_result: dict,
 ) -> SafetyAssessmentResponse:
@@ -668,9 +736,39 @@ def diagnose_symptom(
     )
 
 
+    # 只有在懷孕相關問題真的進入候選時才查生理性別，
+    # 避免每一輪都多付一條資料庫連線。
+    may_ask_pregnancy = any(
+        flag in PREGNANCY_SPECIFIC_FLAGS
+        for rule in (
+            safety_result.get(
+                "indeterminate_rules"
+            )
+            or []
+        )
+        if rule.get("engaged")
+        for flag in (
+            rule.get("swing_set")
+            or []
+        )
+    )
+
+
+    biological_sex = (
+        fetch_biological_sex(
+            current_user[
+                "id"
+            ]
+        )
+        if may_ask_pregnancy and not is_guest
+        else None
+    )
+
+
     clarifications = pending_clarifications(
         safety_result,
         asked_before,
+        biological_sex=biological_sex,
     )
 
 
