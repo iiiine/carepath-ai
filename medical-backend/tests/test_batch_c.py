@@ -389,3 +389,52 @@ def test_observation_failure_never_breaks_the_consultation(client, member, diagn
     response = client.post("/api/v1/diagnose", json=APK_PAYLOAD)
 
     assert response.status_code == 200, response.text
+
+
+def test_completed_consultation_can_report_insufficient(client, member, diagnosis_setup, store, monkeypatch):
+    """
+    問診「完成」但評估未完成，是真的會發生的狀態 ——
+    該問的都問過了卻仍未得到答案，追問不會無限重複。
+
+    這是網頁端那段「安全評估尚未完成」提示的前提；
+    若永遠不可能發生，那段 UI 就是死碼。
+    """
+    from routes import diagnose
+    from safety_observability import assessment_completeness
+    from safety_state import advance
+
+    def fake(symptom_text, history=None, prior_state=None, prior_state_unavailable=False):
+        result = {
+            "assessment_status": "success", "risk_level": "standard",
+            "risk_label": "一般", "should_stop_normal_flow": False,
+            "requires_human_review": False, "has_red_flags": False,
+            "safety_action": "", "red_flags": [],
+            "engine_version": "test", "extractor_version": "test",
+            # 規則仍被帶動且未定案，但 swing_set 的項目都問過了
+            "indeterminate_rules": [
+                {"code": "HIGH_RISK_HEAD_INJURY", "risk_level": "emergency",
+                 "engaged": True, "swing_set": ["taking_anticoagulants"]},
+            ],
+        }
+        result["assessment_completeness"] = assessment_completeness(result)
+        result["next_state"] = advance(prior_state, {}, result)
+        return result
+
+    monkeypatch.setattr(diagnose, "run_safety_pipeline", fake)
+    store["box"]["state"] = {
+        "flag_states": {}, "established_rules": [],
+        "asked_flags": ["taking_anticoagulants"],   # 已經問過，不再問
+        "resolved_recently": [], "turn_count": 1,
+    }
+    store["box"]["status"] = LOAD_OK
+
+    data = client.post(
+        "/api/v1/diagnose",
+        json={**APK_PAYLOAD, "conversation_id": "77777777-7777-4777-8777-777777777777"},
+    ).json()
+
+    # 問診完成，但安全評估並未完成
+    assert data["is_complete"] is True
+    assert data["status"] == "completed"
+    assert data["safety"]["risk_level"] == "standard"
+    assert data["safety"]["assessment_completeness"] == "insufficient"

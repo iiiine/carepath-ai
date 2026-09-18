@@ -530,6 +530,12 @@ function SymptomChecker({
   // Capture the position used by this result; later location changes must not relabel it.
   const [resultLocation, setResultLocation] = useState(null);
 
+  // 跨輪安全狀態識別碼，由後端發放。
+  //
+  // 同一段對話的後續請求要帶回去，先前成立的警訊才不會因為
+  // 本輪沒再提到而消失。不帶回只會退回單輪評估，不會出錯。
+  const [conversationId, setConversationId] = useState(null);
+
 
 
   // ==========================================
@@ -868,6 +874,9 @@ function SymptomChecker({
               longitude,
             user_city: selectedCity || null,
 
+            conversation_id:
+              conversationId,
+
             history:
               history
           }
@@ -876,6 +885,15 @@ function SymptomChecker({
 
       const data =
         response.data;
+
+
+      // 三種回應（asking / completed / safety_alert）都會帶回來；
+      // 存不進去時後端會給 null，那時維持單輪評估即可。
+      if (data.conversation_id) {
+        setConversationId(
+          data.conversation_id
+        );
+      }
 
 
       console.log(
@@ -1213,6 +1231,12 @@ function SymptomChecker({
     session
   ) => {
 
+    // 檢視歷史紀錄不屬於當前對話，同樣要切斷跨輪狀態。
+    setConversationId(
+      null
+    );
+
+
     // 問診區在清單模式下是隱藏的；選了紀錄就是要看那一次的結果，
     // 不收掉清單的話內容雖然載入了，畫面卻停在原地，看起來像沒反應。
     onCloseHistory?.();
@@ -1497,6 +1521,14 @@ function SymptomChecker({
   // 新問診
   // ==========================================
   const handleNewChat = () => {
+
+    // 新問診必須切斷跨輪安全狀態。
+    // 不重置的話，新對話會沿用上一段已經成立的警訊，
+    // 使用者換了主訴卻還被先前的風險擋著。
+    setConversationId(
+      null
+    );
+
 
     // 與 handleSelectSession 同理：清單模式下問診區是 display:none。
     // 不收掉清單的話，底下狀態雖然全部重設了，畫面仍停在清單上，
@@ -3906,6 +3938,67 @@ function SymptomChecker({
                   {diagnosisResult ? (
 
                     <div>
+
+                      {/* ====================== */}
+                      {/* 安全評估未完成 */}
+                      {/*                        */}
+                      {/* 「資訊不足」與「已確認低風險」的 risk_level */}
+                      {/* 都可能是 standard，意義卻完全不同 —— */}
+                      {/* 這裡必須讓使用者看得出差別。 */}
+                      {/*                        */}
+                      {/* 會走到這裡是因為該問的都問過了但仍未得到答案， */}
+                      {/* 追問不會無限重複，改以此標示。 */}
+                      {/* ====================== */}
+
+                      {diagnosisResult?.safety
+                        ?.assessment_completeness ===
+                        'insufficient' && (
+
+                        <div
+                          style={{
+                            padding:
+                              '10px 12px',
+
+                            backgroundColor:
+                              '#fbf1dc',
+
+                            border:
+                              '1px solid #e0b25f',
+
+                            borderRadius:
+                              '8px',
+
+                            marginBottom:
+                              '10px',
+
+                            fontSize:
+                              '0.85rem',
+
+                            lineHeight:
+                              1.7,
+
+                            color:
+                              '#7a5208'
+                          }}
+                        >
+
+                          <strong>
+                            安全評估尚未完成
+                          </strong>
+
+                          <div
+                            style={{
+                              marginTop:
+                                '4px'
+                            }}
+                          >
+                            有部分關鍵資訊沒有取得，
+                            因此這次結果<strong>不代表已確認為低風險</strong>。
+                            若症狀持續或加重，請直接就醫評估。
+                          </div>
+
+                        </div>
+                      )}
 
                       {/* ====================== */}
                       {/* 科別與可能原因 */}
