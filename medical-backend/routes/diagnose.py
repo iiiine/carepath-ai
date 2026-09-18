@@ -322,6 +322,40 @@ def specialty_score(
 # Safety Assessment → Pydantic Model
 # ============================================================
 
+# ============================================================
+# 已上架 APK 的求助資訊管道
+#
+# 那個版本的急症畫面只渲染兩個東西：
+#
+#     safetyAlert.safety?.safety_action || safetyAlert.message
+#     safetyAlert.safety?.red_flags[].title / .reason
+#
+# 它不會呼叫 /api/v1/emergency-resources，所以急症畫面上
+# 沒有任何院所或求助管道。APK 已繳交且無法更新，
+# 因此把最精簡的求助資訊接進 safety_action —— 那是唯一到得了的地方。
+#
+# 網頁端另有獨立的資源區塊，會看到一行重複；
+# 對凍結的用戶端來說，重複好過沒有。
+#
+# ⚠️ 只加在「會阻斷一般流程」的情況（emergency 或評估失敗），
+#    那正是 APK 顯示急症畫面的時機。一般完成的問診不加。
+# ============================================================
+
+EMERGENCY_CONTACT_LINE = (
+    "\n\n立即撥打 119 或前往最近的急診；"
+    "無法自行前往時請請他人協助。"
+)
+
+EMOTIONAL_SUPPORT_LINE = (
+    "\n心理支持可撥打 1925 安心專線（24 小時免付費）。"
+)
+
+SUPPORT_FLAG_PREFIXES = (
+    "SELF_HARM",
+    "HARM_TO_OTHERS",
+)
+
+
 def build_safety_model(
     safety_result: dict,
 ) -> SafetyAssessmentResponse:
@@ -332,12 +366,45 @@ def build_safety_model(
     Pipeline 裡的額外 audit 欄位，
     若目前 API Model 尚未使用，
     Pydantic 會忽略。
+
+    safety_action 會在此補上求助資訊（見上方說明）。
+    刻意不改 safety_result 本身 —— 那份會原樣存進 safety_snapshot，
+    稽核紀錄不該混入面向使用者的文案。
     """
 
-    return (
+    model = (
         SafetyAssessmentResponse.model_validate(
             safety_result
         )
+    )
+
+
+    if not model.should_stop_normal_flow:
+        return model
+
+
+    extra = EMERGENCY_CONTACT_LINE
+
+
+    if any(
+        str(
+            flag.code
+            or ""
+        ).startswith(
+            SUPPORT_FLAG_PREFIXES
+        )
+        for flag in model.red_flags
+    ):
+        extra += EMOTIONAL_SUPPORT_LINE
+
+
+    return model.model_copy(
+        update={
+            "safety_action": (
+                model.safety_action
+                + extra
+            )
+        }
     )
 
 
