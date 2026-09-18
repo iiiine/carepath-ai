@@ -13,6 +13,28 @@ CITIES = (
 )
 
 
+# ============================================================
+# 已上架 APK 的假定位哨兵
+#
+# 那個版本在定位被拒絕、逾時或不支援時，不會送 null，
+# 而是送出一組寫死的座標：
+#
+#     mobile_app/src/screens/ConsultScreen.js:21
+#     const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
+#
+# 後端若照單全收，會把它當成真實定位，回傳編造的距離並標上
+# distance_reference = "provided_coordinates"，等於宣稱那是實際取得的位置。
+#
+# 那個 APK 已經繳交且無法再更新，因此只能由後端認出這組值並當成「未定位」。
+# 真實 GPS 不可能剛好落在整數 23.0 / 120.2，誤判風險可忽略。
+#
+# ⚠️ 這是對特定用戶端魔術數字的耦合，很醜。
+#    等行動端重新打包、改送 null 之後，這段就該移除。
+# ============================================================
+
+LEGACY_FALLBACK_COORDINATES = (23.0, 120.2)
+
+
 class UserLocation(BaseModel):
     user_latitude: Optional[float] = Field(None, ge=-90, le=90, allow_inf_nan=False)
     user_longitude: Optional[float] = Field(None, ge=-180, le=180, allow_inf_nan=False)
@@ -30,6 +52,11 @@ class UserLocation(BaseModel):
 
     @model_validator(mode='after')
     def complete_location(self):
+        # 先處理哨兵值：那不是定位，是「定位失敗」的代碼
+        if (self.user_latitude, self.user_longitude) == LEGACY_FALLBACK_COORDINATES:
+            self.user_latitude = None
+            self.user_longitude = None
+
         if (self.user_latitude is None) != (self.user_longitude is None):
             raise ValueError('緯度與經度必須一起提供')
         if self.user_city and self.user_latitude is not None:
