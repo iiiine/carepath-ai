@@ -83,6 +83,8 @@ from safety_followup import (
 )
 
 from safety_state_store import (
+    LOAD_NEW,
+    LOAD_OK,
     LOAD_UNAVAILABLE,
     load_state,
     save_state,
@@ -676,7 +678,7 @@ def diagnose_symptom(
     if is_guest:
 
         prior_state = None
-        prior_state_status = "new"
+        prior_state_status = LOAD_NEW
 
     else:
 
@@ -843,8 +845,27 @@ def diagnose_symptom(
         "next_state"
     ):
 
+        # 只有真的讀到既有狀態時才續用同一個 ID。
+        #
+        # RESTART（過期／查無／不屬於本人）代表這一輪是從空狀態重新評估，
+        # 續用舊 ID 會把這份新狀態 upsert 到那一列上：
+        #
+        #   過期 —— expires_at 只有 DEFAULT，UPDATE 不會更新它，
+        #           那一列會永遠是過期的，每一輪都重新開始，
+        #           跨輪保護對這個 ID 從此靜默失效。
+        #
+        #   別人的 —— 見 save_state 的 user 防護。
+        #
+        # 發新 ID 讓兩種情況都回到一條乾淨的新對話。
+        reusable_conversation_id = (
+            payload.conversation_id
+            if prior_state_status == LOAD_OK
+            else None
+        )
+
+
         conversation_id = save_state(
-            payload.conversation_id,
+            reusable_conversation_id,
             current_user[
                 "id"
             ],

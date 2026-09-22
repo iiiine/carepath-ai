@@ -229,6 +229,19 @@ def save_state(
                     engine_version    = EXCLUDED.engine_version,
                     extractor_version = EXCLUDED.extractor_version,
                     updated_at        = CURRENT_TIMESTAMP
+
+                -- 只有原持有人能更新這一列。
+                --
+                -- load_state 有比對 user_id，這裡沒有的話就不對稱：
+                -- 帶著別人的 conversation_id 進來時（同一個分頁換帳號就會發生，
+                -- 用戶端狀態未必跟著身分重置），upsert 會蓋掉對方的列，
+                -- 而 user_id 不在 SET 裡所以仍記在對方名下 ——
+                -- 對方已成立的警訊被抹掉，自己又永遠讀不回來。
+                --
+                -- 不符時不更新任何列，RETURNING 無列，save_state 回 None，
+                -- 呼叫端就不會發出 conversation_id（與存不進去的處理相同）。
+                WHERE {TABLE}.user_id = EXCLUDED.user_id
+
                 RETURNING id;
                 """,
                 (
