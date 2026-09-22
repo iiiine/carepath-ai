@@ -19,6 +19,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
 
@@ -36,6 +37,11 @@ from models import (
     UserLogin,
     UserPublic,
     TokenResponse,
+)
+
+from rate_limit import (
+    client_key,
+    guest_login_limiter,
 )
 
 from services import (
@@ -1157,7 +1163,9 @@ def get_me(
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def guest_login():
+def guest_login(
+    request: Request,
+):
     """
     建立匿名訪客帳號。
 
@@ -1167,6 +1175,52 @@ def guest_login():
     - 有 JWT
     - 無法知道隨機產生的密碼
     """
+
+    # ========================================================
+    # 0. 速率限制
+    #
+    # 這支是完全匿名的寫入端點：每呼叫一次就往 users 塞一列，
+    # 而拿到的 token 可以直接打 /diagnose 消耗 Gemini 額度。
+    # 沒有任何限制的話，一個迴圈就能同時灌爆資料表與 API 額度。
+    #
+    # 限制是行程內計數（見 rate_limit.py 對多實例的但書），
+    # 擋的是反覆呼叫，不是分散式攻擊。
+    # ========================================================
+
+    allowed, retry_after = (
+        guest_login_limiter.check(
+            client_key(
+                request
+            )
+        )
+    )
+
+
+    if not allowed:
+
+        print(
+            "⚠️ [RateLimit] guest-login 超出限制，"
+            f"來源 {client_key(request)}，"
+            f"建議 {int(retry_after)} 秒後重試"
+        )
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_429_TOO_MANY_REQUESTS
+            ),
+            detail=(
+                "訪客身分建立過於頻繁，請稍後再試。"
+            ),
+            headers={
+                "Retry-After": str(
+                    max(
+                        int(retry_after),
+                        1,
+                    )
+                ),
+            },
+        )
+
 
     # ========================================================
     # 1. 建立匿名識別資料
