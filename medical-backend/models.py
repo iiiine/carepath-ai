@@ -4,12 +4,41 @@ from typing import List, Literal, Optional, Union
 
 
 # ============================================================
+# 輸入長度上限
+#
+# history 由用戶端送回、後端全盤信任，而且會整段串進 prompt。
+# 沒有上限等於讓任何人決定我們要送多少 token 給 Gemini。
+#
+# 數字刻意訂得寬，因為**已上架的 APK 改不了，絕不可以因此收到 422**：
+#
+#   MAX_SYMPTOM_CHARS   一次主訴 2000 字。高齡使用者實際輸入遠少於此。
+#   MAX_MESSAGE_CHARS   單則訊息 5000 字。後端自己產生的訊息最長是完成
+#                       訊息（diagnose.py 1376-1409 那幾句），數百字而已；
+#                       院所清單走 nearby_medical_resources，不在這裡。
+#   MAX_HISTORY_MESSAGES  100 則。一次問診的追問輪次遠低於這個數。
+#
+# 也就是說，正常使用碰不到這些上限；碰到的是刻意灌量的請求。
+# ============================================================
+
+MAX_SYMPTOM_CHARS = 2000
+MAX_MESSAGE_CHARS = 5000
+MAX_HISTORY_MESSAGES = 100
+
+
+# ============================================================
 # 1. 歷史對話訊息結構
 # ============================================================
 
 class ChatMessage(BaseModel):
-    role: str      # "user" 或 "model"
-    content: str   # 對話內容
+    # 收斂成列舉。history 是用戶端送回來的，role 若是自由字串，
+    # 就可以偽造成「AI 說過的話」去影響後續判斷。
+    # 兩個用戶端實際只會送這兩個值（ConsultScreen.js、SymptomChecker.jsx），
+    # 後端自己組 history 時也只用這兩個，所以收斂不會影響相容性。
+    role: Literal["user", "model"]
+
+    content: str = Field(
+        max_length=MAX_MESSAGE_CHARS,
+    )
 
 
 # ============================================================
@@ -24,10 +53,15 @@ class SymptomRequest(UserLocation):
         description="不舒服程度 (1-5分)"
     )
 
-    symptom_text: str
+    # 刻意不設 min_length：空字串目前是會走完流程的，
+    # 在這裡擋掉等於改變既有行為，不屬於本次範圍。
+    symptom_text: str = Field(
+        max_length=MAX_SYMPTOM_CHARS,
+    )
 
     history: List[ChatMessage] = Field(
-        default_factory=list
+        default_factory=list,
+        max_length=MAX_HISTORY_MESSAGES,
     )
 
 
