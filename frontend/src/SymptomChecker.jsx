@@ -534,7 +534,18 @@ function SymptomChecker({
   //
   // 同一段對話的後續請求要帶回去，先前成立的警訊才不會因為
   // 本輪沒再提到而消失。不帶回只會退回單輪評估，不會出錯。
-  const [conversationId, setConversationId] = useState(null);
+  //
+  // 連同所屬帳號一起存，理由與 recurringSymptoms 相同：
+  // 登出與登入都不會重建這個元件（App.jsx 只在「新問診」與
+  // 「最近問診」時換 key），所以 ID 會跟著分頁跨帳號留下來。
+  // 靠推導條件擋掉，不在 effect 裡同步清空。
+  //
+  // 送出別人的 ID 不會讀到對方的狀態（後端 load 有比對 user_id），
+  // 但會讓自己每一輪都被判定為新對話，跨輪保護靜默失效。
+  const [conversationId, setConversationId] = useState({
+    userId: null,
+    id: null
+  });
 
 
 
@@ -875,7 +886,9 @@ function SymptomChecker({
             user_city: selectedCity || null,
 
             conversation_id:
-              conversationId,
+              conversationId.userId === user?.id
+                ? conversationId.id
+                : null,
 
             history:
               history
@@ -890,9 +903,10 @@ function SymptomChecker({
       // 三種回應（asking / completed / safety_alert）都會帶回來；
       // 存不進去時後端會給 null，那時維持單輪評估即可。
       if (data.conversation_id) {
-        setConversationId(
-          data.conversation_id
-        );
+        setConversationId({
+          userId: user?.id ?? null,
+          id: data.conversation_id
+        });
       }
 
 
@@ -1232,9 +1246,10 @@ function SymptomChecker({
   ) => {
 
     // 檢視歷史紀錄不屬於當前對話，同樣要切斷跨輪狀態。
-    setConversationId(
-      null
-    );
+    setConversationId({
+      userId: null,
+      id: null
+    });
 
 
     // 問診區在清單模式下是隱藏的；選了紀錄就是要看那一次的結果，
@@ -1525,9 +1540,10 @@ function SymptomChecker({
     // 新問診必須切斷跨輪安全狀態。
     // 不重置的話，新對話會沿用上一段已經成立的警訊，
     // 使用者換了主訴卻還被先前的風險擋著。
-    setConversationId(
-      null
-    );
+    setConversationId({
+      userId: null,
+      id: null
+    });
 
 
     // 與 handleSelectSession 同理：清單模式下問診區是 display:none。
