@@ -34,7 +34,7 @@ from safety_engine import (
 # Pipeline Version
 # ============================================================
 
-SAFETY_PIPELINE_VERSION = "2026.09.2"
+SAFETY_PIPELINE_VERSION = "2026.09.3"
 
 
 # ============================================================
@@ -324,6 +324,15 @@ def run_safety_pipeline(
                     assessment
                 ),
 
+            # 追問路由、懷孕抑制與觀測紀錄都從這裡讀。
+            # 這裡是逐欄挑選，漏帶的話那三者會靜默拿到空清單 ——
+            # 追問永遠不觸發，而且不會有任何錯誤。
+            "indeterminate_rules":
+                assessment.get(
+                    "indeterminate_rules",
+                    [],
+                ),
+
             "risk_label":
                 RISK_LABELS.get(
                     risk_level,
@@ -496,6 +505,9 @@ def run_safety_pipeline(
             # 技術失敗時評估當然是不完整的
             "assessment_completeness":
                 INSUFFICIENT,
+
+            "indeterminate_rules":
+                [],
 
             "risk_label":
                 RISK_LABELS[
