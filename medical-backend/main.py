@@ -5,6 +5,7 @@
 # uvicorn 必須等這個模組 import 完才綁 port，所以底下每一段耗時
 # 都會實實在在加在第一個請求上。計時器要放在所有 import 之前。
 
+import os
 import threading
 import time
 
@@ -102,12 +103,86 @@ install_error_handlers(app)
 
 # ============================================================
 # CORS
+#
+# 原本是 allow_origins=["*"] 配 allow_credentials=True。
+# 那個組合在瀏覽器的 CORS 規範裡不成立 —— wildcard 不能配 credentials，
+# 瀏覽器會拒收 Access-Control-Allow-Origin: *，
+# 所以 credentials 實際上是失效的，同時 API 對任何來源全開。
+#
+# 改成白名單，由 CORS_ALLOWED_ORIGINS 以逗號分隔設定。
+# 未設定時只放行本機開發用的來源（Vite 鎖死 5174，見前端說明）。
+#
+# ⚠️ 這不影響已上架的 APK。CORS 是瀏覽器強制的，
+#    原生 App 的請求根本不帶 Origin 標頭，中介層不會擋。
+#    受影響的只有瀏覽器端：網頁版與 Expo Web。
 # ============================================================
+
+DEFAULT_ALLOWED_ORIGINS = (
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+)
+
+
+def _parse_allowed_origins() -> list:
+    """把 CORS_ALLOWED_ORIGINS 解析成來源清單，未設定時回開發預設值。"""
+
+    raw = os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "",
+    ).strip()
+
+
+    if not raw:
+        return list(
+            DEFAULT_ALLOWED_ORIGINS
+        )
+
+
+    return [
+        origin.strip()
+        for origin in raw.split(",")
+        if origin.strip()
+    ]
+
+
+def _allow_credentials(
+    origins: list,
+) -> bool:
+    """
+    這組來源是否能搭配 credentials。
+
+    wildcard 配 credentials 在 CORS 規範裡是無效組合，瀏覽器會拒收
+    Access-Control-Allow-Origin: *。真的有人設了 "*" 就把 credentials 關掉，
+    讓設定至少自洽 —— 靜默維持 True 會讓人以為 cookie 還能跨站帶，那是錯的。
+    """
+
+    return "*" not in origins
+
+
+allowed_origins = _parse_allowed_origins()
+
+allow_credentials = _allow_credentials(
+    allowed_origins
+)
+
+
+if not allow_credentials:
+    print(
+        "⚠️ [CORS] CORS_ALLOWED_ORIGINS 含 \"*\"，"
+        "已關閉 allow_credentials（wildcard 與 credentials 不能並存）。"
+        "正式環境請改成明確的來源白名單。"
+    )
+
+else:
+    print(
+        f"🔒 [CORS] 放行來源：{', '.join(allowed_origins)}"
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

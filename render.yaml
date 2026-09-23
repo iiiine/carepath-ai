@@ -41,6 +41,12 @@ services:
       - key: PYTHONUNBUFFERED
         value: "1"
 
+      # 瀏覽器端的 CORS 白名單，逗號分隔。
+      # 不是機密，但值會隨前端部署位置變動，所以留給 Render 上手動填。
+      # 未設定時後端只放行本機開發來源，正式站的網頁端會被擋掉。
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
       # 以下四個是機密，一律手動填，不寫進版控
       - key: DATABASE_URL
         sync: false
