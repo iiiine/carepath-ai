@@ -9,6 +9,22 @@ from symptom_flag_extractor import (
     extract_symptom_flags,
 )
 
+from safety_observability import (
+    INSUFFICIENT,
+    assessment_completeness,
+)
+
+from safety_types import (
+    STATE_ABSENT,
+    STATE_PRESENT,
+    STATE_UNKNOWN,
+)
+
+from safety_state import (
+    advance,
+    merged_for_evaluation,
+)
+
 from safety_engine import (
     evaluate_red_flags,
 )
@@ -18,7 +34,7 @@ from safety_engine import (
 # Pipeline Version
 # ============================================================
 
-SAFETY_PIPELINE_VERSION = "2026.09.1"
+SAFETY_PIPELINE_VERSION = "2026.09.2"
 
 
 # ============================================================
@@ -68,10 +84,39 @@ def _elapsed_ms(
 # Final Safety Assessment
 # ============================================================
 
+def _flags_in_state(
+    flags,
+    wanted,
+):
+    """從合併後的旗標取出指定狀態的鍵，供稽核欄位使用。"""
+
+    return sorted(
+        key
+        for key, state in (flags or {}).items()
+        if state == wanted
+    )
+
+
 def run_safety_pipeline(
     symptom_text: str,
     history: Optional[Sequence[Any]] = None,
+    prior_state: Optional[Dict[str, Any]] = None,
+    prior_state_unavailable: bool = False,
 ) -> Dict[str, Any]:
+    """
+    執行安全評估。
+
+    prior_state 是同一段對話先前累積的跨輪狀態（safety_state 的格式）。
+    帶入時，引擎收到的是「合併後」的旗標而非本輪抽取結果 ——
+    本輪沒再提到的症狀不會退回 unknown，先前成立的警訊也不會消失。
+
+    不帶 prior_state 時行為與先前完全相同（每輪獨立評估），
+    這是訪客與未帶 conversation_id 的用戶端走的路徑。
+
+    prior_state_unavailable 代表「對方帶了 conversation_id，但狀態讀不到」。
+    這種情況一律走既有的 fail-safe 分支，不可以當成新對話繼續 ——
+    先前很可能已經有成立的警訊，讀不到不等於不存在。
+    """
 
     # ========================================================
     # Performance：
@@ -99,6 +144,21 @@ def run_safety_pipeline(
 
 
     try:
+
+        # ====================================================
+        # 0. 跨輪狀態讀取失敗 → 直接走 fail-safe
+        #
+        # 刻意用 raise 交給下面的 except 統一處理，
+        # 而不是在這裡另外組一份回應 ——
+        # 失敗時的回應格式只能有一個來源。
+        # ====================================================
+
+        if prior_state_unavailable:
+
+            raise RuntimeError(
+                "跨輪安全狀態無法讀取"
+            )
+
 
         # ====================================================
         # 1. AI 結構化抽取
@@ -141,12 +201,32 @@ def run_safety_pipeline(
 
         # 引擎吃三態，不可再傳 safety_flags（bool）：
         # bool 會被收斂成 unknown，所有規則都不會命中。
+        #
+        # 也不可以直接傳 extraction["states"]：
+        # 那是「本輪」的抽取結果，沒有先前輪次的資訊，
+        # 跨輪保護會靜默失效。一律走 merged_for_evaluation。
+        merged_flags = merged_for_evaluation(
+            prior_state,
+            extraction[
+                "states"
+            ],
+        )
+
+
         assessment = (
             evaluate_red_flags(
-                extraction[
-                    "states"
-                ]
+                merged_flags
             )
+        )
+
+
+        # 推進狀態供呼叫端保存；本模組不寫資料庫。
+        next_state = advance(
+            prior_state,
+            extraction[
+                "states"
+            ],
+            assessment,
         )
 
 
@@ -239,6 +319,11 @@ def run_safety_pipeline(
             "risk_level":
                 risk_level,
 
+            "assessment_completeness":
+                assessment_completeness(
+                    assessment
+                ),
+
             "risk_label":
                 RISK_LABELS.get(
                     risk_level,
@@ -293,22 +378,27 @@ def run_safety_pipeline(
                     "engine_version"
                 ),
 
+            # 稽核欄位反映「引擎實際據以判斷的旗標」，也就是合併後的狀態。
+            # 只記本輪抽取會讓快照謊稱判斷基礎，事後無法重現當時的決定。
             "present_flags":
-                extraction.get(
-                    "present_flags",
-                    [],
+                _flags_in_state(
+                    merged_flags,
+                    STATE_PRESENT,
                 ),
 
             "absent_flags":
-                extraction.get(
-                    "absent_flags",
-                    [],
+                _flags_in_state(
+                    merged_flags,
+                    STATE_ABSENT,
                 ),
 
+            "next_state":
+                next_state,
+
             "unknown_flags":
-                extraction.get(
-                    "unknown_flags",
-                    [],
+                _flags_in_state(
+                    merged_flags,
+                    STATE_UNKNOWN,
                 ),
 
             "flag_states":
@@ -402,6 +492,10 @@ def run_safety_pipeline(
 
             "risk_level":
                 "unknown",
+
+            # 技術失敗時評估當然是不完整的
+            "assessment_completeness":
+                INSUFFICIENT,
 
             "risk_label":
                 RISK_LABELS[

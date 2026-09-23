@@ -6,7 +6,7 @@ import re
 
 from datetime import datetime
 from functools import lru_cache
-from typing import Union
+from typing import Optional, Union
 
 from api_errors import log_failure
 
@@ -66,6 +66,29 @@ from locations import valid_coordinates, in_city, distance_key
 # ============================================================
 
 from safety_pipeline import run_safety_pipeline
+
+from safety_engine import SAFETY_ENGINE_VERSION
+
+from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
+
+from safety_observability import (
+    format_observation,
+    observe_turn,
+)
+
+from safety_followup import (
+    PREGNANCY_SPECIFIC_FLAGS,
+    build_followup_message,
+    pending_clarifications,
+)
+
+from safety_state_store import (
+    LOAD_NEW,
+    LOAD_OK,
+    LOAD_UNAVAILABLE,
+    load_state,
+    save_state,
+)
 
 
 # ============================================================
@@ -356,6 +379,73 @@ SUPPORT_FLAG_PREFIXES = (
 )
 
 
+def fetch_biological_sex(
+    user_id: int,
+) -> Optional[str]:
+    """
+    取得生理性別，供懷孕相關追問的抑制使用。
+
+    刻意只查這一個欄位，也刻意在需要時才呼叫 ——
+    每條 Neon 連線約 1.45 秒，不值得為少數情況讓每一輪都多付。
+
+    查不到就回 None，代表「不確定」，追問會照問（保守方向）。
+    """
+
+    conn = get_db_connection()
+
+
+    if not conn:
+        return None
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                SELECT gender
+                FROM user_profiles
+                WHERE user_id = %s;
+                """,
+                (
+                    user_id,
+                ),
+            )
+
+
+            row = cur.fetchone()
+
+
+        return (
+            row[0]
+            if row
+            else None
+        )
+
+
+    except Exception as exc:
+
+        log_failure(
+            "diagnose.biological_sex",
+            exc,
+        )
+
+        return None
+
+
+    finally:
+
+        try:
+            conn.close()
+
+        except Exception as close_err:
+            log_failure(
+                "diagnose.biological_sex_close",
+                close_err,
+            )
+
+
 def build_safety_model(
     safety_result: dict,
 ) -> SafetyAssessmentResponse:
@@ -570,6 +660,44 @@ def diagnose_symptom(
     # 之前執行。
     # ========================================================
 
+    # --------------------------------------------------------
+    # 跨輪安全狀態
+    #
+    # 訪客不做伺服器端狀態（維持現況每輪重算），
+    # 未帶 conversation_id 的用戶端（含已上架的 APK）也一樣，
+    # 兩者都不會因此出錯。
+    # --------------------------------------------------------
+
+    is_guest = bool(
+        current_user.get(
+            "is_guest"
+        )
+    )
+
+
+    if is_guest:
+
+        prior_state = None
+        prior_state_status = LOAD_NEW
+
+    else:
+
+        prior_state, prior_state_status = (
+            load_state(
+                payload.conversation_id,
+                current_user[
+                    "id"
+                ],
+                engine_version=(
+                    SAFETY_ENGINE_VERSION
+                ),
+                extractor_version=(
+                    SYMPTOM_EXTRACTOR_VERSION
+                ),
+            )
+        )
+
+
     safety_result = (
         run_safety_pipeline(
             symptom_text=(
@@ -578,8 +706,179 @@ def diagnose_symptom(
             history=(
                 payload.history
             ),
+            prior_state=(
+                prior_state
+            ),
+            prior_state_unavailable=(
+                prior_state_status
+                == LOAD_UNAVAILABLE
+            ),
         )
     )
+
+
+    # --------------------------------------------------------
+    # 安全追問
+    #
+    # 只針對「已被主訴帶動」且為 emergency 的未定案規則發問，
+    # 每輪最多兩題、問過的不再問。詳見 safety_followup。
+    #
+    # 訪客沒有伺服器端狀態，因此不做跨輪去重。
+    #
+    # 曾經考慮從用戶端 history 比對問句文字來推導「已問過」，
+    # 但那要拿 model 訊息去對 QUESTIONS 的內容，問句一改比對就靜默失效，
+    # 這種脆弱模式不該出現在安全相關路徑上。
+    #
+    # 實務上去重會自然發生：使用者回答「沒有」之後抽取器把旗標設成
+    # absent，規則就不再是未定案，自然不會再問。只有使用者不回答時
+    # 才會重複問，屬於體驗問題，不是安全退化。
+    # --------------------------------------------------------
+
+    asked_before = (
+        prior_state
+        or {}
+    ).get(
+        "asked_flags",
+        [],
+    )
+
+
+    # 只有在懷孕相關問題真的進入候選時才查生理性別，
+    # 避免每一輪都多付一條資料庫連線。
+    may_ask_pregnancy = any(
+        flag in PREGNANCY_SPECIFIC_FLAGS
+        for rule in (
+            safety_result.get(
+                "indeterminate_rules"
+            )
+            or []
+        )
+        if rule.get("engaged")
+        for flag in (
+            rule.get("swing_set")
+            or []
+        )
+    )
+
+
+    biological_sex = (
+        fetch_biological_sex(
+            current_user[
+                "id"
+            ]
+        )
+        if may_ask_pregnancy and not is_guest
+        else None
+    )
+
+
+    clarifications = pending_clarifications(
+        safety_result,
+        asked_before,
+        biological_sex=biological_sex,
+    )
+
+
+    # --------------------------------------------------------
+    # 觀測（批次 C 步驟 4）
+    #
+    # 只寫後端 log，不進 API 回應、不影響任何行為。
+    # 用來回答「追問多常觸發、使用者答不答」這些現在還不知道的事，
+    # 也是驗證每輪上限與發問優先序是否合理的依據。
+    # --------------------------------------------------------
+
+    try:
+
+        print(
+            format_observation(
+                observe_turn(
+                    prior_state,
+                    safety_result.get(
+                        "next_state"
+                    ),
+                    safety_result,
+                    clarifications,
+                )
+            )
+        )
+
+    except Exception as observe_err:
+
+        # 觀測壞掉不可以影響問診
+        log_failure(
+            "diagnose.observe",
+            observe_err,
+        )
+
+
+    # 把本輪問出去的項目記進狀態，避免下一輪重複問
+    if clarifications and safety_result.get(
+        "next_state"
+    ):
+
+        safety_result[
+            "next_state"
+        ][
+            "asked_flags"
+        ] = sorted(
+            set(
+                asked_before
+            )
+            | {
+                item["flag"]
+                for item in clarifications
+            }
+        )
+
+
+    # --------------------------------------------------------
+    # 保存推進後的狀態
+    #
+    # 存不進去就不發 conversation_id：發了一個下輪讀不到的 ID，
+    # 會被當成新對話，先前成立的警訊就消失了。
+    # --------------------------------------------------------
+
+    conversation_id = None
+
+
+    if not is_guest and safety_result.get(
+        "next_state"
+    ):
+
+        # 只有真的讀到既有狀態時才續用同一個 ID。
+        #
+        # RESTART（過期／查無／不屬於本人）代表這一輪是從空狀態重新評估，
+        # 續用舊 ID 會把這份新狀態 upsert 到那一列上：
+        #
+        #   過期 —— expires_at 只有 DEFAULT，UPDATE 不會更新它，
+        #           那一列會永遠是過期的，每一輪都重新開始，
+        #           跨輪保護對這個 ID 從此靜默失效。
+        #
+        #   別人的 —— 見 save_state 的 user 防護。
+        #
+        # 發新 ID 讓兩種情況都回到一條乾淨的新對話。
+        reusable_conversation_id = (
+            payload.conversation_id
+            if prior_state_status == LOAD_OK
+            else None
+        )
+
+
+        conversation_id = save_state(
+            reusable_conversation_id,
+            current_user[
+                "id"
+            ],
+            safety_result[
+                "next_state"
+            ],
+            engine_version=safety_result.get(
+                "engine_version"
+            ),
+            extractor_version=safety_result.get(
+                "extractor_version"
+            ),
+        )
 
 
     safety_model = (
@@ -674,10 +973,70 @@ def diagnose_symptom(
         return SafetyAlertResponse(
             status="safety_alert",
             is_complete=True,
+            conversation_id=conversation_id,
             message=safety_message,
             safety=safety_model,
             history=alert_history,
             nearby_medical_resources=[],
+        )
+
+
+    # ========================================================
+    # Step 2.5
+    # 安全追問
+    #
+    # 走一般追問的形狀（status=asking、is_complete=false），
+    # 刻意不走 safety_alert —— 已上架的 APK 警示徽章寫死是「緊急」，
+    # 把「資訊不足」丟進那條路徑會被誤標成緊急。
+    #
+    # 這裡直接回應，不進 RAG 與一般問診 Gemini：
+    # 安全資訊沒問清楚之前，科別推薦沒有意義，也省一次模型呼叫。
+    # ========================================================
+
+    if clarifications:
+
+        followup_message = (
+            build_followup_message(
+                clarifications
+            )
+        )
+
+
+        followup_history = (
+            payload.history
+            + [
+                ChatMessage(
+                    role="user",
+                    content=(
+                        payload.symptom_text
+                    ),
+                ),
+                ChatMessage(
+                    role="model",
+                    content=(
+                        followup_message
+                    ),
+                ),
+            ]
+        )
+
+
+        print(
+            "🛡️ [安全追問] "
+            + "、".join(
+                item["flag"]
+                for item in clarifications
+            )
+        )
+
+
+        return FollowUpResponse(
+            status="asking",
+            is_complete=False,
+            conversation_id=conversation_id,
+            message=followup_message,
+            history=followup_history,
+            safety=safety_model,
         )
 
 
@@ -1027,6 +1386,7 @@ def diagnose_symptom(
             return FollowUpResponse(
                 status="asking",
                 is_complete=False,
+                conversation_id=conversation_id,
                 message=follow_up_message,
                 history=follow_up_history,
                 safety=safety_model,
@@ -1661,6 +2021,7 @@ def diagnose_symptom(
             status="completed",
             is_complete=True,
             session_id=session_id,
+            conversation_id=conversation_id,
             save_status=save_status,
             location_context=payload.context(),
             symptom=payload.symptom_text,
