@@ -28,7 +28,7 @@ from safety_types import (
 )
 
 
-SAFETY_OBSERVABILITY_VERSION = "2026.09.1"
+SAFETY_OBSERVABILITY_VERSION = "2026.09.2"
 
 
 # ============================================================
@@ -47,7 +47,25 @@ INSUFFICIENT = "insufficient"
 
 def assessment_completeness(
     assessment: Mapping[str, Any] | None,
+    excluded_flags: Iterable[str] | None = None,
 ) -> str:
+    """
+    excluded_flags 是「對這位使用者不適用、因此刻意不問」的旗標
+    （目前只有生理性別為男時的懷孕相關三項）。
+
+    一條未定案規則若能讓它翻盤的旗標全部都不適用，
+    這條規則對這位使用者就不可能成立，不應該再把評估標成未完成 ——
+    否則網頁端會對他顯示「安全評估尚未完成」，
+    而原因是一個我們刻意不問、也不需要問的問題。
+
+    只要還有任何一個適用的旗標就維持 insufficient；
+    swing_set 為空的規則也維持 insufficient（不確定時往保守倒）。
+    """
+
+    excluded = set(
+        excluded_flags or []
+    )
+
 
     for rule in (
         (assessment or {}).get(
@@ -56,11 +74,24 @@ def assessment_completeness(
         or []
     ):
 
-        if (
+        if not (
             rule.get("engaged")
             and rule.get("risk_level") == "emergency"
         ):
-            return INSUFFICIENT
+            continue
+
+
+        swing = set(
+            rule.get("swing_set")
+            or []
+        )
+
+
+        if excluded and swing and swing <= excluded:
+            continue
+
+
+        return INSUFFICIENT
 
 
     return COMPLETE
@@ -150,8 +181,13 @@ def observe_turn(
                 "risk_level"
             ),
 
+        # 呼叫端可能已依使用者情況修正過完整度（例如懷孕抑制），
+        # 有就沿用，確保觀測紀錄與 API 回應、快照是同一個值。
         "completeness":
-            assessment_completeness(
+            (assessment or {}).get(
+                "assessment_completeness"
+            )
+            or assessment_completeness(
                 assessment
             ),
 
@@ -244,6 +280,28 @@ if __name__ == "__main__":
             {"code": "X", "risk_level": "urgent", "engaged": True},
         ]
     }) == COMPLETE
+
+    # 懷孕規則的 swing_set 全部不適用 → 對這位使用者算完整
+    pregnancy = {"indeterminate_rules": [
+        {"code": "PREGNANCY_EMERGENCY", "risk_level": "emergency", "engaged": True,
+         "swing_set": ["pregnant", "heavy_vaginal_bleeding"]},
+    ]}
+    excluded = ("pregnant", "vaginal_bleeding", "heavy_vaginal_bleeding")
+    assert assessment_completeness(pregnancy) == INSUFFICIENT
+    assert assessment_completeness(pregnancy, excluded) == COMPLETE
+
+    # 只要還有一個適用的旗標就維持未完成
+    mixed = {"indeterminate_rules": [
+        {"code": "X", "risk_level": "emergency", "engaged": True,
+         "swing_set": ["pregnant", "fainting"]},
+    ]}
+    assert assessment_completeness(mixed, excluded) == INSUFFICIENT
+
+    # swing_set 為空時不因排除清單而放行
+    empty = {"indeterminate_rules": [
+        {"code": "X", "risk_level": "emergency", "engaged": True, "swing_set": []},
+    ]}
+    assert assessment_completeness(empty, excluded) == INSUFFICIENT
 
     print("✓ 評估完整度")
 

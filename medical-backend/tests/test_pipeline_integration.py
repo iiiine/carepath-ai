@@ -123,3 +123,57 @@ def test_pregnancy_question_suppressed_for_male(client, member, diagnosis_setup,
 
     assert "懷孕" not in data.get("message", "")
     assert "陰道" not in data.get("message", "")
+
+
+# ============================================================
+# 完整度要跟懷孕抑制走同一個判斷
+# ============================================================
+
+def test_male_abdominal_pain_is_not_marked_incomplete(client, member, diagnosis_setup, real_pipeline, monkeypatch):
+    """
+    懷孕規則對男性被抑制、不會去問，就不該再把評估標成未完成 ——
+    否則網頁端會顯示「安全評估尚未完成」，原因卻是一個不需要問的問題。
+    """
+    from routes import diagnose
+
+    real_pipeline(severe_abdominal_pain=True)
+    monkeypatch.setattr(diagnose, "fetch_biological_sex", lambda user_id: "男")
+
+    data = client.post("/api/v1/diagnose", json={**APK, "symptom_text": "我肚子非常痛"}).json()
+
+    assert data["safety"]["assessment_completeness"] == "complete"
+
+
+def test_unknown_sex_abdominal_pain_stays_incomplete(client, member, diagnosis_setup, real_pipeline):
+    """性別不明時懷孕仍然要問，評估當然還沒完成。"""
+    real_pipeline(severe_abdominal_pain=True)
+
+    data = client.post("/api/v1/diagnose", json={**APK, "symptom_text": "我肚子非常痛"}).json()
+
+    assert data["safety"]["assessment_completeness"] == "insufficient"
+
+
+def test_suppression_does_not_relax_other_rules(client, member, diagnosis_setup, real_pipeline, monkeypatch):
+    """男性頭部撞擊：抑制只針對懷孕相關旗標，頭部外傷規則仍是未完成。"""
+    from routes import diagnose
+
+    real_pipeline(head_injury=True)
+    monkeypatch.setattr(diagnose, "fetch_biological_sex", lambda user_id: "男")
+
+    data = client.post("/api/v1/diagnose", json={**APK, "symptom_text": "我頭撞到了"}).json()
+
+    assert data["safety"]["assessment_completeness"] == "insufficient"
+
+
+def test_technical_failure_stays_incomplete_even_for_male(monkeypatch):
+    """技術失敗時不可因重算而翻成 complete（那是往危險方向倒）。"""
+    from safety_observability import assessment_completeness
+    from safety_followup import PREGNANCY_SPECIFIC_FLAGS
+    import safety_pipeline
+
+    failed = safety_pipeline.run_safety_pipeline("肚子痛", prior_state_unavailable=True)
+
+    assert failed["assessment_completeness"] == "insufficient"
+    # 就算有人誤把排除清單套上去，失敗結果本身沒有規則可重算 ——
+    # 所以 diagnose.py 必須用 technical_failure 擋住，而不是依賴這裡。
+    assert assessment_completeness(failed, PREGNANCY_SPECIFIC_FLAGS) == "complete"
