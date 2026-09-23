@@ -27,6 +27,19 @@ import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } fro
 
 
 // ==========================================
+// 症狀輸入長度上限
+//
+// 與後端 models.py 的 MAX_SYMPTOM_CHARS 一致，超過會被後端以 422 拒絕。
+// 在輸入端就擋住，並在接近上限時提示 —— 否則使用者貼上長文後
+// 只會看到送出失敗，不知道原因。
+// ==========================================
+
+const MAX_SYMPTOM_CHARS = 2000;
+
+const SYMPTOM_CHARS_WARN_AT = 1800;
+
+
+// ==========================================
 // 定位與地區由 useLocationSelection 管理；未定位不補座標。
 // ==========================================
 
@@ -2960,6 +2973,10 @@ function SymptomChecker({
 
                 placeholder="傳訊息給 CarePath AI..."
 
+                maxLength={
+                  MAX_SYMPTOM_CHARS
+                }
+
                 disabled={
                   loading
                 }
@@ -3053,6 +3070,40 @@ function SymptomChecker({
               </button>
 
             </form>
+
+
+            {inputText.length >=
+              SYMPTOM_CHARS_WARN_AT && (
+
+              <div
+                role="status"
+
+                style={{
+                  marginTop:
+                    '6px',
+
+                  paddingRight:
+                    '12px',
+
+                  textAlign:
+                    'right',
+
+                  fontSize:
+                    '0.75rem',
+
+                  color:
+                    inputText.length >=
+                    MAX_SYMPTOM_CHARS
+                      ? '#b3261e'
+                      : t.muted
+                }}
+              >
+                {inputText.length} / {MAX_SYMPTOM_CHARS} 字
+                {inputText.length >=
+                  MAX_SYMPTOM_CHARS &&
+                  '：已達上限，超過的部分不會送出'}
+              </div>
+            )}
 
             {isOpening && (
               <>

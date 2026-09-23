@@ -72,11 +72,13 @@ from safety_engine import SAFETY_ENGINE_VERSION
 from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
 
 from safety_observability import (
+    assessment_completeness,
     format_observation,
     observe_turn,
 )
 
 from safety_followup import (
+    BIOLOGICAL_SEX_WITHOUT_PREGNANCY,
     PREGNANCY_SPECIFIC_FLAGS,
     build_followup_message,
     pending_clarifications,
@@ -777,6 +779,27 @@ def diagnose_symptom(
         asked_before,
         biological_sex=biological_sex,
     )
+
+
+    # 懷孕相關問題對這位使用者被抑制時，完整度要跟著同一個判斷走。
+    # 否則男性說「肚子很痛」會被標成評估未完成，網頁端顯示
+    # 「安全評估尚未完成」，而原因是一個刻意不問、也不需要問的問題。
+    #
+    # 只在評估成功時修正：技術失敗時 indeterminate_rules 是空的，
+    # 若拿來重算會把 insufficient 翻成 complete，那是往危險方向倒。
+    if (
+        biological_sex == BIOLOGICAL_SEX_WITHOUT_PREGNANCY
+        and not safety_result.get(
+            "technical_failure"
+        )
+    ):
+
+        safety_result[
+            "assessment_completeness"
+        ] = assessment_completeness(
+            safety_result,
+            excluded_flags=PREGNANCY_SPECIFIC_FLAGS,
+        )
 
 
     # --------------------------------------------------------
