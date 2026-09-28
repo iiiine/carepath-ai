@@ -12,6 +12,21 @@ import { BaymaxAvatar } from '../Baymax'
 import LongitudinalHealthPanel from '../LongitudinalHealthPanel'
 
 
+// ============================================================
+// 載入提示的時間點
+//
+// HINT_DELAY_MS  等這麼久還沒回來才顯示。資料已在手邊時整段載入
+//                通常遠短於此，不延遲的話會閃一下反而像故障。
+//
+// HINT_SLOW_MS   超過這個時間補上「伺服器正在喚醒」的說明。
+//                取 8 秒是因為正常回應約 1-2 秒，而冷啟動是幾十秒級，
+//                8 秒足以區分兩者，又不會讓人先乾等半分鐘才看到解釋。
+// ============================================================
+
+const HINT_DELAY_MS = 600
+const HINT_SLOW_MS = 8000
+
+
 const DashboardPage = ({
   user,
   onStartConsultation,
@@ -53,6 +68,66 @@ const DashboardPage = ({
     error,
     setError,
   ] = useState('')
+
+
+  // ==========================================
+  // 載入提示
+  //
+  // 骨架（Bone）只說明「版面長這樣」，沒有說明「還要等多久、為什麼」。
+  // 後端在 Render 免費方案上閒置會休眠，冷啟動實測約 62 秒 ——
+  // 對使用者來說，一分鐘的骨架跟壞掉沒有兩樣。
+  //
+  // 兩段式：
+  //   hidden → normal   延遲 HINT_DELAY_MS 才出現，快取命中時不閃一下
+  //   normal → slow     超過 HINT_SLOW_MS 補上冷啟動的說明
+  //
+  // 刻意不做成遮罩彈窗：骨架已經把版面結構畫出來了，遮住反而讓人
+  // 不知道等完會看到什麼。
+  // ==========================================
+
+  const [
+    hintStage,
+    setHintStage,
+  ] = useState('hidden')
+
+
+  useEffect(() => {
+
+    if (!loading) {
+      return undefined
+    }
+
+
+    const showTimer = setTimeout(
+      () => setHintStage('normal'),
+      HINT_DELAY_MS,
+    )
+
+
+    const slowTimer = setTimeout(
+      () => setHintStage('slow'),
+      HINT_SLOW_MS,
+    )
+
+
+    // 歸零放在 cleanup 而不是 effect 開頭：
+    //
+    //   1. effect body 裡同步 setState 會造成串聯 render（lint 也會擋）。
+    //   2. cleanup 在「載入結束」與「下一次載入開始前」都會跑，
+    //      所以第二次載入不會沿用上一輪已經推到 slow 的文案。
+    //
+    // 計時器只負責往前推，回到 hidden 只有這一個出口。
+    return () => {
+
+      clearTimeout(showTimer)
+      clearTimeout(slowTimer)
+
+      setHintStage(
+        'hidden'
+      )
+    }
+
+  }, [loading])
 
 
   // ==========================================
@@ -937,6 +1012,64 @@ const DashboardPage = ({
           </div>
 
         </section>
+
+
+        {/* ================================== */}
+        {/* 載入提示 */}
+        {/*                                    */}
+        {/* role="status" + aria-live="polite"：讀螢幕的人不會被打斷， */}
+        {/* 但文案從 normal 換成 slow 時會被念出來。 */}
+        {/* ================================== */}
+
+        {hintStage !== 'hidden' && (
+
+          <div
+            role="status"
+            aria-live="polite"
+
+            style={
+              styles.loadingHint
+            }
+          >
+
+            <span
+              className="carepath-spin"
+              aria-hidden="true"
+              style={
+                styles.loadingHintSpinner
+              }
+            />
+
+
+            <div className="elder-readable-text">
+
+              <strong>
+                正在載入你的健康紀錄…
+              </strong>
+
+
+              {hintStage === 'slow' && (
+
+                <div
+                  style={{
+                    marginTop:
+                      '4px',
+
+                    color:
+                      t.muted,
+                  }}
+                >
+                  伺服器閒置一段時間後，第一次開啟需要較久（最多約一分鐘）。
+                  請先不要離開這個畫面。
+                </div>
+
+              )}
+
+            </div>
+
+          </div>
+
+        )}
 
 
         {/* ================================== */}
@@ -2084,6 +2217,67 @@ const styles = {
 
     whiteSpace:
       'nowrap',
+  },
+
+
+  loadingHint: {
+    display:
+      'flex',
+
+    alignItems:
+      'flex-start',
+
+    gap:
+      '10px',
+
+    border:
+      `1px solid ${t.border}`,
+
+    backgroundColor:
+      t.panel,
+
+    color:
+      t.text,
+
+    borderRadius:
+      '10px',
+
+    padding:
+      '12px 16px',
+
+    fontSize:
+      '0.84rem',
+
+    lineHeight:
+      1.5,
+  },
+
+
+  loadingHintSpinner: {
+    flexShrink:
+      0,
+
+    width:
+      '16px',
+
+    height:
+      '16px',
+
+    marginTop:
+      '2px',
+
+    borderRadius:
+      '50%',
+
+    // 三邊淡、一邊深，轉起來才看得出方向
+    border:
+      `2px solid ${t.border}`,
+
+    borderTopColor:
+      t.muted,
+
+    animation:
+      'carepath-spin 0.9s linear infinite',
   },
 
 

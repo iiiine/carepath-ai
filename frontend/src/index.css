@@ -31,6 +31,21 @@ body {
   50% { opacity: 0.45; }
 }
 
+/* 載入提示的轉圈（DashboardPage 用） */
+@keyframes carepath-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 使用者在系統層級關掉動態時就不要轉。
+   下面高齡模式那條 prefers-reduced-motion 只套用在 data-elder-mode="true"，
+   一般使用者的偏好沒有被尊重；這裡先補上這個轉圈，
+   其餘既有動畫維持原樣以免影響現有畫面。 */
+@media (prefers-reduced-motion: reduce) {
+  .carepath-spin {
+    animation: none !important;
+  }
+}
+
 
 /* ============================================================
    高齡友善模式

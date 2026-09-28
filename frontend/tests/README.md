@@ -32,3 +32,20 @@ node --test frontend/tests/location.test.mjs
 七個瀏覽器情境：拒絕定位、定位逾時、不支援定位、成功定位、手選縣市、急診資料延遲後無匹配、急診查詢失敗。驗證實際 POST 座標／縣市，以及資料載入期間與失敗後求助電話仍可使用。
 
 三個純函式測試驗證：缺座標與真正零座標、距離來源標記、地址導覽及無定位搜尋。外部 Google Maps 被封鎖，因此不是實際地圖或行車導覽驗收。
+
+## C：Dashboard 載入提示
+
+同一個 Vite 測試站下執行：
+
+```bash
+NODE_PATH=/tmp/carepath-browser-check/node_modules node frontend/tests/dashboard-loading-hint.browser.cjs
+```
+
+三種情境：資料立刻回來、慢但正常（2.5 秒）、冷啟動級（10 秒）。攔截 `/api/v1/history` 控制延遲，走「最近問診 → 健康 Dashboard」的實際動線。
+
+驗證提示橫幅在資料立刻回來時完全不出現（避免閃一下像故障）、慢的時候只顯示基本文案、超過 8 秒才補上伺服器喚醒的說明，以及三種情況載入完成後橫幅都消失。
+
+時間點對應 `DashboardPage.jsx` 的 `HINT_DELAY_MS` 與 `HINT_SLOW_MS`，改那兩個常數時測試要跟著改。
+
+> 本機沒有 Playwright 下載的 chromium 時，可用系統瀏覽器：
+> `BROWSER_EXECUTABLE="C:/Program Files/Google/Chrome/Application/chrome.exe"`
