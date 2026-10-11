@@ -2367,16 +2367,22 @@ function SymptomChecker({
                       </div>
                     )}
 
+                    <EmergencyResources location={userLocation} city={selectedCity} safety={safetyAlert.safety} />
+
+                    {/*
+                      「開始新問診」原本和急症資源擠在同一個 flex row 裡，
+                      於是被推到整份院所名單的尾巴，看起來像名單的一部分。
+
+                      它是離開這個警示的出口，與求助資源是兩回事，
+                      所以拉出來自成一列，並用一條分隔線斷開。
+                    */}
                     <div
                       style={{
-                        marginTop: '14px',
-                        display: 'flex',
-                        gap: '8px',
-                        flexWrap: 'wrap',
+                        marginTop: '16px',
+                        paddingTop: '14px',
+                        borderTop: '1px solid #fecaca',
                       }}
                     >
-                      <EmergencyResources location={userLocation} city={selectedCity} safety={safetyAlert.safety} />
-
                       <button
                         type="button"
                         onClick={handleNewChat}
