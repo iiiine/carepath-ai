@@ -2078,8 +2078,12 @@ function SymptomChecker({
           flex:
             1,
 
-          height:
-            '100%',
+          // 警示狀態下改用 minHeight：見下方白色面板的說明。
+          // 這一層若維持固定 height，面板長出來的部分會落在它外面，
+          // App 那層的捲動區算不到真正的內容高度，就捲不到底。
+          ...(safetyAlert
+            ? { minHeight: '100%' }
+            : { height: '100%' }),
 
           minWidth:
             0,
@@ -2102,8 +2106,18 @@ function SymptomChecker({
                 ? '860px'
                 : '780px',
 
-              height:
-                '100%',
+              // 平常固定一個視窗高度：訊息在內部捲，輸入框釘在底部。
+              //
+              // 但出現安全警示時輸入框整個不渲染（見下方 {!safetyAlert && ...}），
+              // 釘底就失去意義，這頁變成一份要從頭讀到尾的文件。
+              // 這時白色面板必須跟著內容長高，否則警示框會直接溢出到面板外，
+              // 看起來像白底斷掉一截。捲動由 App 那層的 overflowY: auto 負責。
+              //
+              // 仍保留 minHeight 100%：內容短的時候面板還是要撐滿，
+              // 不然底下會露出一塊背景色。
+              ...(safetyAlert
+                ? { minHeight: '100%' }
+                : { height: '100%' }),
 
               margin:
                 '0 auto',
