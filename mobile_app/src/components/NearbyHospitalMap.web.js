@@ -21,8 +21,8 @@ export default function NearbyHospitalMap({ style, hospitals }) {
 
             <Text style={styles.hint}>
                 {count > 0
-                    ? `已為你找到 ${count} 間附近醫院，詳細資訊請見下方清單`
-                    : '附近醫院資訊請見下方清單'}
+                    ? `已為你找到 ${count} 間院所，詳細資訊請見下方清單`
+                    : '院所資訊請見下方清單'}
             </Text>
         </View>
     );
