@@ -132,9 +132,9 @@ def crawl_disease_category(category_url, output_filename, headers):
     total_count = len(valid_articles)
     print(f"  找到 {total_count} 個真實疾病，開始寫入 {output_filename}...")
     
-    # 確保輸出目錄存在於 medical-backend 資料夾下
-    os.makedirs(os.path.join("medical-backend", "data", "knowledge"), exist_ok=True)
-    file_path = os.path.join("medical-backend", "data", "knowledge", output_filename)
+    # 確保輸出目錄存在於 backend 資料夾下
+    os.makedirs(os.path.join("backend", "data", "knowledge"), exist_ok=True)
+    file_path = os.path.join("backend", "data", "knowledge", output_filename)
 
     with open(file_path, "w", encoding="utf-8") as f:
         for index, item in enumerate(valid_articles, 1):

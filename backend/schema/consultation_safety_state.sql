@@ -13,7 +13,7 @@
 -- 本檔為單一事實來源，可重複執行（全部 IF NOT EXISTS）。
 --
 -- 套用：
---   cd medical-backend
+--   cd backend
 --   & $py schema/apply_schema.py schema/consultation_safety_state.sql
 -- ============================================================
 

@@ -1,6 +1,6 @@
 # 後端離線回歸測試
 
-從 `medical-backend` 目錄執行：
+從 `backend` 目錄執行：
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt

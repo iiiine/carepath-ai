@@ -9,8 +9,8 @@ services:
     runtime: python
     plan: free
 
-    # 後端程式在子目錄，requirements.txt 也放在那裡（根目錄那份是 UTF-16，pip 讀不了）
-    rootDir: medical-backend
+    # 後端程式與 requirements.txt 都在 backend/ 子目錄
+    rootDir: backend
 
     buildCommand: pip install -r requirements.txt
 
@@ -25,11 +25,11 @@ services:
     # render.yaml 自己也要列進來，否則改了部署設定不會生效。
     buildFilter:
       paths:
-        - "medical-backend/**"
+        - "backend/**"
         - "render.yaml"
       # ignoredPaths 優先於 paths：純文件變動不值得重跑一次建置
       ignoredPaths:
-        - "medical-backend/**/*.md"
+        - "backend/**/*.md"
 
     envVars:
       # 本機跑的是 3.14，這裡對齊避免版本差異

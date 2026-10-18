@@ -1,5 +1,5 @@
 # 診斷流程的最小自我檢查（會連資料庫，但不會呼叫 Gemini）
-#   cd medical-backend && PYTHONPATH=. .venv/bin/python test_diagnose.py
+#   cd backend && PYTHONPATH=. .venv/bin/python test_diagnose.py
 import asyncio
 import json
 from types import SimpleNamespace

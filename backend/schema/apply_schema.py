@@ -6,7 +6,7 @@ schema/*.sql 能被重複執行而不必開 psql，不是 migration 框架 —�
 沒有版本表、沒有回滾，檔案本身就是唯一事實來源。
 
 用法：
-    cd medical-backend
+    cd backend
     & $py schema/apply_schema.py schema/consultation_safety_state.sql
 
 所有 schema/*.sql 都必須可重複執行（IF NOT EXISTS），
@@ -48,7 +48,7 @@ def main() -> int:
         return 1
 
 
-    # .env 在 medical-backend/ 底下，不在專案根目錄
+    # .env 在 backend/ 底下，不在專案根目錄
     load_dotenv(
         Path(__file__).parent.parent / ".env"
     )
@@ -62,7 +62,7 @@ def main() -> int:
     if not database_url:
 
         print(
-            "❌ 找不到 DATABASE_URL，請確認 medical-backend/.env"
+            "❌ 找不到 DATABASE_URL，請確認 backend/.env"
         )
 
         return 1

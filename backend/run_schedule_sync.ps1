@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 
-$ProjectRoot = "C:\Users\User\OneDrive\Desktop\medical_project"
-$BackendDir = Join-Path $ProjectRoot "medical-backend"
+# 以腳本位置推算路徑，不綁定特定電腦的目錄
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$BackendDir = $PSScriptRoot
 $PythonExe = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $RunnerFile = Join-Path $BackendDir "schedule_sync_runner.py"
 
