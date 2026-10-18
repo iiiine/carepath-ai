@@ -1,13 +1,10 @@
-# 後端部署用的相依套件（UTF-8，pip 讀得懂）
+# 後端部署用的相依套件
 #
-# 為什麼不用根目錄那份 requirements.txt：
-#   1. 它是 UTF-16 編碼，pip 會直接解析失敗。
-#   2. 它是整個開發環境的 freeze，混進了爬蟲與 RAG 匯入才需要的
-#      chromadb / onnxruntime / playwright / openai，光這幾包就好幾百 MB，
-#      Render 免費方案的記憶體與建置時間撐不住，而 API 執行路徑根本沒 import。
+# 這份只列 API 執行路徑真正 import 到的直接相依，刻意不放
+# chromadb / onnxruntime / playwright 這類離線工具才用的大型套件，
+# 否則 Render 免費方案的記憶體與建置時間撐不住。
 #
-# 這份只列「後端真的 import 到的直接相依」，間接相依交給 pip 自己解。
-# 版本沿用根目錄 freeze 的值，避免跟本機跑出不同行為。
+# 間接相依交給 pip 自己解。
 #
 # ⚠️ RAG 匯入腳本 ingest.py 另外需要 langchain-community，
 #    那是離線工具、不在 API 路徑上，刻意不放進來。

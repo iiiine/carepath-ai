@@ -21,7 +21,7 @@ description: 重建 CarePath AI 的 RAG 向量庫（PGVector）。當使用者�
 
 ## 前置條件
 
-1. **語料存在**：`medical-backend/data/knowledge/*.txt`，且為下列格式。
+1. **語料存在**：`backend/data/knowledge/*.txt`，且為下列格式。
 2. **`.env` 已設定**：需要 `GEMINI_API_KEY` 與 `DATABASE_URL`
    （缺任一個 `ingest.py` 會直接 `RuntimeError` 中止，不會半途才爆）。
 3. **用對的 Python**：根目錄 `.venv/` 是壞的，PATH 上的 python 3.12 沒裝相依套件。
@@ -30,7 +30,7 @@ description: 重建 CarePath AI 的 RAG 向量庫（PGVector）。當使用者�
 
 ```powershell
 $py = "C:\Users\ian05\AppData\Local\Python\bin\python3.14.exe"
-cd medical-backend
+cd backend
 & $py ingest.py
 ```
 
@@ -93,7 +93,7 @@ collection 名稱不一致 → 寫進 A、查的是 B，檢索結果永遠是空
 匯入後確認檢索真的通了，而不是只看 ingest 印了成功：
 
 ```powershell
-cd medical-backend
+cd backend
 & $py -c "from services import get_rag_context; print(get_rag_context('頭痛想吐'))"
 ```
 
