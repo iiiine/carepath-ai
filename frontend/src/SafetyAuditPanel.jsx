@@ -130,7 +130,7 @@ const SafetyAuditPanel = ({ safety }) => {
           fontWeight: 600,
         }}
       >
-        🛡️ 安全篩檢稽核紀錄
+        安全篩檢稽核紀錄
         <span style={{ marginLeft: '8px', color: riskColor }}>
           {safety.risk_label}
         </span>
