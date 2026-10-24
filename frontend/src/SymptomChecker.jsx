@@ -6,6 +6,7 @@ import EmergencyResources from './EmergencyResources';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import api from './api/axios';
 import { useElderMode } from './useElderMode';
+import { useSpeechInput } from './useSpeechInput';
 
 import HospitalMap from './HospitalMap';
 import HistorySidebar from './HistorySidebar';
@@ -23,7 +24,7 @@ import VisitSummaryPanel from './VisitSummaryPanel';
 import { t } from './theme';
 import { BaymaxAvatar, CarePathWordmark } from './Baymax';
 import Icon from './Icon';
-import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline } from '@mdi/js';
+import { mdiCheck, mdiMapMarker, mdiMapMarkerCheck, mdiFileDocumentOutline, mdiMicrophone, mdiStop } from '@mdi/js';
 
 
 // ==========================================
@@ -312,6 +313,24 @@ function SymptomChecker({
     elderMode: elderFriendlyMode,
     toggleElderMode: handleToggleElderFriendlyMode
   } = useElderMode();
+
+
+  // ==========================================
+  // 語音輸入
+  //
+  // 辨識結果接在輸入框現有文字後面，不自動送出：
+  // 使用者確認字沒辨識錯再按送出，走原本的 handleSendMessage。
+  // ==========================================
+  const speech = useSpeechInput({
+    onText: (spoken) =>
+      setInputText((prev) => {
+        const joined = prev.trim()
+          ? `${prev.trimEnd()}，${spoken}`
+          : spoken;
+
+        return joined.slice(0, MAX_SYMPTOM_CHARS);
+      }),
+  });
 
 
   // 開場狀態：只有招呼語、還沒送出任何症狀。這時候不排聊天氣泡，
@@ -835,6 +854,11 @@ function SymptomChecker({
     ) {
       return;
     }
+
+
+    // 還在聽的話先停掉，不然送出後才到的辨識結果
+    // 會跑進已經清空的輸入框，變成下一則訊息的開頭。
+    speech.stop();
 
 
     const userText =
@@ -3026,6 +3050,99 @@ function SymptomChecker({
               />
 
 
+              {/* 語音輸入：瀏覽器不支援（例如 Firefox）就不顯示 */}
+              {speech.supported && (
+                <button
+                  type="button"
+
+                  onClick={
+                    speech.listening
+                      ? speech.stop
+                      : speech.start
+                  }
+
+                  disabled={
+                    loading
+                  }
+
+                  aria-label={
+                    speech.listening
+                      ? '停止語音輸入'
+                      : '用說的輸入症狀'
+                  }
+
+                  aria-pressed={
+                    speech.listening
+                  }
+
+                  title={
+                    speech.listening
+                      ? '停止語音輸入'
+                      : '用說的輸入症狀'
+                  }
+
+                  style={{
+                    // 高齡模式放大到 44px，達到常見的觸控目標建議尺寸
+                    width:
+                      elderFriendlyMode
+                        ? '44px'
+                        : '34px',
+
+                    height:
+                      elderFriendlyMode
+                        ? '44px'
+                        : '34px',
+
+                    flexShrink:
+                      0,
+
+                    display:
+                      'flex',
+
+                    alignItems:
+                      'center',
+
+                    justifyContent:
+                      'center',
+
+                    backgroundColor:
+                      speech.listening
+                        ? t.danger
+                        : t.subtle,
+
+                    color:
+                      speech.listening
+                        ? '#ffffff'
+                        : t.text,
+
+                    border:
+                      'none',
+
+                    borderRadius:
+                      '50%',
+
+                    cursor:
+                      loading
+                        ? 'default'
+                        : 'pointer',
+
+                    fontSize:
+                      elderFriendlyMode
+                        ? '1.5rem'
+                        : '1.15rem'
+                  }}
+                >
+                  <Icon
+                    path={
+                      speech.listening
+                        ? mdiStop
+                        : mdiMicrophone
+                    }
+                  />
+                </button>
+              )}
+
+
               <button
                 type="submit"
 
@@ -3090,6 +3207,42 @@ function SymptomChecker({
               </button>
 
             </form>
+
+
+            {(speech.listening || speech.error) && (
+
+              <div
+                role="status"
+
+                style={{
+                  marginTop:
+                    '6px',
+
+                  padding:
+                    '0 12px',
+
+                  fontSize:
+                    elderFriendlyMode
+                      ? '1rem'
+                      : '0.8rem',
+
+                  lineHeight:
+                    1.5,
+
+                  color:
+                    speech.error
+                      ? '#b3261e'
+                      : t.muted
+                }}
+              >
+                {speech.error
+                  || (
+                    speech.interim
+                      ? `正在聆聽：${speech.interim}`
+                      : '正在聆聽，請說出您的症狀…說完停一下會自動結束。'
+                  )}
+              </div>
+            )}
 
 
             {inputText.length >=
