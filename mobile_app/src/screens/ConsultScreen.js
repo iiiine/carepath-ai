@@ -17,8 +17,35 @@ import { useElderMode } from '../context/ElderModeContext';
 import Icon from '@react-native-vector-icons/material-design-icons';
 import client from '../api/client';
 import VisitSummaryPanel from './VisitSummaryPanel';
+import SafetyAuditPanel from '../components/SafetyAuditPanel';
+import EmergencyResources from '../components/EmergencyResources';
+import DoctorScheduleInfo from '../components/DoctorScheduleInfo';
+import { useSpeechInput } from '../hooks/useSpeechInput';
 
-const FALLBACK_LOCATION = { latitude: 23.0, longitude: 120.2 };
+const MAX_SYMPTOM_CHARS = 2000;
+
+function formatHospitalDistance(hospital) {
+  const meters = hospital?.distance_meters;
+  if (
+    hospital?.distance_reference !== 'provided_coordinates'
+    || typeof meters !== 'number'
+    || !Number.isFinite(meters)
+    || meters < 0
+  ) return '';
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} 公里` : `${meters} 公尺`;
+}
+
+function hospitalNavigationUrl(hospital) {
+  const destination = [hospital?.name, hospital?.address].filter(Boolean).join(' ');
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+
+const CITIES = [
+  '臺北市', '新北市', '桃園市', '臺中市', '臺南市', '高雄市',
+  '基隆市', '新竹市', '新竹縣', '苗栗縣', '彰化縣', '南投縣',
+  '雲林縣', '嘉義市', '嘉義縣', '屏東縣', '宜蘭縣', '花蓮縣',
+  '臺東縣', '澎湖縣', '金門縣', '連江縣',
+];
 
 // ============================================================
 // 快捷症狀
@@ -181,6 +208,8 @@ export default function ConsultScreen() {
   
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState('loading');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [history, setHistory] = useState([]);
   const [messages, setMessages] = useState([
     { role: 'model', content: '您好！我是 CarePath AI，請在下方選擇您不舒服的程度。您今天哪裡不舒服呢？' }
@@ -191,7 +220,16 @@ export default function ConsultScreen() {
   // 高齡友善模式已抽到 context，所有畫面共用同一個開關
   const { elderMode, s, toggleElderMode } = useElderMode();
   const styles = useMemo(() => makeStyles(s), [s]);
+  const speech = useSpeechInput({
+    onText: (spoken) => setInputText((previous) => {
+      const current = previous.trimEnd();
+      const combined = current ? `${current}，${spoken}` : spoken;
+      return combined.slice(0, MAX_SYMPTOM_CHARS);
+    }),
+  });
   const [safetyAlert, setSafetyAlert] = useState(null);
+  const [latestSafety, setLatestSafety] = useState(null);
+  const [conversationId, setConversationId] = useState({ userId: null, id: null });
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
 
   // 🎯 核心修復：如果沒有資料庫 sessionId (例如訪客問診)，就採用臨時本地快取，確保訪客也能看摘要！
@@ -302,16 +340,17 @@ export default function ConsultScreen() {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setUserLocation(FALLBACK_LOCATION);
-          setLocationStatus('fallback');
+          setUserLocation(null);
+          setLocationStatus(status === 'denied' ? 'denied' : 'unavailable');
           return;
         }
         let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setUserLocation({ latitude: location.coords.latitude, longitude: location.coords.longitude });
         setLocationStatus('success');
       } catch (error) {
-        setUserLocation(FALLBACK_LOCATION);
-        setLocationStatus('fallback');
+        console.error('取得目前位置失敗：', error);
+        setUserLocation(null);
+        setLocationStatus('unavailable');
       }
     })();
   }, []);
@@ -338,6 +377,8 @@ export default function ConsultScreen() {
       setHistory(savedHistory);
       setPainLevel(targetSession.pain_level ?? 3);
       setSafetyAlert(null);
+      setLatestSafety(null);
+      setConversationId({ userId: null, id: null });
       
       setDiagnosisResult({
         session_id: id,
@@ -361,19 +402,34 @@ export default function ConsultScreen() {
 
   const handleSendMessage = async (textToSubmit = inputText) => {
     if (!textToSubmit.trim() || loading || safetyAlert) return;
+    if (textToSubmit.trim().length > MAX_SYMPTOM_CHARS) {
+      Alert.alert('文字過長', `症狀描述最多 ${MAX_SYMPTOM_CHARS} 字，請刪減後再送出。`);
+      return;
+    }
     const userText = textToSubmit.trim();
+    speech.abort();
     setInputText(''); 
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setLoading(true);
 
     try {
-      const lat = userLocation?.latitude ?? FALLBACK_LOCATION.latitude;
-      const lng = userLocation?.longitude ?? FALLBACK_LOCATION.longitude;
+      const lat = selectedCity ? null : userLocation?.latitude ?? null;
+      const lng = selectedCity ? null : userLocation?.longitude ?? null;
       const response = await client.post('/api/v1/diagnose', {
-        pain_level: Number(painLevel), symptom_text: userText, user_latitude: lat, user_longitude: lng, history: history
+        pain_level: Number(painLevel),
+        symptom_text: userText,
+        user_latitude: lat,
+        user_longitude: lng,
+        user_city: selectedCity || null,
+        conversation_id: isMember && conversationId.userId === user?.id ? conversationId.id : null,
+        history,
       });
 
       const data = response.data;
+      setLatestSafety(data.safety ?? null);
+      if (data.conversation_id && isMember) {
+        setConversationId({ userId: user?.id ?? null, id: data.conversation_id });
+      }
       
       // 🎯 安全優先設計：緊急安全阻斷
       if (data.status === 'safety_alert') {
@@ -440,18 +496,15 @@ export default function ConsultScreen() {
   };
 
   const handleResetChat = () => {
+    speech.abort();
     navigation.setParams({ sessionId: undefined });
     setDiagnosisResult(null);
     setSafetyAlert(null);
+    setLatestSafety(null);
+    setConversationId({ userId: null, id: null });
     setTempSummaryData(null); // 重設暫存摘要
     setHistory([]);
     setMessages([{ role: 'model', content: '您好！我是 CarePath AI，請在下方選擇您不舒服的程度。您今天哪裡不舒服呢？' }]);
-  };
-
-  const handleNearbyEmergency = () => {
-    const lat = userLocation?.latitude ?? FALLBACK_LOCATION.latitude;
-    const lng = userLocation?.longitude ?? FALLBACK_LOCATION.longitude;
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=急診+${lat},${lng}`);
   };
 
   // 渲染氣泡，如果是高齡模式，除最後一筆外淡化
@@ -575,7 +628,11 @@ export default function ConsultScreen() {
               <View style={styles.safetyHeaderRow}>
                 <View style={styles.safetyAlertIcon}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>!</Text></View>
                 <Text style={styles.safetyAlertTitle}>醫療安全風險警報</Text>
-                <View style={styles.safetyBadge}><Text style={styles.safetyBadgeText}>緊急</Text></View>
+                <View style={styles.safetyBadge}>
+                  <Text style={styles.safetyBadgeText}>
+                    {safetyAlert.safety?.risk_label || (safetyAlert.safety?.risk_level === 'emergency' ? '緊急' : '安全評估')}
+                  </Text>
+                </View>
               </View>
 
               <Text style={styles.safetyMessage}>
@@ -594,26 +651,12 @@ export default function ConsultScreen() {
                 </View>
               )}
 
-              <View style={styles.safetyActionsRow}>
-                <TouchableOpacity
-                  onPress={handleNearbyEmergency}
-                  style={styles.safetyActionBtnPrimary}
-                  accessibilityLabel="搜尋最近急診"
-                  accessibilityRole="button"
-                >
-                  <Icon name="map-marker-radius" size={16} color="#FFFFFF" />
-                  <Text style={styles.safetyActionTextPrimary}>搜尋最近急診</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => Linking.openURL('tel:119')}
-                  style={styles.safetyActionBtnDanger}
-                  accessibilityLabel="撥打 119 求助"
-                  accessibilityRole="button"
-                >
-                  <Icon name="phone" size={16} color="#FFFFFF" />
-                  <Text style={styles.safetyActionTextPrimary}>撥打 119 求助</Text>
-                </TouchableOpacity>
-              </View>
+              <EmergencyResources
+                location={userLocation}
+                city={selectedCity}
+                safety={safetyAlert.safety}
+                onSelectCity={() => setCityPickerVisible(true)}
+              />
               <TouchableOpacity onPress={handleResetChat} style={styles.safetyResetBtn}>
                 <Text style={styles.safetyResetBtnText}>重新開始問診</Text>
               </TouchableOpacity>
@@ -622,6 +665,8 @@ export default function ConsultScreen() {
 
           {diagnosisResult ? (
             <View style={styles.resultSection}>
+              {!elderMode && <SafetyAuditPanel safety={latestSafety} />}
+
               {!elderMode && (
                 <CollapsibleBox title="對話紀錄" defaultExpanded={false} maxHeight={300}>
                   {renderMessages()}
@@ -656,6 +701,7 @@ export default function ConsultScreen() {
                 {Array.isArray(diagnosisResult.nearby_medical_resources) && diagnosisResult.nearby_medical_resources.length > 0 && (
                   (() => {
                     const topHospital = diagnosisResult.nearby_medical_resources[0];
+                    const distance = formatHospitalDistance(topHospital);
                     return (
                       <View style={styles.topRecommendCard}>
                         <View style={styles.topRecommendHeader}>
@@ -663,17 +709,21 @@ export default function ConsultScreen() {
                           <View style={{ flex: 1 }}>
                             <View style={styles.topRecommendBadgeRow}>
                               <View style={styles.topBadge}><Text style={styles.topBadgeText}>最推薦</Text></View>
-                              <Text style={styles.topBadgeSub}>專長最符合、距離最近</Text>
+                              <Text style={styles.topBadgeSub}>
+                                {distance
+                                  ? '專長最符合、距離最近'
+                                  : '依科別與專長匹配'}
+                              </Text>
                             </View>
                             <Text style={styles.topHospitalName}>{topHospital.name}</Text>
                             <Text style={styles.topHospitalInfo}>
                               {topHospital.address} 
-                              {topHospital.distance_meters != null ? ` · 約 ${(topHospital.distance_meters / 1000).toFixed(1)} 公里` : ''}
+                              {distance ? ` · 約 ${distance}` : ''}
                             </Text>
                           </View>
                         </View>
                         <View style={styles.topRecommendActions}>
-                          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${topHospital.latitude},${topHospital.longitude}`)} style={styles.topActionBtnPrimary}>
+                          <TouchableOpacity onPress={() => Linking.openURL(hospitalNavigationUrl(topHospital))} style={styles.topActionBtnPrimary}>
                             <Text style={styles.topActionBtnTextPrimary}>導航前往</Text>
                           </TouchableOpacity>
                           {topHospital.phone && (
@@ -691,8 +741,7 @@ export default function ConsultScreen() {
                   <View style={styles.mapCard}>
                     <NearbyHospitalMap
                       style={styles.map}
-                      userLocation={userLocation}
-                      fallbackLocation={FALLBACK_LOCATION}
+                      userLocation={selectedCity ? null : userLocation}
                       hospitals={diagnosisResult.nearby_medical_resources}
                     />
                   </View>
@@ -730,7 +779,7 @@ export default function ConsultScreen() {
                             <Text style={styles.actionBtnText}>撥打電話</Text>
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}`)} style={[styles.actionBtn, styles.actionBtnPrimary]}>
+                        <TouchableOpacity onPress={() => Linking.openURL(hospitalNavigationUrl(hospital))} style={[styles.actionBtn, styles.actionBtnPrimary]}>
                           <Text style={styles.actionBtnTextPrimary}>開啟導航</Text>
                         </TouchableOpacity>
                       </View>
@@ -744,6 +793,10 @@ export default function ConsultScreen() {
                             <View key={dIdx} style={styles.doctorRow}>
                               <Text style={styles.doctorName}>{doc.name} 醫師</Text>
                               <Text style={styles.doctorSpecialty}>專長：{doc.specialty}</Text>
+                              <DoctorScheduleInfo
+                                hospitalCode={hospital.hospital_code}
+                                doctorName={doc.name}
+                              />
                             </View>
                           ))
                         ) : (
@@ -760,6 +813,7 @@ export default function ConsultScreen() {
           ) : (
             <>
               {renderMessages()}
+              {!elderMode && <SafetyAuditPanel safety={latestSafety} />}
               {/* 載入歷史紀錄時已有全螢幕浮層，這裡不再重複顯示打字氣泡 */}
               {loading && !loadingHistory && (
                 <View style={[styles.messageRow, styles.messageRowModel]}>
@@ -813,11 +867,32 @@ export default function ConsultScreen() {
                 placeholder="傳訊息給 CarePath AI..."
                 placeholderTextColor={t.muted}
                 value={inputText}
-                onChangeText={setInputText}
+                onChangeText={(text) => setInputText(text.slice(0, MAX_SYMPTOM_CHARS))}
+                maxLength={MAX_SYMPTOM_CHARS}
                 onSubmitEditing={() => handleSendMessage(inputText)}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
               />
+              {speech.supported && (
+                <TouchableOpacity
+                  style={[
+                    styles.speechButton,
+                    speech.listening && styles.speechButtonActive,
+                    (loading || speech.starting) && styles.speechButtonDisabled,
+                  ]}
+                  onPress={speech.listening ? speech.stop : speech.start}
+                  disabled={loading || speech.starting}
+                  accessibilityRole="button"
+                  accessibilityLabel={speech.listening ? '停止語音輸入' : '用說的輸入症狀'}
+                  accessibilityState={{ disabled: loading || speech.starting, selected: speech.listening }}
+                >
+                  <Icon
+                    name={speech.listening ? 'stop' : 'microphone'}
+                    size={s.subtitle}
+                    color={speech.listening ? '#ffffff' : t.text}
+                  />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity 
                 style={[
                   styles.sendButton,
@@ -832,7 +907,33 @@ export default function ConsultScreen() {
                 <Text style={[styles.sendIcon, (!inputText.trim() || loading) && { color: t.muted }]}>↑</Text>
               </TouchableOpacity>
             </View>
-            
+            {!!inputText.length && (
+              <Text style={[styles.inputCounter, inputText.length >= 1800 && styles.inputCounterWarning]}>
+                {inputText.length} / {MAX_SYMPTOM_CHARS} 字
+                {inputText.length >= 1800 ? '（接近上限）' : ''}
+              </Text>
+            )}
+            {(speech.starting || speech.listening || speech.error) && (
+              <View style={styles.speechStatus}>
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={speech.error ? styles.speechStatusError : { color: t.muted }}
+                >
+                  {speech.error
+                    || (speech.starting
+                      ? '正在準備語音辨識...'
+                      : speech.interim
+                        ? `正在聆聽：${speech.interim}`
+                        : '正在聆聽，說完停一下會自動結束。')}
+                </Text>
+                {!speech.error && (
+                  <Text style={{ color: t.muted, marginTop: 2 }}>
+                    語音由裝置辨識服務處理，可能會使用網路；辨識文字不會自動送出。
+                  </Text>
+                )}
+              </View>
+            )}
+
             {!inputFocused && (
               <>
                 {/* 不適度改用 slider：原本是點一下加一、到 5 再繞回 1，
@@ -858,16 +959,25 @@ export default function ConsultScreen() {
                 </View>
 
                 <View style={styles.controlsRow}>
-                  <View style={[styles.controlBadge, styles.controlBadgeRow, locationStatus === 'success' && { borderColor: t.userBubble }]}>
+                  <TouchableOpacity
+                    onPress={() => setCityPickerVisible(true)}
+                    style={[styles.controlBadge, styles.controlBadgeRow, (locationStatus === 'success' || selectedCity) && { borderColor: t.userBubble }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="選擇縣市或查看定位狀態"
+                  >
                     <Icon
-                      name={locationStatus === 'success' ? 'map-marker-check' : 'map-marker'}
+                      name={locationStatus === 'success' && !selectedCity ? 'map-marker-check' : 'map-marker'}
                       size={s.caption + 1}
-                      color={locationStatus === 'success' ? t.userBubble : t.muted}
+                      color={(locationStatus === 'success' || selectedCity) ? t.userBubble : t.muted}
                     />
-                    <Text style={[styles.controlBadgeText, locationStatus === 'success' && { color: t.userBubble }]}>
-                      {locationStatus === 'loading' ? '定位中...' : locationStatus === 'success' ? '已定位' : '備援定位'}
+                    <Text style={[styles.controlBadgeText, (locationStatus === 'success' || selectedCity) && { color: t.userBubble }]}>
+                      {selectedCity || (
+                        locationStatus === 'loading' ? '定位中...' :
+                          locationStatus === 'success' ? '已定位' :
+                            locationStatus === 'denied' ? '未授權定位' : '未定位，選縣市'
+                      )}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -946,6 +1056,62 @@ export default function ConsultScreen() {
           <View style={{ flex: 1 }}>
             {/* 🎯 核心修復：如果 tempSummaryData 存在，優先在 VisitSummaryPanel 中直接渲染暫存資料；否則正常拉取 API */}
             <VisitSummaryPanel sessionId={sessionId} tempSummaryData={tempSummaryData} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={cityPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCityPickerVisible(false)}
+      >
+        <View style={styles.cityModalBackdrop}>
+          <View style={[styles.cityModal, { maxHeight: '82%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>選擇問診地區</Text>
+              <TouchableOpacity
+                onPress={() => setCityPickerVisible(false)}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="關閉縣市選擇"
+              >
+                <Text style={styles.modalCloseBtnText}>關閉</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.cityModalHint}>
+              選擇縣市後以該地區搜尋；清除選擇則使用已取得的定位，未定位時不推測距離。
+            </Text>
+            <ScrollView>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCity('');
+                  setCityPickerVisible(false);
+                }}
+                style={styles.cityOption}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.cityOptionText, !selectedCity && { fontWeight: '800' }]}>
+                  使用定位／未定位不計距離
+                </Text>
+              </TouchableOpacity>
+              {CITIES.map((city) => (
+                <TouchableOpacity
+                  key={city}
+                  onPress={() => {
+                    setSelectedCity(city);
+                    setCityPickerVisible(false);
+                  }}
+                  style={styles.cityOption}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedCity === city }}
+                >
+                  <Text style={[styles.cityOptionText, selectedCity === city && { color: t.userBubble, fontWeight: '800' }]}>
+                    {city}{selectedCity === city ? '　✓' : ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1091,6 +1257,13 @@ const makeStyles = (s) => StyleSheet.create({
   
   inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: s.radiusLg + 4, paddingHorizontal: s.pad, paddingVertical: 6, borderWidth: s.border, borderColor: s.borderStrong, marginBottom: s.gapLg },
   textInput: { flex: 1, fontSize: s.input, paddingVertical: 10, color: t.text },
+  speechButton: { width: s.touch, height: s.touch, borderRadius: s.touch / 2, alignItems: 'center', justifyContent: 'center', marginLeft: s.gap, backgroundColor: t.subtle },
+  speechButtonActive: { backgroundColor: t.danger },
+  speechButtonDisabled: { opacity: 0.55 },
+  speechStatus: { marginHorizontal: s.pad, marginBottom: s.gap, fontSize: s.caption, lineHeight: s.lineBody },
+  speechStatusError: { color: '#b3261e', fontSize: s.caption, lineHeight: s.lineBody },
+  inputCounter: { alignSelf: 'flex-end', marginHorizontal: s.padLg, marginBottom: s.gap, color: t.muted, fontSize: s.caption },
+  inputCounterWarning: { color: '#c2410c', fontWeight: '700' },
   sendButton: { backgroundColor: '#1A1A1A', borderRadius: s.touch / 2, width: s.touch - 8, height: s.touch - 8, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   sendIcon: { fontSize: s.subtitle, color: '#fff', fontWeight: 'bold' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
@@ -1121,6 +1294,11 @@ const makeStyles = (s) => StyleSheet.create({
   modalHeaderTitle: { fontSize: s.subtitle, fontWeight: '900', color: t.text },
   modalCloseBtn: { padding: 8 },
   modalCloseBtnText: { fontSize: s.body, color: '#2563EB', fontWeight: 'bold' },
+  cityModalBackdrop: { flex: 1, justifyContent: 'center', padding: s.pad, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
+  cityModal: { backgroundColor: t.panel, borderRadius: s.radiusLg, padding: s.pad },
+  cityModalHint: { color: t.muted, fontSize: s.caption, lineHeight: s.lineBody, marginBottom: s.gap },
+  cityOption: { minHeight: s.touch, justifyContent: 'center', paddingHorizontal: s.gap, borderBottomWidth: 1, borderBottomColor: t.border },
+  cityOptionText: { color: t.text, fontSize: s.body, lineHeight: s.lineBody },
 
   // 🎯 安全優先設計：警報看板樣式
   safetyAlertContainer: { backgroundColor: '#FEF2F2', borderStyle: 'solid', borderWidth: 2, borderColor: '#EF4444', borderRadius: 20, padding: 18, marginVertical: 12, shadowColor: '#991B1B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 3 },

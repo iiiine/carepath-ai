@@ -36,7 +36,7 @@ module.exports = {
 
     android: {
       package: 'com.carepathai.app',
-      versionCode: 5,
+      versionCode: 6,
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff',
@@ -59,6 +59,14 @@ module.exports = {
       'expo-secure-store',
       '@react-native-vector-icons/material-design-icons',
       'expo-font',
+
+      [
+        'expo-speech-recognition',
+        {
+          microphonePermission: 'CarePath AI 需要使用麥克風，才能將您說出的症狀轉成文字。',
+          speechRecognitionPermission: 'CarePath AI 需要使用語音辨識，才能將您說出的症狀轉成文字。',
+        },
+      ],
 
       [
         'expo-location',
