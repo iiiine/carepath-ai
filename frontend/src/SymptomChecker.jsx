@@ -20,6 +20,9 @@ import DashboardPage from './pages/DashboardPage';
 // ★ Step 3B-2：AI 就醫摘要
 import VisitSummaryPanel from './VisitSummaryPanel';
 
+// 安全篩檢稽核紀錄（唯讀）
+import SafetyAuditPanel from './SafetyAuditPanel';
+
 import { t } from './theme';
 import { BaymaxAvatar, CarePathWordmark } from './Baymax';
 import Icon from './Icon';
@@ -243,6 +246,12 @@ function SymptomChecker({
 
   const [inputText, setInputText] =
     useState('');
+
+
+  // 最近一次 /diagnose 回傳的安全評估，給稽核面板唯讀顯示。
+  // 三種回應（asking / completed / safety_alert）都會帶 safety。
+  const [latestSafety, setLatestSafety] =
+    useState(null);
 
 
   const [painLevel, setPainLevel] =
@@ -929,6 +938,11 @@ function SymptomChecker({
       );
 
 
+      setLatestSafety(
+        data.safety ?? null
+      );
+
+
       // ======================================
       // Medical Safety Alert
       //
@@ -1313,6 +1327,12 @@ function SymptomChecker({
     );
 
 
+    // 歷史紀錄的回應不帶這次的安全評估；不清掉的話面板會顯示上一段對話的結果
+    setLatestSafety(
+      null
+    );
+
+
     setResultLocation(null);
     // Step 3B-2：歷史問診直接使用資料庫 Session ID
     setCurrentSessionId(
@@ -1596,6 +1616,11 @@ function SymptomChecker({
 
 
     setSafetyAlert(
+      null
+    );
+
+
+    setLatestSafety(
       null
     );
 
@@ -2758,6 +2783,14 @@ function SymptomChecker({
               )}
 
 
+              {/* 安全篩檢稽核紀錄：給醫護與評審核對，高齡模式不顯示以免干擾 */}
+              {!loading && !elderFriendlyMode && (
+                <SafetyAuditPanel
+                  safety={latestSafety}
+                />
+              )}
+
+
               <div
                 ref={
                   messagesEndRef
@@ -3904,6 +3937,13 @@ function SymptomChecker({
                       </div>
 
                     )
+                  )}
+
+
+                  {!elderFriendlyMode && (
+                    <SafetyAuditPanel
+                      safety={latestSafety}
+                    />
                   )}
 
 
