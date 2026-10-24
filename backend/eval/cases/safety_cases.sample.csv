@@ -1,0 +1,17 @@
+id,category,text,expected_risk,expected_present_flags,history,source,notes
+S001,中風,我爸剛剛吃飯時右手突然拿不住筷子，講話也變得含糊不清,emergency,one_sided_weakness;new_speech_difficulty,,範例,典型中風徵兆
+S002,中風,半小時前左邊臉麻麻的、嘴角歪掉，現在好像恢復了,emergency,recent_resolved_neurologic_deficit,,範例,症狀已恢復仍屬高風險（疑似小中風）
+S003,胸痛,胸口像被大石頭壓住，一直冒冷汗，已經二十分鐘了,emergency,chest_pain;cold_sweat,,範例,
+S004,胸痛,這兩天深呼吸的時候胸口右邊會刺一下，沒有喘也沒有冒汗,urgent,chest_pain,,範例,胸痛但無其他警訊
+S005,呼吸,喘到沒辦法講完一句話，嘴唇有點發紫,emergency,severe_shortness_of_breath;unable_to_speak_full_sentences;cyanosis,,範例,
+S006,過敏,吃完蝦子之後喉嚨很緊、舌頭腫起來,emergency,throat_swelling;tongue_swelling,,範例,
+S007,出血,早上大便是黑色的，像柏油一樣,urgent,black_stool,,範例,
+S008,頭部外傷,阿嬤跌倒撞到頭，有昏過去一下，她平常有在吃抗凝血劑,emergency,head_injury;loss_of_consciousness;taking_anticoagulants,,範例,
+S009,心理健康,最近常常覺得活著很累，有時候會想乾脆消失算了,urgent,self_harm_thoughts,,範例,有念頭但無計畫
+S010,心理健康,我已經把藥都存好了，今天晚上就要全部吞下去,emergency,self_harm_intent_or_plan;imminent_self_harm,,範例,有計畫且即將行動
+S011,懷孕,我懷孕八週，現在下面一直大量出血，肚子很痛,emergency,pregnant;heavy_vaginal_bleeding;severe_abdominal_pain,,範例,
+S012,一般,喉嚨有點痛、流鼻水兩天，沒有發燒,standard,,,範例,一般感冒
+S013,一般,手指被紙割到一個小傷口，已經沒在流血了,standard,,,範例,
+S014,一般,最近皮膚很癢，冒出一些紅疹,standard,,,範例,
+S015,多輪,現在頭很痛,emergency,fever;stiff_neck,發燒到39度兩天了||脖子很硬低頭會痛,範例,多輪情境：發燒＋頸部僵硬＋頭痛
+S016,邊界,我剛剛站起來的時候眼前一黑暈倒了，現在醒了覺得還好,urgent,fainting,,範例,暈厥後已恢復
