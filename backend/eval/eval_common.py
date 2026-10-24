@@ -22,6 +22,11 @@ BACKEND_DIR = EVAL_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+# Git Bash 的主控台是 cp950，印 emoji 會直接 UnicodeEncodeError 中止評測
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 # ============================================================
 # 風險等級
