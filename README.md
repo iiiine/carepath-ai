@@ -78,6 +78,8 @@ npm start
 
 APK 透過 EAS Build 打包（設定見 `mobile_app/eas.json`）；雲端建置不會讀本機 `.env`，需用 `eas env:set` 另外設定。
 
+行動端語音輸入使用裝置的語音辨識服務，需允許麥克風與語音辨識權限。辨識結果只會填入問診輸入框，不會自動送出；裝置的辨識服務可能需要網路。新增或更新原生模組後須重新以 EAS 建置 App，Expo Go 不包含此原生功能。
+
 ## RAG 知識庫
 
 衛教文件放在 `backend/data/knowledge/*.txt`，更新後重新匯入：

@@ -11,15 +11,26 @@ import React from 'react';
 import { Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
+function coordinate(value, limit) {
+    if (value == null || value === '') return null;
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    const number = Number(value);
+    return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+}
 
 export default function NearbyHospitalMap({
     style,
     userLocation,
-    fallbackLocation,
     hospitals,
 }) {
-    const lat = Number(userLocation?.latitude ?? fallbackLocation.latitude);
-    const lng = Number(userLocation?.longitude ?? fallbackLocation.longitude);
+    const firstHospital = Array.isArray(hospitals)
+        ? hospitals.find((hospital) => coordinate(hospital.latitude, 90) !== null && coordinate(hospital.longitude, 180) !== null)
+        : null;
+    const userLat = coordinate(userLocation?.latitude, 90);
+    const userLng = coordinate(userLocation?.longitude, 180);
+    const hasUserLocation = userLat !== null && userLng !== null;
+    const lat = hasUserLocation ? userLat : (coordinate(firstHospital?.latitude, 90) ?? 23.6978);
+    const lng = hasUserLocation ? userLng : (coordinate(firstHospital?.longitude, 180) ?? 120.9605);
 
     return (
         <MapView
@@ -35,17 +46,19 @@ export default function NearbyHospitalMap({
                 longitudeDelta: 0.02,
             }}
         >
-            <Marker
-                coordinate={{ latitude: lat, longitude: lng }}
-                title="目前位置"
-                pinColor="red"
-            />
+            {hasUserLocation && (
+                <Marker
+                    coordinate={{ latitude: userLat, longitude: userLng }}
+                    title="目前位置"
+                    pinColor="red"
+                />
+            )}
 
             {Array.isArray(hospitals) && hospitals.map((hospital, idx) => {
-                const hLat = parseFloat(hospital.latitude);
-                const hLng = parseFloat(hospital.longitude);
+                const hLat = coordinate(hospital.latitude, 90);
+                const hLng = coordinate(hospital.longitude, 180);
 
-                if (isNaN(hLat) || isNaN(hLng)) return null;
+                if (hLat === null || hLng === null) return null;
 
                 return (
                     <Marker
