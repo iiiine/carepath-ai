@@ -59,7 +59,7 @@ UTF-8 CSV，Excel 另存「CSV UTF-8」即可。範例見 `cases/*.sample.csv`�
 | `text` | ✅ | 使用者的第一句話 |
 | `expected_departments` | ✅ | 可接受的科別，多個用 `;` 分隔，**必須在白名單內**（見下） |
 | `followup_answer` | | AI 追問時的回答，沒填就回「沒有其他補充了」 |
-| `pain_level` | | 0–10，預設 5 |
+| `pain_level` | | 1–5 的整數（與正式 API 相同），預設 3 |
 | `history`、`category`、`source`、`notes` | | 同上 |
 
 目前科別白名單（資料庫 `doctors` 表實際有醫師的科別，共 9 科）：

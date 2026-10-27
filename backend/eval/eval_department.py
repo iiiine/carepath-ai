@@ -55,6 +55,10 @@ FALLBACK_DEPARTMENT = "家醫科"
 
 DEFAULT_FOLLOWUP_ANSWER = "沒有其他補充了，請依目前的資訊建議科別。"
 
+# 與 models.py DiagnoseRequest.pain_level 相同：1～5，預設 3
+VALID_PAIN_LEVELS = {"1", "2", "3", "4", "5"}
+DEFAULT_PAIN_LEVEL = 3
+
 
 # ============================================================
 # 關鍵字對照組
@@ -162,7 +166,7 @@ def predict_ai(
             rag_knowledge=rag_knowledge,
             profile_info_text=GUEST_PROFILE_TEXT,
             safety_result=safety_result,
-            pain_level=case.get("pain_level") or 5,
+            pain_level=case.get("pain_level") or DEFAULT_PAIN_LEVEL,
             departments=departments,
             history=history,
             symptom_text=symptom_text,
@@ -408,6 +412,18 @@ def main():
         raise SystemExit(
             f"❌ expected_departments 有不在白名單的科別：{invalid}\n"
             f"   目前白名單：{departments}"
+        )
+
+    # 正式 API 只接受 1～5（models.py DiagnoseRequest），範圍外的值線上根本送不進來
+    bad_pain = [
+        case["id"]
+        for case in cases
+        if case.get("pain_level") and case["pain_level"] not in VALID_PAIN_LEVELS
+    ]
+
+    if bad_pain:
+        raise SystemExit(
+            f"❌ pain_level 只能是 1～5 的整數（與正式 API 相同），有問題的 id：{bad_pain}"
         )
 
     if args.limit:
