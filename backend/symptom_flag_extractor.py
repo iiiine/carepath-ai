@@ -15,7 +15,10 @@ from services import client, GEMINI_MODEL_NAME
 # Extractor Version
 # ============================================================
 
-SYMPTOM_EXTRACTOR_VERSION = "2026.10.1"  # 2026.10.1：被動的死亡意念視為 self_harm_thoughts
+# 2026.10.1：被動的死亡意念視為 self_harm_thoughts
+# 2026.10.2：新增 11 個旗標（突然視力喪失、雷擊樣頭痛、嚴重平衡障礙等），
+#            來源是 Robin 案例集評測的漏判分析
+SYMPTOM_EXTRACTOR_VERSION = "2026.10.2"
 
 
 # ============================================================
@@ -181,6 +184,52 @@ class SymptomFlagsSchema(BaseModel):
     fever: FlagState = "unknown"
 
     persistent_vomiting: FlagState = "unknown"
+
+
+    # --------------------------------------------------------
+    # 2026.10.2 新增：評測發現規則表沒有涵蓋的警訊
+    #
+    # 每個旗標本身就是完整的警訊（例如「未滿三個月嬰兒發燒」），
+    # 組合判斷由抽取器做，規則端只看單一旗標。
+    #
+    # 不在規則端用兩個旗標組合：組合規則只要有一個旗標成立
+    # 就會被追問閘門帶動（safety_engine._is_engaged），
+    # 例如「發燒 且 未滿三個月」會讓所有發燒的人都被追問年齡、
+    # 沒有問句時還會被標成評估未完成。
+    # --------------------------------------------------------
+
+    # 突然單眼或雙眼看不見、視野突然缺一塊（含已恢復的短暫發作）
+    sudden_vision_loss: FlagState = "unknown"
+
+    # 突然爆發、數秒到一分鐘內就達到最劇烈的頭痛
+    thunderclap_headache: FlagState = "unknown"
+
+    # 突然發生且持續的嚴重平衡障礙：站不住、走路一直偏向一側
+    acute_severe_imbalance: FlagState = "unknown"
+
+    # 清潔劑、強酸強鹼等化學物質進入眼睛
+    eye_chemical_injury: FlagState = "unknown"
+
+    # 誤食或吞下清潔劑、強酸強鹼、農藥、大量藥物等有毒物質
+    toxic_ingestion: FlagState = "unknown"
+
+    # 未滿三個月的嬰兒發燒
+    young_infant_fever: FlagState = "unknown"
+
+    # 突然撕裂樣的胸痛或背痛
+    tearing_chest_or_back_pain: FlagState = "unknown"
+
+    # 任何部位大量出血（含陰道、產後），合併頭暈到快站不住、虛弱或昏倒
+    bleeding_with_shock_signs: FlagState = "unknown"
+
+    # 差點昏倒、眼前發黑快暈過去，但沒有真的失去意識
+    near_syncope: FlagState = "unknown"
+
+    # 咳出血
+    coughing_blood: FlagState = "unknown"
+
+    # 脫水警訊：尿量明顯變少，合併喝不下、嚴重腹瀉或站起來頭暈
+    dehydration_signs: FlagState = "unknown"
 
 
 class SymptomExtractionSchema(BaseModel):
@@ -776,6 +825,55 @@ fever
 
 persistent_vomiting
 持續或反覆嘔吐。
+
+sudden_vision_loss
+突然發生的單眼或雙眼看不見、視野突然缺一塊或一整片變黑。
+已經恢復的短暫發作（例如「剛才右眼黑掉幾分鐘，現在又看得到」）
+也要標記 present —— 症狀消失不代表風險解除。
+慢慢變模糊、眼睛乾澀、老花、看久了累，不可標記 present。
+
+thunderclap_headache
+突然爆發、幾秒到一分鐘內就達到最劇烈的頭痛，
+例如「像被打到一樣突然爆痛」「這輩子最痛的頭痛」。
+一般頭痛、慢慢加重的頭痛，不可標記 present。
+
+acute_severe_imbalance
+突然發生、目前仍持續的嚴重平衡障礙：
+站不住、扶著也站不穩、走路一直偏向一側、天旋地轉到無法站立。
+一般頭暈、站起來一下子暈、已經完全恢復的輕微頭暈，不可標記 present。
+
+eye_chemical_injury
+清潔劑、漂白水、強酸強鹼等化學物質噴到或流進眼睛。
+
+toxic_ingestion
+誤食或吞下清潔劑、強酸強鹼、農藥、燈油、大量藥物、電池等有毒或危險物品。
+只吃到不新鮮的食物，不可標記 present。
+
+young_infant_fever
+未滿三個月的嬰兒發燒（約 38 度以上）。
+只有年齡與發燒兩項都明確時才標記 present；
+三個月以上的孩子發燒標記 absent，不知道年齡時用 unknown。
+
+tearing_chest_or_back_pain
+突然撕裂樣、刀割樣的劇烈胸痛或背痛，或從胸口一路痛到背後。
+
+bleeding_with_shock_signs
+任何部位大量出血（含陰道出血、產後出血、外傷出血），
+同時出現頭暈到快站不住、非常虛弱、臉色蒼白冒冷汗或昏倒。
+出血量不大、或沒有任何頭暈虛弱，不可標記 present。
+
+near_syncope
+差點昏倒、眼前發黑快暈過去，但沒有真的失去意識。
+已經真的昏倒的情況屬於 fainting，不是這個旗標。
+
+coughing_blood
+咳嗽時咳出血或血絲。
+吐血（從胃吐出來）屬於 vomiting_blood。
+
+dehydration_signs
+尿量明顯變少或很久沒尿，
+同時有喝不下水、嚴重腹瀉或嘔吐、站起來頭暈其中一項。
+只有口渴，不可標記 present。
 
 
 ============================================================

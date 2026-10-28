@@ -28,7 +28,7 @@ import re
 import sys
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
@@ -54,6 +54,10 @@ NO_RAG_TEXT = "暫無相關衛教知識"
 FALLBACK_DEPARTMENT = "家醫科"
 
 DEFAULT_FOLLOWUP_ANSWER = "沒有其他補充了，請依目前的資訊建議科別。"
+
+# 與 models.py DiagnoseRequest.pain_level 相同：1～5，預設 3
+VALID_PAIN_LEVELS = {"1", "2", "3", "4", "5"}
+DEFAULT_PAIN_LEVEL = 3
 
 
 # ============================================================
@@ -162,7 +166,7 @@ def predict_ai(
             rag_knowledge=rag_knowledge,
             profile_info_text=GUEST_PROFILE_TEXT,
             safety_result=safety_result,
-            pain_level=case.get("pain_level") or 5,
+            pain_level=case.get("pain_level") or DEFAULT_PAIN_LEVEL,
             departments=departments,
             history=history,
             symptom_text=symptom_text,
@@ -389,6 +393,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--max-turns", type=int, default=3)
+    parser.add_argument("--resume", help="接續先前中斷的結果資料夾，已完成的不重跑")
+    parser.add_argument("--retry-failures", action="store_true", help="接續時把執行錯誤的案例重跑")
     args = parser.parse_args()
 
     cases_path = ec.Path(args.cases)
@@ -410,6 +416,18 @@ def main():
             f"   目前白名單：{departments}"
         )
 
+    # 正式 API 只接受 1～5（models.py DiagnoseRequest），範圍外的值線上根本送不進來
+    bad_pain = [
+        case["id"]
+        for case in cases
+        if case.get("pain_level") and case["pain_level"] not in VALID_PAIN_LEVELS
+    ]
+
+    if bad_pain:
+        raise SystemExit(
+            f"❌ pain_level 只能是 1～5 的整數（與正式 API 相同），有問題的 id：{bad_pain}"
+        )
+
     if args.limit:
         cases = cases[: args.limit]
 
@@ -427,20 +445,35 @@ def main():
         warmup_ms = round((time.perf_counter() - started) * 1000, 1)
         print(f"🔥 RAG 暖機 {warmup_ms / 1000:.1f} 秒")
 
-    print(f"🧪 {args.system}：{len(cases)} 案")
+    run_dir = ec.open_run_dir(f"department_{args.system}", args.resume)
 
-    rows: List[Dict[str, Any]] = []
-    console = io.StringIO()
+    wanted = {case["id"] for case in cases}
+    rows: List[Dict[str, Any]] = [
+        r
+        for r in ec.load_checkpoint(run_dir, args.retry_failures)
+        if r["id"] in wanted
+    ]
+    finished = {r["id"] for r in rows}
+    pending = [case for case in cases if case["id"] not in finished]
 
-    # 理由同 eval_safety.py：redirect_stdout 是全域的，只能包在 pool 外面
-    with contextlib.redirect_stdout(console), ThreadPoolExecutor(max_workers=args.workers) as pool:
+    print(f"🧪 {args.system}：{len(cases)} 案，已完成 {len(rows)}，剩 {len(pending)} 案")
+    print(f"   結果資料夾：{run_dir}（中斷後用 --resume 這個路徑接續）")
+
+    # 理由同 eval_safety.py：redirect_stdout 是全域的，只能包在 pool 外面；
+    # 每案完成就落檔，被中止時已完成的不會白費
+    with open(run_dir / "console.log", "a", encoding="utf-8") as console, \
+            contextlib.redirect_stdout(console), \
+            ThreadPoolExecutor(max_workers=args.workers) as pool:
+
         futures = [
             pool.submit(run_one, args.system, case, departments, args.max_turns)
-            for case in cases
+            for case in pending
         ]
 
-        for done, future in enumerate(futures, start=1):
-            rows.append(future.result())
+        for done, future in enumerate(as_completed(futures), start=1):
+            row = future.result()
+            rows.append(row)
+            ec.append_checkpoint(run_dir, row)
 
             if done % 10 == 0 or done == len(futures):
                 print(f"   {done}/{len(futures)}", file=sys.__stdout__, flush=True)
@@ -461,11 +494,9 @@ def main():
         "result": summarize(rows),
     }
 
-    run_dir = ec.make_run_dir(f"department_{args.system}")
     ec.write_csv(rows, run_dir / "predictions.csv")
     ec.write_json(summary, run_dir / "summary.json")
     (run_dir / "summary.md").write_text(render_markdown(summary, rows), encoding="utf-8")
-    (run_dir / "console.log").write_text(console.getvalue(), encoding="utf-8")
 
     s = summary["result"]
     print()
