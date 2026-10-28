@@ -27,9 +27,11 @@ from safety_types import (
 #
 # 2026.09.2：規則改用三態（safety_types），新增 indeterminate_rules。
 #            命中條件與 2026.09.1 相同，只有 present 會命中。
+# 2026.10.1：新增 8 條 emergency、5 條 urgent 規則（評測漏判分析），
+#            全部為單一旗標規則，不改變既有規則與追問行為。
 # ============================================================
 
-SAFETY_ENGINE_VERSION = "2026.09.3"
+SAFETY_ENGINE_VERSION = "2026.10.1"
 
 
 # ============================================================
@@ -373,6 +375,127 @@ EMERGENCY_RULES: List[SafetyRule] = [
             ),
         ),
     ),
+
+    # --------------------------------------------------------
+    # 2026.10.1 新增
+    #
+    # 來源：Robin 案例集（S001-S200）評測的漏判分析。
+    # 每條只看一個旗標，組合判斷在抽取器做，理由見
+    # symptom_flag_extractor.py 對應段落：組合規則會被追問閘門帶動，
+    # 讓大量無關的使用者被追問或被標成評估未完成。
+    #
+    # ⚠️ 尚待臨床人員審閱。
+    # --------------------------------------------------------
+
+    SafetyRule(
+        code="SUDDEN_VISION_LOSS",
+        risk_level=RISK_EMERGENCY,
+        title="突然視力喪失",
+        reason=(
+            "突然單眼或雙眼看不見、視野缺損，"
+            "即使已經恢復，仍可能是中風或眼部急症的警訊。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "sudden_vision_loss",
+        ),
+    ),
+
+    SafetyRule(
+        code="THUNDERCLAP_HEADACHE",
+        risk_level=RISK_EMERGENCY,
+        title="突發劇烈頭痛",
+        reason=(
+            "頭痛在數秒到一分鐘內達到最劇烈，"
+            "需立即排除腦出血等急症。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "thunderclap_headache",
+        ),
+    ),
+
+    SafetyRule(
+        code="ACUTE_SEVERE_IMBALANCE",
+        risk_level=RISK_EMERGENCY,
+        title="突發嚴重平衡障礙",
+        reason=(
+            "突然站不穩、走路偏向一側且持續，"
+            "可能是後循環中風等神經學急症。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "acute_severe_imbalance",
+        ),
+    ),
+
+    SafetyRule(
+        code="EYE_CHEMICAL_INJURY",
+        risk_level=RISK_EMERGENCY,
+        title="化學物質入眼",
+        reason=(
+            "化學物質進入眼睛需要立即持續沖洗並緊急就醫。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "eye_chemical_injury",
+        ),
+    ),
+
+    SafetyRule(
+        code="TOXIC_INGESTION",
+        risk_level=RISK_EMERGENCY,
+        title="誤食有毒物質",
+        reason=(
+            "誤食清潔劑、強酸鹼、農藥或大量藥物等，"
+            "需立即就醫或聯絡毒物諮詢。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "toxic_ingestion",
+        ),
+    ),
+
+    SafetyRule(
+        code="YOUNG_INFANT_FEVER",
+        risk_level=RISK_EMERGENCY,
+        title="未滿三個月嬰兒發燒",
+        reason=(
+            "未滿三個月的嬰兒發燒需要立即就醫評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "young_infant_fever",
+        ),
+    ),
+
+    SafetyRule(
+        code="TEARING_CHEST_OR_BACK_PAIN",
+        risk_level=RISK_EMERGENCY,
+        title="撕裂樣胸背痛",
+        reason=(
+            "突然撕裂樣的胸痛或背痛，"
+            "需立即排除主動脈剝離等急症。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "tearing_chest_or_back_pain",
+        ),
+    ),
+
+    SafetyRule(
+        code="BLEEDING_WITH_SHOCK_SIGNS",
+        risk_level=RISK_EMERGENCY,
+        title="大量出血合併頭暈虛弱",
+        reason=(
+            "大量出血同時出現頭暈到快站不住、虛弱或昏倒，"
+            "可能已影響血液循環。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "bleeding_with_shock_signs",
+        ),
+    ),
 ]
 
 
@@ -491,6 +614,84 @@ URGENT_RULES: List[SafetyRule] = [
         predicate=lambda f: has(
             f,
             "head_injury",
+        ),
+    ),
+
+    # --------------------------------------------------------
+    # 2026.10.1 新增（來源同上方 emergency 新增段落）
+    #
+    # urgent 規則不產生追問、也不影響評估完整度
+    # （safety_followup 與 safety_observability 只看 emergency），
+    # 所以這裡沿用既有旗標也不會改變追問行為。
+    #
+    # ⚠️ 尚待臨床人員審閱。
+    # --------------------------------------------------------
+
+    SafetyRule(
+        code="SHORTNESS_OF_BREATH",
+        risk_level=RISK_URGENT,
+        title="呼吸困難需要儘快評估",
+        reason=(
+            "新出現或惡化的喘、呼吸不順，"
+            "即使尚未嚴重，仍建議儘快接受醫療評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "shortness_of_breath",
+        ),
+    ),
+
+    SafetyRule(
+        code="NEAR_SYNCOPE",
+        risk_level=RISK_URGENT,
+        title="差點昏倒需要儘快評估",
+        reason=(
+            "出現眼前發黑、快要暈倒的情形，"
+            "即使已經恢復，仍建議儘快接受醫療評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "near_syncope",
+        ),
+    ),
+
+    SafetyRule(
+        code="COUGHING_BLOOD",
+        risk_level=RISK_URGENT,
+        title="咳血需要儘快評估",
+        reason=(
+            "咳出血即使量少，也建議儘快接受醫療評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "coughing_blood",
+        ),
+    ),
+
+    SafetyRule(
+        code="DEHYDRATION_SIGNS",
+        risk_level=RISK_URGENT,
+        title="脫水警訊",
+        reason=(
+            "尿量明顯減少，合併喝不下、嚴重腹瀉或站起來頭暈，"
+            "可能有脫水風險。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "dehydration_signs",
+        ),
+    ),
+
+    SafetyRule(
+        code="SEVERE_ABDOMINAL_PAIN",
+        risk_level=RISK_URGENT,
+        title="劇烈腹痛需要儘快評估",
+        reason=(
+            "出現劇烈腹痛，建議儘快接受醫療評估。"
+        ),
+        predicate=lambda f: has(
+            f,
+            "severe_abdominal_pain",
         ),
     ),
 ]
@@ -942,7 +1143,58 @@ if __name__ == "__main__":
             "name": "胸痛 + 呼吸困難",
             "flags": {"chest_pain": P, "shortness_of_breath": P},
             "risk_level": RISK_EMERGENCY,
-            "codes": ["HIGH_RISK_CHEST_PAIN", "CHEST_PAIN"],
+            "codes": ["HIGH_RISK_CHEST_PAIN", "CHEST_PAIN", "SHORTNESS_OF_BREATH"],
+        },
+
+        # ---- 2026.10.1 新增規則 ----
+
+        {
+            "name": "短暫單眼視力喪失（已恢復）",
+            "flags": {"sudden_vision_loss": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["SUDDEN_VISION_LOSS"],
+        },
+
+        {
+            "name": "雷擊樣頭痛",
+            "flags": {"thunderclap_headache": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["THUNDERCLAP_HEADACHE"],
+        },
+
+        {
+            "name": "未滿三個月嬰兒發燒",
+            "flags": {"young_infant_fever": P, "fever": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["YOUNG_INFANT_FEVER"],
+        },
+
+        {
+            "name": "大量出血合併頭暈",
+            "flags": {"bleeding_with_shock_signs": P},
+            "risk_level": RISK_EMERGENCY,
+            "codes": ["BLEEDING_WITH_SHOCK_SIGNS"],
+        },
+
+        {
+            "name": "單純喘，沒有胸痛",
+            "flags": {"shortness_of_breath": P, "chest_pain": A},
+            "risk_level": RISK_URGENT,
+            "codes": ["SHORTNESS_OF_BREATH"],
+        },
+
+        {
+            "name": "差點昏倒但沒失去意識",
+            "flags": {"near_syncope": P, "fainting": A},
+            "risk_level": RISK_URGENT,
+            "codes": ["NEAR_SYNCOPE"],
+        },
+
+        {
+            "name": "明確否認視力喪失",
+            "flags": {"sudden_vision_loss": A},
+            "risk_level": RISK_STANDARD,
+            "codes": [],
         },
 
         {
@@ -1086,6 +1338,18 @@ if __name__ == "__main__":
         {"pregnant": U, "heavy_vaginal_bleeding": P}
     )
     assert indeterminate(result)["PREGNANCY_EMERGENCY"] == ["pregnant"]
+
+    # 2026.10.1 新增規則都是單一旗標：只說發燒時，
+    # 嬰兒發燒規則仍未被帶動，不會產生追問、也不會讓評估變成未完成
+    result = evaluate_red_flags(
+        {"fever": P}
+    )
+    young_infant = next(
+        rule
+        for rule in result["indeterminate_rules"]
+        if rule["code"] == "YOUNG_INFANT_FEVER"
+    )
+    assert young_infant["engaged"] is False
 
     # 已命中的規則不會出現在 indeterminate_rules
     result = evaluate_red_flags(
