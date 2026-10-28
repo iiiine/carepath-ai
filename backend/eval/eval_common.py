@@ -266,6 +266,83 @@ def make_run_dir(
     return run_dir
 
 
+def open_run_dir(
+    name: str,
+    resume: Optional[str],
+) -> Path:
+    """--resume 給了就沿用那個資料夾，否則開新的。"""
+
+    if not resume:
+        return make_run_dir(name)
+
+    run_dir = Path(resume)
+
+    if not run_dir.is_dir():
+        raise SystemExit(f"❌ 找不到要接續的資料夾：{run_dir}")
+
+    return run_dir
+
+
+# ============================================================
+# 斷點續跑
+#
+# 每完成一筆就追加一行到 rows.jsonl。
+# 評測一跑就是上千次呼叫，原本全部跑完才寫檔，
+# 中途被系統停掉時已完成的呼叫全部白費（2026-10-28 實際發生過）。
+# ============================================================
+
+CHECKPOINT_FILE = "rows.jsonl"
+
+
+def load_checkpoint(
+    run_dir: Path,
+    drop_failures: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    讀回已完成的列。
+
+    drop_failures：把技術失敗的列丟掉讓它重跑。
+    配額用完造成的失敗不代表系統行為，但要不要重跑由執行者決定，不自動丟。
+    """
+
+    path = run_dir / CHECKPOINT_FILE
+
+    if not path.exists():
+        return []
+
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    if drop_failures:
+        rows = [
+            r
+            for r in rows
+            if not r.get("technical_failure") and not r.get("error")
+        ]
+
+        # 丟掉的列不能還留在檔案裡，否則下次讀回來又會出現
+        path.write_text(
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+            encoding="utf-8",
+        )
+
+    return rows
+
+
+def append_checkpoint(
+    run_dir: Path,
+    row: Dict[str, Any],
+) -> None:
+    """只在主執行緒呼叫，不需要鎖。"""
+
+    with open(run_dir / CHECKPOINT_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        f.flush()
+
+
 def write_csv(
     rows: List[Dict[str, Any]],
     path: Path,

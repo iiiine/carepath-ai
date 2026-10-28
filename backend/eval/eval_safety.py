@@ -16,12 +16,11 @@
 
 import argparse
 import contextlib
-import io
 import json
 import sys
 import time
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel
@@ -520,6 +519,8 @@ def main():
         default=None,
         help="只影響 llm_only；不給就用模型預設值，模擬一般人直接問 AI 的情況",
     )
+    parser.add_argument("--resume", help="接續先前中斷的結果資料夾，已完成的不重跑")
+    parser.add_argument("--retry-failures", action="store_true", help="接續時把技術失敗的列重跑")
     args = parser.parse_args()
 
     cases_path = ec.Path(args.cases)
@@ -539,23 +540,37 @@ def main():
         for case in cases
     ]
 
-    print(f"🧪 {args.system}：{len(cases)} 案 × {args.repeats} 次 = {len(jobs)} 次呼叫")
+    run_dir = ec.open_run_dir(f"safety_{args.system}", args.resume)
 
-    rows: List[Dict[str, Any]] = []
+    wanted = {(case["id"], repeat) for case, repeat in jobs}
+    rows: List[Dict[str, Any]] = [
+        r
+        for r in ec.load_checkpoint(run_dir, args.retry_failures)
+        if (r["id"], r["repeat"]) in wanted
+    ]
+    finished = {(r["id"], r["repeat"]) for r in rows}
+    jobs = [(case, repeat) for case, repeat in jobs if (case["id"], repeat) not in finished]
 
-    # pipeline 每次都會印效能 log，評測時整段收起來另存 console.log。
+    print(f"🧪 {args.system}：{len(cases)} 案 × {args.repeats} 次，已完成 {len(rows)}，剩 {len(jobs)} 次呼叫")
+    print(f"   結果資料夾：{run_dir}（中斷後用 --resume 這個路徑接續）")
+
+    # pipeline 每次都會印效能 log，評測時整段導到 console.log。
     # redirect_stdout 換的是全域 sys.stdout，不可以在各執行緒裡各自包，
     # 所以包在整個 pool 外面，進度訊息直接寫 sys.__stdout__。
-    console = io.StringIO()
+    with open(run_dir / "console.log", "a", encoding="utf-8") as console, \
+            contextlib.redirect_stdout(console), \
+            ThreadPoolExecutor(max_workers=args.workers) as pool:
 
-    with contextlib.redirect_stdout(console), ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [
             pool.submit(run_one, args.system, case, repeat, args.temperature)
             for case, repeat in jobs
         ]
 
-        for done, future in enumerate(futures, start=1):
-            rows.append(future.result())
+        # 依完成順序收：每筆一完成就落檔，被中止時最多只損失還在跑的幾筆
+        for done, future in enumerate(as_completed(futures), start=1):
+            row = future.result()
+            rows.append(row)
+            ec.append_checkpoint(run_dir, row)
 
             if done % 10 == 0 or done == len(futures):
                 print(f"   {done}/{len(futures)}", file=sys.__stdout__, flush=True)
@@ -614,11 +629,9 @@ def main():
             for code in ec.split_multi(r["matched_rules"])
         ).most_common()
 
-    run_dir = ec.make_run_dir(f"safety_{args.system}")
     ec.write_csv(rows, run_dir / "predictions.csv")
     ec.write_json(summary, run_dir / "summary.json")
     (run_dir / "summary.md").write_text(render_markdown(summary), encoding="utf-8")
-    (run_dir / "console.log").write_text(console.getvalue(), encoding="utf-8")
 
     s = summary["first_run"]
     print()
