@@ -1,38 +1,36 @@
 # eval/eval_safety.py
 #
-# 安全分級評測：同一批案例，比較兩個系統。
+# 安全分級評測：同一批案例，比較三個系統。
 #
-#   carepath  正式的 Safety Pipeline（Gemini 抽取三態旗標 → 規則引擎判斷）
-#   llm_only  對照組：直接請同一個 Gemini 模型判斷緊急程度，不經規則引擎
+#   carepath        正式的 Safety Pipeline：抽取三態旗標 → 規則引擎，再加 AI 安全網（只能升級）
+#   carepath_rules  同上但關掉安全網，量「只有規則」的表現
+#   llm_only        對照組：直接請同一個 Gemini 判斷緊急程度，不經規則引擎
 #
-# llm_only 只存在於評測，不是正式流程的任何一部分。
+# llm_only 呼叫的就是正式的 safety_llm_net.run_safety_net（同一份 prompt），
+# 只是 temperature 用模型預設值，模擬一般人直接問 AI 的情況。
 #
 # 執行（在 backend/ 底下）：
 #
 #   & $py eval/eval_safety.py --system carepath --repeats 5
+#   & $py eval/eval_safety.py --system carepath_rules --repeats 5
 #   & $py eval/eval_safety.py --system llm_only --repeats 5
 #
-# ⚠️ 會實際呼叫 Gemini：案例數 × repeats 次。
+# ⚠️ 會實際呼叫 Gemini：案例數 × repeats 次（carepath 每次兩個呼叫）。
 
 import argparse
 import contextlib
-import json
 import sys
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Literal, Optional
-
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
 
 import eval_common as ec
 
-from google.genai import types
-from google.genai.errors import APIError
-
-from services import client, GEMINI_MODEL_NAME
+from services import GEMINI_MODEL_NAME
 from safety_pipeline import run_safety_pipeline, SAFETY_PIPELINE_VERSION
 from safety_engine import SAFETY_ENGINE_VERSION
+from safety_llm_net import run_safety_net, SAFETY_NET_VERSION
 from symptom_flag_extractor import SYMPTOM_EXTRACTOR_VERSION
 
 
@@ -46,31 +44,32 @@ REQUIRED_COLUMNS = (
 
 
 # ============================================================
-# 系統一：CarePath Safety Pipeline
+# CarePath Safety Pipeline（含／不含 AI 安全網）
 # ============================================================
 
-def predict_carepath(
+def _predict_pipeline(
     case: Dict[str, str],
-    temperature: Optional[float],
+    use_safety_net: bool,
 ) -> Dict[str, Any]:
-    """
-    呼叫正式的 run_safety_pipeline。
-
-    temperature 參數對這個系統無效（抽取器在正式環境固定 temperature=0），
-    只是為了和 llm_only 共用同一個介面。
-    """
 
     started = time.perf_counter()
 
     result = run_safety_pipeline(
         symptom_text=case["text"],
         history=ec.parse_history(case.get("history", "")),
+        use_safety_net=use_safety_net,
     )
+
+    net = result.get("safety_net") or {}
 
     return {
         "predicted_risk": result["risk_level"],
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         "technical_failure": result["technical_failure"],
+        "rule_risk": result.get("rule_risk_level") or "",
+        "net_status": net.get("status", ""),
+        "net_risk": net.get("risk_level", ""),
+        "net_escalated": bool(net.get("escalated")),
         "matched_rules": ";".join(
             rule["code"]
             for rule in result.get("red_flags", [])
@@ -80,112 +79,59 @@ def predict_carepath(
             rule["code"]
             for rule in result.get("indeterminate_rules", [])
         ),
-        "reason": "",
+        "reason": net.get("reason", ""),
     }
 
 
+def predict_carepath(
+    case: Dict[str, str],
+    temperature: Optional[float],
+) -> Dict[str, Any]:
+    """temperature 對這個系統無效：正式流程的兩個模型呼叫都固定 temperature=0。"""
+
+    return _predict_pipeline(case, use_safety_net=True)
+
+
+def predict_carepath_rules(
+    case: Dict[str, str],
+    temperature: Optional[float],
+) -> Dict[str, Any]:
+
+    return _predict_pipeline(case, use_safety_net=False)
+
+
 # ============================================================
-# 系統二：直接問 LLM（對照組）
-#
-# 等級定義刻意寫成與 RISK_LABELS 相同的語意，
-# 讓兩個系統比的是同一件事。
+# 對照組：直接問 LLM
 # ============================================================
-
-class LlmTriageSchema(BaseModel):
-
-    risk_level: Literal[
-        "standard",
-        "urgent",
-        "emergency",
-    ]
-
-    reason: str
-
-
-LLM_TRIAGE_PROMPT = """
-你是一位健康諮詢助理。請根據使用者的描述，判斷就醫的緊急程度，
-只能從以下三個等級中選擇一個：
-
-- emergency：可能危及生命，應立即撥打 119 或前往急診
-- urgent：需要儘快（當天內）接受醫療評估
-- standard：可以安排一般門診，或先在家觀察
-
-並用一句話說明理由。
-
-{history_block}使用者的描述：
-「{text}」
-"""
-
 
 def predict_llm_only(
     case: Dict[str, str],
     temperature: Optional[float],
 ) -> Dict[str, Any]:
 
-    if not client:
-        raise RuntimeError("缺少 GEMINI_API_KEY，無法執行 llm_only")
-
-    history = ec.parse_history(case.get("history", ""))
-
-    history_block = (
-        "使用者先前說過：\n"
-        + "\n".join(f"- {msg.content}" for msg in history)
-        + "\n\n"
-        if history
-        else ""
-    )
-
-    prompt = LLM_TRIAGE_PROMPT.format(
-        history_block=history_block,
-        text=case["text"],
-    )
-
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_schema=LlmTriageSchema,
-        temperature=temperature,
-    )
-
     started = time.perf_counter()
-    delay = 2.0
 
-    for attempt in range(5):
+    result = run_safety_net(
+        case["text"],
+        ec.parse_history(case.get("history", "")),
+        temperature=temperature,
+        max_retries=5,
+    )
 
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL_NAME,
-                contents=prompt,
-                config=config,
-            )
-
-            parsed = response.parsed or LlmTriageSchema.model_validate(
-                json.loads(response.text)
-            )
-
-            return {
-                "predicted_risk": parsed.risk_level,
-                "latency_ms": round((time.perf_counter() - started) * 1000, 1),
-                "technical_failure": False,
-                "matched_rules": "",
-                "present_flags": "",
-                "indeterminate_rules": "",
-                "reason": parsed.reason,
-            }
-
-        except APIError as exc:
-
-            if getattr(exc, "code", None) in {429, 500, 502, 503, 504} and attempt < 4:
-                time.sleep(delay)
-                delay *= 2
-                continue
-
-            raise
-
-    raise RuntimeError("llm_only 超過最大重試次數")
+    return {
+        "predicted_risk": result["risk_level"],
+        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+        "technical_failure": False,
+        "matched_rules": "",
+        "present_flags": "",
+        "indeterminate_rules": "",
+        "reason": result["reason"],
+    }
 
 
 SYSTEMS = {
     "carepath": predict_carepath,
+    "carepath_rules": predict_carepath_rules,
     "llm_only": predict_llm_only,
 }
 
@@ -453,6 +399,17 @@ def render_markdown(
             "",
         ]
 
+    if summary.get("safety_net"):
+        net = summary["safety_net"]
+        lines += [
+            "## AI 安全網（第 1 次執行）",
+            "",
+            f"- 升級次數：{ec.fmt_rate(net['escalated'])}",
+            f"- 升級後等級正確：{net['escalated_correct']}；升級後判太重：{net['escalated_over']}",
+            f"- 安全網狀態（全部執行）：{net['status']}",
+            "",
+        ]
+
     if summary.get("flag_recall"):
         fr = summary["flag_recall"]
         lines += [
@@ -593,13 +550,14 @@ def main():
             "repeats": args.repeats,
             "model": GEMINI_MODEL_NAME,
             "temperature": (
-                "0（正式抽取器固定值）"
-                if args.system == "carepath"
+                "0（正式流程固定值）"
+                if args.system.startswith("carepath")
                 else args.temperature if args.temperature is not None else "模型預設"
             ),
             "pipeline_version": SAFETY_PIPELINE_VERSION,
             "engine_version": SAFETY_ENGINE_VERSION,
             "extractor_version": SYMPTOM_EXTRACTOR_VERSION,
+            "safety_net_version": SAFETY_NET_VERSION,
         },
         "first_run": summarize_predictions(first_rows),
         "latency": ec.latency_summary(r["latency_ms"] for r in rows),
@@ -621,13 +579,30 @@ def main():
             len(rows_by_case),
         )
 
-    if args.system == "carepath":
+    if args.system.startswith("carepath"):
         summary["flag_recall"] = flag_recall(cases, first_rows)
         summary["rule_hits"] = Counter(
             code
             for r in first_rows
             for code in ec.split_multi(r["matched_rules"])
         ).most_common()
+
+    if args.system == "carepath":
+        # 安全網的貢獻：升級了幾次、升對幾次、升錯（判太重）幾次、失敗幾次
+        escalated = [r for r in first_rows if r["net_escalated"]]
+
+        summary["safety_net"] = {
+            "escalated": ec.rate(len(escalated), len(first_rows)),
+            "escalated_correct": sum(
+                1 for r in escalated if r["predicted_risk"] == r["expected_risk"]
+            ),
+            "escalated_over": sum(
+                1
+                for r in escalated
+                if triage_direction(r["expected_risk"], r["predicted_risk"]) == "over"
+            ),
+            "status": dict(Counter(r["net_status"] for r in rows)),
+        }
 
     ec.write_csv(rows, run_dir / "predictions.csv")
     ec.write_json(summary, run_dir / "summary.json")
