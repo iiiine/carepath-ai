@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
 from locations import UserLocation
-from typing import List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 
 # ============================================================
@@ -266,6 +266,20 @@ class SafetyAssessmentResponse(BaseModel):
     extractor_version: Optional[str] = None
 
     engine_version: Optional[str] = None
+
+    # --------------------------------------------------------
+    # AI 安全網（2026.10.1）
+    #
+    # rule_risk_level 是規則引擎自己的判斷；
+    # risk_level 是經安全網升級後的最終結果。
+    # 兩者不同時，代表是安全網把等級往上調。
+    #
+    # 兩個欄位都是選填：已上架的 APK 讀不到，也不需要讀。
+    # --------------------------------------------------------
+
+    rule_risk_level: Optional[str] = None
+
+    safety_net: Optional[Dict[str, Any]] = None
 
     # Safety Pipeline 是否發生技術性錯誤
     technical_failure: bool = False

@@ -3,10 +3,19 @@ from __future__ import annotations  # ponytail: 本機 venv 是 Python 3.9，沒
 
 import time
 
+from concurrent.futures import ThreadPoolExecutor
+
 from typing import Any, Dict, Optional, Sequence
 
 from symptom_flag_extractor import (
     extract_symptom_flags,
+)
+
+from safety_llm_net import (
+    SAFETY_NET_VERSION,
+    escalation_flag,
+    run_safety_net,
+    should_escalate,
 )
 
 from safety_observability import (
@@ -26,15 +35,36 @@ from safety_state import (
 )
 
 from safety_engine import (
+    SAFETY_ACTIONS,
     evaluate_red_flags,
 )
 
 
 # ============================================================
 # Pipeline Version
+#
+# 2026.10.1：加入 AI 安全網（safety_llm_net），只能升級規則結果
 # ============================================================
 
-SAFETY_PIPELINE_VERSION = "2026.09.3"
+SAFETY_PIPELINE_VERSION = "2026.10.1"
+
+
+# ============================================================
+# AI 安全網的執行方式
+#
+# 與症狀抽取同時跑，使用者等的是兩者中較慢的那個，而不是相加。
+# 共用一個執行緒池，不在每次請求各開一個。
+#
+# 逾時從 pipeline 開始起算。超過就放棄安全網、維持規則結果 ——
+# 安全網是補強，不能讓它拖住整個問診。
+# ============================================================
+
+SAFETY_NET_TIMEOUT_SECONDS = 12
+
+_safety_net_pool = ThreadPoolExecutor(
+    max_workers=8,
+    thread_name_prefix="safety-net",
+)
 
 
 # ============================================================
@@ -97,11 +127,45 @@ def _flags_in_state(
     )
 
 
+def _collect_safety_net(
+    future,
+    deadline: float,
+) -> Dict[str, Any]:
+    """
+    取回安全網結果。任何失敗都只記錄狀態，不往外拋 ——
+    安全網失敗時維持規則結果，不讓評估變成 unknown。
+    """
+
+    if future is None:
+        return {"status": "disabled"}
+
+    try:
+        result = future.result(
+            timeout=max(0.0, deadline - time.perf_counter())
+        )
+
+        return {
+            "status": "ok",
+            "risk_level": result["risk_level"],
+            "reason": result["reason"],
+        }
+
+    except TimeoutError:
+        return {"status": "timeout"}
+
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "error_type": type(exc).__name__,
+        }
+
+
 def run_safety_pipeline(
     symptom_text: str,
     history: Optional[Sequence[Any]] = None,
     prior_state: Optional[Dict[str, Any]] = None,
     prior_state_unavailable: bool = False,
+    use_safety_net: bool = True,
 ) -> Dict[str, Any]:
     """
     執行安全評估。
@@ -116,6 +180,9 @@ def run_safety_pipeline(
     prior_state_unavailable 代表「對方帶了 conversation_id，但狀態讀不到」。
     這種情況一律走既有的 fail-safe 分支，不可以當成新對話繼續 ——
     先前很可能已經有成立的警訊，讀不到不等於不存在。
+
+    use_safety_net 只給評測關掉，用來量「只有規則」的表現。
+    正式流程一律開啟。
     """
 
     # ========================================================
@@ -158,6 +225,26 @@ def run_safety_pipeline(
             raise RuntimeError(
                 "跨輪安全狀態無法讀取"
             )
+
+
+        # ====================================================
+        # 0.5 AI 安全網：先丟到背景，與抽取同時跑
+        # ====================================================
+
+        safety_net_future = (
+            _safety_net_pool.submit(
+                run_safety_net,
+                symptom_text,
+                history,
+            )
+            if use_safety_net
+            else None
+        )
+
+        safety_net_deadline = (
+            pipeline_started_at
+            + SAFETY_NET_TIMEOUT_SECONDS
+        )
 
 
         # ====================================================
@@ -218,6 +305,70 @@ def run_safety_pipeline(
                 merged_flags
             )
         )
+
+
+        rule_risk_level = (
+            assessment.get(
+                "risk_level",
+                "standard",
+            )
+        )
+
+
+        # ====================================================
+        # 2.5 AI 安全網：只能往上調
+        #
+        # 升級時連同 red_flags 一起改，
+        # 下面的 advance() 才會把它記進跨輪紀錄（established_rules）。
+        # ====================================================
+
+        safety_net = _collect_safety_net(
+            safety_net_future,
+            safety_net_deadline,
+        )
+
+        safety_net["version"] = SAFETY_NET_VERSION
+
+        safety_net["escalated"] = (
+            safety_net["status"] == "ok"
+            and should_escalate(
+                rule_risk_level,
+                safety_net["risk_level"],
+            )
+        )
+
+
+        if safety_net["escalated"]:
+
+            net_level = safety_net["risk_level"]
+
+            assessment = {
+                **assessment,
+
+                "risk_level":
+                    net_level,
+
+                "should_stop_normal_flow":
+                    net_level == "emergency",
+
+                "has_red_flags":
+                    True,
+
+                "matched_rule_count":
+                    assessment.get("matched_rule_count", 0) + 1,
+
+                "red_flags":
+                    list(assessment.get("red_flags", []))
+                    + [
+                        escalation_flag(
+                            net_level,
+                            safety_net["reason"],
+                        )
+                    ],
+
+                "safety_action":
+                    SAFETY_ACTIONS[net_level],
+            }
 
 
         # 推進狀態供呼叫端保存；本模組不寫資料庫。
@@ -296,7 +447,9 @@ def run_safety_pipeline(
             "⏱️ [Safety Performance]\n"
             f"   total      = {total_ms} ms\n"
             f"   extractor  = {extractor_ms} ms\n"
-            f"   rule_engine= {engine_ms} ms\n"
+            f"   rule_engine= {engine_ms} ms（含等待安全網）\n"
+            f"   safety_net = {safety_net['status']}"
+            f"{'（已升級）' if safety_net['escalated'] else ''}\n"
             f"   risk       = {risk_level}"
         )
 
@@ -338,6 +491,14 @@ def run_safety_pipeline(
                     risk_level,
                     "未知",
                 ),
+
+            # 規則引擎自己的判斷，與 AI 安全網升級後的 risk_level 分開保存，
+            # 事後才分得出是哪一層決定了最終等級。
+            "rule_risk_level":
+                rule_risk_level,
+
+            "safety_net":
+                safety_net,
 
             "should_stop_normal_flow":
                 assessment.get(
@@ -513,6 +674,17 @@ def run_safety_pipeline(
                 RISK_LABELS[
                     "unknown"
                 ],
+
+            "rule_risk_level":
+                None,
+
+            # 技術失敗時不採用安全網的結果：
+            # 安全網只負責往上補規則，規則沒跑完就沒有可以補的對象。
+            "safety_net": {
+                "status": "not_used",
+                "version": SAFETY_NET_VERSION,
+                "escalated": False,
+            },
 
             "should_stop_normal_flow":
                 True,
