@@ -51,6 +51,34 @@ const FLAG_LABELS = {
   imminent_harm_to_others: '即將傷人',
   fever: '發燒',
   persistent_vomiting: '持續嘔吐',
+  sudden_vision_loss: '突然視力喪失',
+  thunderclap_headache: '突發劇烈頭痛',
+  acute_severe_imbalance: '突發嚴重平衡障礙',
+  eye_chemical_injury: '化學物質入眼',
+  toxic_ingestion: '誤食有毒物質',
+  young_infant_fever: '未滿三個月嬰兒發燒',
+  tearing_chest_or_back_pain: '撕裂樣胸背痛',
+  bleeding_with_shock_signs: '大量出血合併頭暈虛弱',
+  near_syncope: '差點昏倒',
+  coughing_blood: '咳血',
+  dehydration_signs: '脫水警訊',
+};
+
+
+const RISK_NAMES = {
+  emergency: '緊急',
+  urgent: '儘快就醫',
+  standard: '一般',
+};
+
+
+// AI 安全網的狀態。沒有這個欄位的舊後端回應不顯示這一段。
+const NET_STATUS = {
+  ok: '已執行',
+  timeout: '逾時，未採用',
+  failed: '執行失敗，未採用',
+  disabled: '未啟用',
+  not_used: '未使用（安全評估未完成）',
 };
 
 const flagLabel = (key) => FLAG_LABELS[key] || key;
@@ -139,8 +167,8 @@ const SafetyAuditPanel = ({ safety }) => {
       <div style={{ padding: '0 14px 14px' }}>
 
         <div style={{ fontSize: '0.78rem', color: t.muted, lineHeight: 1.6 }}>
-          以下是規則式安全篩檢的判斷依據，由固定規則判斷、不經 AI 自由生成，
-          同樣的症狀旗標一定得到同樣的結果。這是風險篩檢，不是診斷。
+          以下是安全篩檢的判斷依據。主體是固定規則，同樣的症狀旗標一定得到同樣的結果；
+          另有 AI 安全網獨立判斷一次，只能把等級往上調。這是風險篩檢，不是診斷。
         </div>
 
         {/* 結論與版本 */}
@@ -165,11 +193,32 @@ const SafetyAuditPanel = ({ safety }) => {
           )}
         </div>
 
+        {safety.safety_net && (
+          <>
+            <div style={sectionTitle}>判斷來源</div>
+            <div style={{ lineHeight: 1.8 }}>
+              安全規則：{RISK_NAMES[safety.rule_risk_level] || '—'}
+              <br />
+              AI 安全網：
+              {safety.safety_net.status === 'ok'
+                ? RISK_NAMES[safety.safety_net.risk_level] || '—'
+                : NET_STATUS[safety.safety_net.status] || safety.safety_net.status}
+              {safety.safety_net.escalated && (
+                <span style={{ color: riskColor }}>（已提高最終等級）</span>
+              )}
+              <div style={{ fontSize: '0.78rem', color: t.muted }}>
+                AI 安全網只能把等級往上調，不能往下調；安全網失敗時以安全規則為準。
+              </div>
+            </div>
+          </>
+        )}
+
         <div style={sectionTitle}>規則版本</div>
         <div style={{ fontFamily: 'Consolas, monospace', fontSize: '0.78rem', color: t.muted, lineHeight: 1.7 }}>
           pipeline {safety.pipeline_version || '—'}
           {' ／ '}engine {safety.engine_version || '—'}
           {' ／ '}extractor {safety.extractor_version || '—'}
+          {safety.safety_net?.version && <>{' ／ '}safety net {safety.safety_net.version}</>}
         </div>
 
         {/* 命中規則 */}
