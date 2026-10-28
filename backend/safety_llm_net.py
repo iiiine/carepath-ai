@@ -211,7 +211,7 @@ def escalation_flag(
         "risk_level": net_risk_level,
         "title": "AI 安全網提高風險等級",
         "reason": (
-            "安全規則未命中，但 AI 獨立判斷認為需要提高警覺："
+            "安全規則的判斷較輕，但 AI 獨立判斷認為需要提高警覺："
             + (net_reason or "（未提供理由）")
         ),
     }
