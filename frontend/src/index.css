@@ -266,3 +266,10 @@ body {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* 320px 的小手機放不下一排，登出按鈕會被切掉，退回換行 */
+@media (max-width: 359px) {
+  html:not([data-elder-mode="true"]) .mobile-topnav {
+    flex-wrap: wrap !important;
+  }
+}
