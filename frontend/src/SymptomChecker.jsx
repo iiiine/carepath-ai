@@ -643,11 +643,25 @@ function SymptomChecker({
     useRef(null);
 
 
+  const safetyAlertRef =
+    useRef(null);
+
+
   useEffect(() => {
+    // 有安全警示時停在警示開頭，不捲到對話底部：
+    // 手機上警示比一個畫面高，捲到底會把標題和 119 按鈕推出畫面。
+    if (safetyAlertRef.current) {
+      safetyAlertRef.current.scrollIntoView({
+        block: 'start'
+      });
+
+      return;
+    }
+
     messagesEndRef.current?.scrollIntoView({
       behavior: 'smooth'
     });
-  }, [messages, loading]);
+  }, [messages, loading, safetyAlert]);
 
 
   // ==========================================
@@ -2150,6 +2164,7 @@ function SymptomChecker({
         'chat-only' ? (
 
           <div
+            className="mobile-chat-panel"
             style={{
               maxWidth: isOpening
                 ? '860px'
@@ -2202,6 +2217,7 @@ function SymptomChecker({
 
             {!isOpening && (
             <div
+              className="mobile-chat-header"
               style={{
                 display:
                   'flex',
@@ -2297,6 +2313,7 @@ function SymptomChecker({
 
             {safetyAlert && (
               <div
+                ref={safetyAlertRef}
                 role="alert"
                 aria-live="assertive"
                 style={{
@@ -2484,6 +2501,7 @@ function SymptomChecker({
             {/* ============================== */}
 
             <div
+              className={isOpening ? 'mobile-opening-hero' : undefined}
               style={{
                 flex: isOpening ? '0 0 auto' : 1,
                 overflowY: isOpening ? 'visible' : 'auto',
@@ -3416,6 +3434,7 @@ function SymptomChecker({
           // ==================================
 
           <div
+            className="mobile-result-grid"
             style={{
               display:
                 'grid',
@@ -3571,6 +3590,8 @@ function SymptomChecker({
             {/* ============================== */}
 
             <div
+              // 全螢幕時不可套手機固定高度，否則地圖會縮回 420px
+              className={fullscreenSection === 'map' ? undefined : 'mobile-result-map'}
               style={{
                 ...getSectionStyle(
                   'map'
@@ -3707,6 +3728,7 @@ function SymptomChecker({
             {/* ============================== */}
 
             <div
+              className="mobile-result-detail"
               style={{
                 display:
                   'flex',
@@ -3739,6 +3761,7 @@ function SymptomChecker({
                   不是「東西變少」—— 看不到自己講過什麼反而更難確認結果是
                   依據什麼給的。改為一律顯示，靠單欄堆疊維持易讀。 */}
               <div
+                className="mobile-result-chat"
                 style={{
                   ...getSectionStyle(
                     'chat'
@@ -3753,6 +3776,7 @@ function SymptomChecker({
               >
 
                 <div
+                  className="mobile-result-head"
                   style={{
                     display:
                       'flex',

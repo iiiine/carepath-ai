@@ -573,6 +573,7 @@ function App() {
   // ==========================================
   return (
     <div
+      className="mobile-app-shell"
       style={{
         padding:
           '16px 24px',
@@ -604,6 +605,7 @@ function App() {
       {/* 頂部導覽 */}
       {/* ====================================== */}
       <div
+        className="mobile-topnav"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -684,7 +686,7 @@ function App() {
             {user.is_guest ? '訪' : user.username.charAt(0)}
           </span>
 
-          <span style={{ fontSize: '0.8rem', color: t.text }}>
+          <span className="mobile-hide" style={{ fontSize: '0.8rem', color: t.text }}>
             {user.is_guest ? '訪客' : user.username}
           </span>
 
