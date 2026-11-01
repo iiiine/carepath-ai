@@ -643,11 +643,25 @@ function SymptomChecker({
     useRef(null);
 
 
+  const safetyAlertRef =
+    useRef(null);
+
+
   useEffect(() => {
+    // 有安全警示時停在警示開頭，不捲到對話底部：
+    // 手機上警示比一個畫面高，捲到底會把標題和 119 按鈕推出畫面。
+    if (safetyAlertRef.current) {
+      safetyAlertRef.current.scrollIntoView({
+        block: 'start'
+      });
+
+      return;
+    }
+
     messagesEndRef.current?.scrollIntoView({
       behavior: 'smooth'
     });
-  }, [messages, loading]);
+  }, [messages, loading, safetyAlert]);
 
 
   // ==========================================
@@ -2299,6 +2313,7 @@ function SymptomChecker({
 
             {safetyAlert && (
               <div
+                ref={safetyAlertRef}
                 role="alert"
                 aria-live="assertive"
                 style={{
