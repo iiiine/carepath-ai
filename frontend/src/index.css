@@ -162,3 +162,107 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   手機豎屏
+   ============================================================
+   全站是 inline style，媒體查詢只能靠 !important 蓋過去。
+   目前只處理會被切掉或擠成窄欄的版面，桌機不受影響。
+   ============================================================ */
+
+@media (max-width: 640px) {
+  /* 網址列會佔掉 100vh 的一部分，輸入框才不會被壓到畫面外 */
+  .mobile-app-shell {
+    height: 100dvh !important;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+
+  /* 不換行時置中的控制列會往左右溢出，高齡模式按鈕會整個看不到 */
+  .elder-primary-controls {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    max-width: 100%;
+  }
+
+  /* 導覽壓成一排，把高度留給內容。高齡模式字大放不下，維持換行 */
+  html:not([data-elder-mode="true"]) .mobile-topnav {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+  }
+
+  html:not([data-elder-mode="true"]) .mobile-topnav button {
+    padding: 6px 9px !important;
+    font-size: 0.76rem !important;
+    white-space: nowrap;
+  }
+
+  html:not([data-elder-mode="true"]) .mobile-hide {
+    display: none !important;
+  }
+
+  .mobile-opening-hero {
+    padding-top: 4px !important;
+  }
+
+  .mobile-opening-hero img {
+    height: 110px !important;
+  }
+
+  .mobile-chat-panel {
+    padding: 12px !important;
+  }
+
+  .mobile-chat-header {
+    flex-direction: column !important;
+    gap: 10px;
+  }
+
+  .mobile-result-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    height: auto !important;
+    gap: 12px !important;
+  }
+
+  /* 對話中只留必要控制項：說明文字和定位狀態會吃掉三分之一個畫面 */
+  .mobile-chat-header p,
+  .mobile-chat-header .elder-secondary-control {
+    display: none !important;
+  }
+
+  .mobile-chat-header img {
+    height: 36px !important;
+    width: 36px !important;
+  }
+
+  .mobile-result-detail {
+    height: auto !important;
+    order: 1 !important;
+  }
+
+  .mobile-result-chat {
+    flex: 0 0 auto !important;
+  }
+
+  .mobile-result-head {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mobile-result-head > div {
+    flex-wrap: wrap;
+  }
+
+  .mobile-result-head button {
+    white-space: nowrap;
+  }
+
+  .mobile-result-map {
+    order: 2 !important;
+    height: 420px !important;
+  }
+
+  .mobile-single-column {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

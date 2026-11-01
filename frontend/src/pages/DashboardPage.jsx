@@ -760,6 +760,7 @@ const DashboardPage = ({
     <div
       style={{
         width,
+        maxWidth: '100%',
         height,
 
         borderRadius:
@@ -1589,6 +1590,7 @@ const DashboardPage = ({
 
         {tab === 'dashboard' && (
         <section
+          className="mobile-single-column"
           style={
             styles.bottomRow
           }
@@ -2065,8 +2067,9 @@ const styles = {
     flexGrow:
       1,
 
+    // 手機上卡片本身可能不到 280px，寫死會把內容撐出卡片
     minWidth:
-      '280px',
+      'min(280px, 100%)',
 
     display:
       'flex',
@@ -2309,8 +2312,9 @@ const styles = {
     display:
       'grid',
 
+    // 窄螢幕自動換行；桌機寬度仍是一排三張
     gridTemplateColumns:
-      'repeat(3, minmax(0, 1fr))',
+      'repeat(auto-fit, minmax(150px, 1fr))',
 
     gap:
       '12px',
