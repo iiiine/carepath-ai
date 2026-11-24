@@ -6,6 +6,7 @@
 // 只讀、不重算：這裡顯示的就是後端當下據以判斷的內容（存進 safety_snapshot 的同一份）。
 // 給醫護人員、評審、開發者核對用，預設收合，一般使用者不需要打開。
 
+import { useRef } from 'react';
 import { t } from './theme';
 
 
@@ -128,6 +129,9 @@ const FlagChips = ({ flags, color, background, empty }) => (
 
 const SafetyAuditPanel = ({ safety }) => {
 
+  // hook 必須在提早 return 之前呼叫
+  const panelRef = useRef(null);
+
   if (!safety) {
     return null;
   }
@@ -135,8 +139,18 @@ const SafetyAuditPanel = ({ safety }) => {
   const riskColor = RISK_COLORS[safety.risk_level] || t.muted;
   const rules = safety.red_flags || [];
 
+  // 展開後內容很長，標題列會捲出畫面；底部再放一個收合按鈕，
+  // 收合後把標題列捲回可見範圍，避免使用者停在一片空白處。
+  const collapse = () => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.open = false;
+    panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
   return (
     <details
+      ref={panelRef}
       style={{
         margin: '12px 0 4px',
         border: `1px solid ${t.border}`,
@@ -298,6 +312,26 @@ const SafetyAuditPanel = ({ safety }) => {
             </ul>
           </>
         )}
+
+        <button
+          type="button"
+          onClick={collapse}
+          style={{
+            display: 'block',
+            width: '100%',
+            marginTop: '14px',
+            padding: '8px 12px',
+            border: `1px solid ${t.border}`,
+            borderRadius: '8px',
+            backgroundColor: 'transparent',
+            color: t.muted,
+            fontSize: '0.82rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          收合稽核紀錄
+        </button>
       </div>
     </details>
   );
